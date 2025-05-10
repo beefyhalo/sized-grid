@@ -29,16 +29,15 @@ import           Data.Constraint
 import           Data.Distributive
 import           Data.Functor.Classes
 import           Data.Functor.Rep
-import           Data.Proxy            (Proxy (..))
-import           Data.Semigroup        ((<>))
 import qualified Data.Vector           as V
 import           Generics.SOP
 import qualified GHC.Generics          as GHC
 import           GHC.TypeLits
 import qualified GHC.TypeLits          as GHC
+import Data.Kind (Type)
 
 -- | A multi dimensional sized grid
-newtype Grid (cs :: [*]) a = Grid
+newtype Grid (cs :: [Type]) a = Grid
   { unGrid :: V.Vector a
   } deriving (Eq, Show, Functor, Foldable, Traversable, Eq1, Show1, GHC.Generic)
 
@@ -233,7 +232,7 @@ mapLowerDim f (Grid v) =
              (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as))))
              v)
 
-class ShrinkableGrid (cs :: [*]) (as :: [*]) (bs :: [*]) where
+class ShrinkableGrid (cs :: [Type]) (as :: [Type]) (bs :: [Type]) where
   shrinkGrid :: Coord cs -> Grid as x -> Grid bs x
 
 instance ShrinkableGrid '[] '[] '[] where

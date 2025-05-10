@@ -15,7 +15,6 @@ import           SizedGrid.Grid.Grid
 import           Control.Comonad
 import           Control.Comonad.Store
 import           Data.Functor.Rep
-import           Data.Semigroup        (Semigroup (..))
 import           Generics.SOP
 
 -- | Similar to `Grid`, but this has a focus on a certain square. Becuase of this we loose some instances, such as `Applicative`, but we gain a `Comonad` and `ComonadStore` instance. We can convert between a focused and unfocused list using facilites in `IsGrid`

@@ -19,7 +19,6 @@ import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Maybe            (fromJust)
 import           Data.Proxy            (Proxy (..))
-import           Data.Semigroup        (Semigroup (..))
 import           GHC.TypeLits
 import           System.Random         (Random (..))
 
@@ -40,26 +39,26 @@ instance IsCoord HardWrap where
   asOrdinal = iso unHardWrap HardWrap
 
 instance (1 <= n, KnownNat n) => Semigroup (HardWrap n) where
-    HardWrap a <> HardWrap b =
-        HardWrap $
-        fromJust $
-        numToOrdinal $
-        min
-            (maxCoordSize (Proxy @(HardWrap n)))
-            (ordinalToNum a + ordinalToNum b)
+  HardWrap a <> HardWrap b =
+    HardWrap $
+    fromJust $
+    numToOrdinal $
+    min
+      (maxCoordSize (Proxy @(HardWrap n)))
+      (ordinalToNum a + ordinalToNum b)
 
 instance (KnownNat n, 1 <= n) => Monoid (HardWrap n) where
   mempty = HardWrap minBound
   mappend = (<>)
 
 instance (1 <= n, KnownNat n) => AffineSpace (HardWrap n) where
-    type Diff (HardWrap n) = Integer
-    HardWrap a .-. HardWrap b =
-        max 0 $
-        min
-            (fromIntegral $ maxCoordSize (Proxy @(HardWrap n)))
-            (ordinalToNum a - ordinalToNum b)
-    HardWrap a .+^ b = HardWrap $ fromJust $ numToOrdinal $
-        max 0 $
-        min (maxCoordSize (Proxy @(HardWrap n))) $
-        ((ordinalToNum a) + fromIntegral b)
+  type Diff (HardWrap n) = Integer
+  HardWrap a .-. HardWrap b =
+    max 0 $
+    min
+      (fromIntegral $ maxCoordSize (Proxy @(HardWrap n)))
+      (ordinalToNum a - ordinalToNum b)
+  HardWrap a .+^ b = HardWrap $ fromJust $ numToOrdinal $
+    max 0 $
+    min (maxCoordSize (Proxy @(HardWrap n))) $
+    ((ordinalToNum a) + fromIntegral b)

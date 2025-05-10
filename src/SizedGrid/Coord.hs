@@ -20,7 +20,6 @@ module SizedGrid.Coord where
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal
 
-import           Control.Applicative   (liftA2)
 import           Control.Applicative   (empty)
 import           Control.Lens          hiding (from, to)
 import           Control.Monad.State
@@ -29,12 +28,11 @@ import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Constraint
 import           Data.Constraint.Nat
+import           Data.Kind (Type)
 import           Data.List             (intercalate)
-import           Data.Semigroup        (Semigroup (..))
 import qualified Data.Vector           as V
 import           Generics.SOP          hiding (Generic, S, Z)
 import qualified Generics.SOP          as SOP
-import           GHC.Exts              (Constraint)
 import           GHC.Generics          (Generic)
 import           GHC.TypeLits
 import qualified GHC.TypeLits          as GHC
@@ -166,7 +164,7 @@ instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d '
   _5 = coordTail . _4
 
 -- | The type of difference between two coords. A n-dimensional coord should have a `Diff` of an n-tuple of `Integers`. We use `Identity` and our 1-tuple. Unfortuantly, each instance is manual at the moment.
-type family CoordDiff (cs :: [k]) :: *
+type family CoordDiff (cs :: [k]) :: Type
 
 type instance CoordDiff '[] = ()
 type instance CoordDiff '[a] = Identity (Diff a)
@@ -293,7 +291,7 @@ tranposeCoord (Coord (a :* b :* Nil)) = Coord (b :* a :* Nil)
 zeroCoord :: All IsCoordLifted cs => Coord cs
 zeroCoord = Coord $ hcpure (Proxy :: Proxy IsCoordLifted) (I $ zeroPosition)
 
-class AllSizedKnown (cs :: [*]) where
+class AllSizedKnown (cs :: [Type]) where
   sizeProof :: Dict (KnownNat (MaxCoordSize cs))
 
 instance AllSizedKnown '[] where
