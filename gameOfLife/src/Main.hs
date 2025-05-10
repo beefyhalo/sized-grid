@@ -23,10 +23,8 @@ import           Control.Comonad
 import           Control.Comonad.Store
 import           Control.Lens
 import           Data.AffineSpace
-import           Data.Semigroup                     (Semigroup (..))
 import           Generics.SOP                       hiding (S, Z)
 import           GHC.TypeLits
-import qualified GHC.TypeLits as GHC
 import           Graphics.Gloss.Interface.Pure.Game
 
 data TileState
@@ -51,7 +49,7 @@ gameOfLife = Rule $ \here neigh ->
 
 applyRule ::
        ( All Monoid cs
-       , All IsCoord cs
+       , All IsCoordLifted cs
        , All Semigroup cs
        , AllDiffSame Integer cs
        , All Eq cs
@@ -82,8 +80,8 @@ data WorldState cs = WorldState
 makeLenses ''WorldState
 
 gridPositionFromScreenCoord ::
-       ( IsCoord x
-       , IsCoord y
+       ( IsCoordLifted x
+       , IsCoordLifted y
        )
     => DisplayInfo
     -> Float
@@ -101,7 +99,7 @@ gridPositionFromScreenCoord DisplayInfo{..} x y =
 drawWorld ::
        ( cs ~ '[ a, b]
        , All Monoid cs
-       , All IsCoord cs
+       , All IsCoordLifted cs
        , All Semigroup cs
        , All AffineSpace cs
        , All Integral (MapDiff cs)
@@ -121,8 +119,8 @@ drawWorld DisplayInfo{..} ws =
            ws
 
 updateWorld :: forall x y .
-       ( IsCoord x
-       , IsCoord y
+       ( IsCoordLifted x
+       , IsCoordLifted y
        , Semigroup x
        , Semigroup y
        , AffineSpace x
@@ -131,7 +129,6 @@ updateWorld :: forall x y .
        , Monoid y
        , Show x
        , Show y
-       , KnownNat ((GHC.*) (CoordSized x) (CoordSized y))
        )
     => DisplayInfo
     -> Event
@@ -147,7 +144,7 @@ updateWorld _ _ world = world
 tickWorld ::
        ( All Monoid cs
        , All Semigroup cs
-       , All IsCoord cs
+       , All IsCoordLifted cs
        , All Eq cs
        , AllDiffSame Integer cs
        , All AffineSpace cs
@@ -158,10 +155,10 @@ tickWorld ::
     -> WorldState cs
     -> WorldState cs
 tickWorld dt world
-    | world ^. timeElapsedSinceLastTick + dt >= 0.25 && world ^. isTicking  =
+    | world ^. timeElapsedSinceLastTick + dt >= 0.1 && world ^. isTicking  =
         world & grid . asFocusedGrid %~ applyRule (world ^. rule) &
         timeElapsedSinceLastTick +~
-        (dt - 0.25)
+        (dt - 0.1)
     | world ^. isTicking = world & timeElapsedSinceLastTick +~ dt
     | otherwise = world
 

@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 module SizedGrid.Coord.Class where
 
@@ -20,9 +21,10 @@ import           Control.Lens
 import           Data.Maybe        (fromJust)
 import           Data.Proxy
 import           GHC.TypeLits
+import Data.Kind (Type)
 
 -- | Everything that can be uses as a Coordinate. The only required function is `asOrdinal` and the type instance of `CoordSized`: the rest can be derived automatically.
-class IsCoord (c :: Nat -> *) where
+class IsCoord (c :: Nat -> Type) where
   -- | As each coord represents a finite number of states, it must be isomorphic to an Ordinal
   asOrdinal :: Iso' (c n) (Ordinal n)
 
@@ -66,7 +68,7 @@ class ( x ~ ((CoordContainer x) (CoordNat x))
       ) =>
       IsCoordLifted x
     where
-    type CoordContainer x :: Nat -> *
+    type CoordContainer x :: Nat -> Type
     type CoordNat x :: Nat
 
 instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
@@ -75,7 +77,7 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
 
 instance IsCoord Ordinal where
     asOrdinal = id
-    zeroPosition = Ordinal (Proxy @0)
+    zeroPosition = Ordinal @0 Proxy
     asSizeProxy (Ordinal p) func = func p
     maxCoord :: forall n proxy . KnownNat n => proxy n -> Ordinal n
     maxCoord _ = fromJust $ numToOrdinal (maxCoordSize (Proxy :: Proxy (Ordinal n)))
