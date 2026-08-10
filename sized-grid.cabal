@@ -36,10 +36,15 @@ source-repository head
 -- headers are far shorter than they used to be.
 common lang
   default-language:   GHC2024
+  -- TypeAbstractions is for @SCons \@xs \@x@ in SizedGrid.Coord: 'SList' has no
+  -- fields, so a type abstraction is the only way to name the head and tail of
+  -- the list it refines. GHC 9.12 still accepts that under TypeApplications but
+  -- warns; from 9.14 it is required.
   default-extensions:
     DefaultSignatures
     FunctionalDependencies
     PatternSynonyms
+    TypeAbstractions
     TypeFamilies
     UndecidableInstances
     UndecidableSuperClasses

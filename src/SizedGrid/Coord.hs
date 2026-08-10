@@ -236,25 +236,85 @@ type family MaxCoordSize (cs :: [k]) :: GHC.Nat where
   MaxCoordSize '[] = 1
   MaxCoordSize ((c n) ': cs) = n GHC.* (MaxCoordSize cs)
 
--- | Convert a `Coord` to its position in a vector
-coordPosition :: (All IsCoordLifted cs) => Coord cs -> Int
-coordPosition (Coord a) =
-    let helper :: (All IsCoordLifted xs) => NP I xs -> Integer
-        helper Nil = 0
-        helper (I c :* (cs :: NP I ys)) =
-            ordinalToNum (c ^. asOrdinal) * sizeOfList cs + helper cs
-        sizeOfList :: All IsCoordLifted xs => NP I xs -> Integer
-        sizeOfList =
-            product .
-            hcollapse .
-            hcmap
-                (Proxy :: Proxy IsCoordLifted)
-                (\(I (_ :: a)) ->
-                     K $
-                     1 +
-                     maxCoordSize
-                         (Proxy :: Proxy ((CoordContainer a) (CoordNat a))))
-     in fromIntegral $ helper a
+-- | Convert a `Coord` to its position in a vector.
+--
+-- The layout is row major: the first axis is the most significant, so a step
+-- along the last axis moves one place in the vector.
+coordPosition :: forall cs. (All IsCoordLifted cs) => Coord cs -> Int
+coordPosition (Coord a) = snd $ helper a
+  where
+    -- One pass, returning the size of the axes alongside the position, because
+    -- the stride of an axis is exactly the size of the axes below it. The
+    -- previous version recomputed that product with a separate traversal per
+    -- axis and did the arithmetic in 'Integer', which cost a boxed 'Integer'
+    -- per @natVal@ and a fresh 'NP' and list per axis: about 800 bytes for a
+    -- single two-dimensional 'coordPosition', which then showed up multiplied
+    -- by 90,000 in every indexed traversal.
+    helper :: All IsCoordLifted xs => NP I xs -> (Int, Int)
+    helper Nil = (1, 0)
+    helper (I (c :: x) :* cs) =
+        case helper cs of
+            (stride, rest) ->
+                let o = c ^. asOrdinal
+                 in ( ordinalSize @(CoordNat x) * stride
+                    , ordinalToInt o * stride + rest)
+
+-- | The number of positions a @'Coord' cs@ ranges over: the product of the
+-- sizes of its axes, and so the length of the vector inside a @'Grid' cs@.
+--
+-- This is 'MaxCoordSize' as a value. It asks only for @All IsCoordLifted cs@
+-- rather than @KnownNat (MaxCoordSize cs)@, so it is available wherever a
+-- coordinate can be taken apart at all --- in particular in the indexed
+-- traversals, which do not carry the @KnownNat@.
+coordSpaceSize :: forall cs. All IsCoordLifted cs => Int
+coordSpaceSize =
+    -- 'SList' carries no fields, so the head and tail of the list are named
+    -- with a type abstraction. 'SCons' quantifies the tail before the head.
+    case sList :: SList cs of
+        SNil          -> 1
+        SCons @xs @x  -> ordinalSize @(CoordNat x) * coordSpaceSize @xs
+
+-- | The inverse of 'coordPosition': the coordinate stored at the given position
+-- of a grid's vector, or 'Nothing' if there is no such position.
+--
+-- @coordFromPosition . coordPosition@ is @Just@ on every 'Coord', and
+-- @coordPosition@ undoes it on every position in @[0, 'coordSpaceSize')@.
+coordFromPosition ::
+       forall cs. All IsCoordLifted cs
+    => Int
+    -> Maybe (Coord cs)
+coordFromPosition p
+    | p < 0 = Nothing
+    | otherwise =
+        case coordDigits p of
+            -- A leftover of anything but zero means @p@ needed a place beyond
+            -- the most significant axis, which is to say it was at least
+            -- 'coordSpaceSize'. No separate bounds check is needed.
+            (np, 0) -> Just $ Coord np
+            _       -> Nothing
+
+-- | Split a position into one ordinal per axis, least significant first, and
+-- return what is left over above the most significant axis.
+--
+-- The tail is taken apart before the head precisely so that no stride has to be
+-- known in advance: each axis takes the low digit of what the axes below it
+-- did not consume, exactly as writing a number in a mixed radix does.
+coordDigits ::
+       forall xs. All IsCoordLifted xs
+    => Int
+    -> (NP I xs, Int)
+coordDigits p =
+    case sList :: SList xs of
+        SNil -> (Nil, p)
+        -- 'unsafeOrdinal' holds on @r@: 'quotRem' by a positive divisor with a
+        -- non-negative numerator gives @0 <= r < size@, and @q@ is non-negative
+        -- whenever the @p@ it came from was.
+        SCons @ys @y ->
+            case coordDigits @ys p of
+                (rest, q) ->
+                    case q `quotRem` ordinalSize @(CoordNat y) of
+                        (q', r) ->
+                            (I (review asOrdinal (unsafeOrdinal r)) :* rest, q')
 
 -- | All Diffs of the members of the list must be equal
 type family AllDiffSame a xs :: Constraint where

@@ -19,6 +19,7 @@ import           Test.Utils
 
 import           Control.Lens          hiding (index)
 import           Control.Monad         (replicateM)
+import           Data.Maybe            (isNothing)
 import           Data.Functor.Rep
 import           Data.Proxy
 import qualified Data.Vector           as V
@@ -61,6 +62,36 @@ testAllCoordOrdered ::
 testAllCoordOrdered _ =
     testCase "allCoord is ordered" $ assertOrderd (allCoord @cs)
 
+-- | The row-major layout `coordPosition` defines, and the inverse that undoes
+-- it. Both `index` and `tabulate` rest on this being a bijection between
+-- @[0, coordSpaceSize)@ and the coordinates taken in `allCoord` order, and
+-- nothing checked that: `coordPosition` used to fold the axis sizes back up on
+-- every call, so a mistake in the stride would have been invisible until a grid
+-- read the wrong cell.
+testCoordLayout ::
+       forall cs proxy.
+       (All Eq cs, All Show cs, All Arbitrary cs, All IsCoordLifted cs)
+    => proxy (Coord cs)
+    -> TestTree
+testCoordLayout _ =
+    testGroup
+        "Positions and coordinates are a bijection"
+        [ testCase "coordPosition numbers allCoord from zero upwards" $
+          assertEqual
+              "positions"
+              [0 .. coordSpaceSize @cs - 1]
+              (map coordPosition (allCoord @cs))
+        , testCase "coordSpaceSize counts the coordinates" $
+          assertEqual "size" (coordSpaceSize @cs) (length (allCoord @cs))
+        , testProperty "coordFromPosition undoes coordPosition" $
+          property $ \(c :: Coord cs) ->
+              coordFromPosition (coordPosition c) === Just c
+        , testCase "coordFromPosition rejects positions outside the space" $ do
+            assertBool "negative" $ isNothing (coordFromPosition @cs (-1))
+            assertBool "one past the end" $
+                isNothing (coordFromPosition @cs (coordSpaceSize @cs))
+        ]
+
 gridTests ::
        forall cs a x y f g.
        ( Show (Coord cs)
@@ -98,10 +129,27 @@ gridTests genC genA =
         property $ do
           g :: Grid cs a <- sequenceA $ pure arbitrary
           return (g === transposeGrid (transposeGrid g))
+      -- Each indexed traversal hands a cell the coordinate that `index` would
+      -- read it back by, and all of them agree on the order. `ifoldr` and
+      -- `ifoldl'` are given explicitly by the instance rather than derived from
+      -- `ifoldMap`, so they need saying separately.
+      imapIsTabulate =
+        property $ do
+          g :: Grid cs a <- sequenceA $ pure arbitrary
+          return (imap (\c _ -> c) g === (tabulate id :: Grid cs (Coord cs)))
+      indexedFoldsAgree =
+        property $ do
+          g :: Grid cs a <- sequenceA $ pure arbitrary
+          return $
+            (ifoldMap (\c _ -> [c]) g === allCoord @cs) .&&.
+            (ifoldr (\c _ acc -> c : acc) [] g === allCoord @cs) .&&.
+            (reverse (ifoldl' (\c acc _ -> c : acc) [] g) === allCoord @cs)
   in [ testProperty "Tabulate index" tabulateIndex
      , testProperty "Collapse UnCollapse" collapseUnCollapse
      , testProperty "UnCollapse and Collapse" uncollapseCollapse
      , testProperty "Transpose twice is id" doubleTranspose
+     , testProperty "imap indexes every cell by its own coord" imapIsTabulate
+     , testProperty "ifoldMap, ifoldr and ifoldl' agree" indexedFoldsAgree
      ]
 
 splitTests ::
@@ -220,6 +268,7 @@ main =
            , affineSpaceLaws p
            , aesonLaws p
            , testAllCoordOrdered p
+           , testCoordLayout p
            ]
       coord2 =
         let p = Proxy @(Coord '[ Periodic 10, Periodic 20])
@@ -229,6 +278,7 @@ main =
            , additiveGroupLaws p
            , aesonLaws p
            , testAllCoordOrdered p
+           , testCoordLayout p
            ]
   in defaultMain $
      testGroup

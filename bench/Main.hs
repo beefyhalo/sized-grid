@@ -99,11 +99,26 @@ walk k c = walk (k - 1) (c .+^ (1, 1))
 --
 -- Only @-fno-full-laziness@ would defeat that, and turning it on would make
 -- every other benchmark here stop resembling how the library is actually
--- compiled. So the cost is measured where it is real instead: the library's own
--- instances receive @All IsCoordLifted@ at runtime, so they cannot share the
--- list, and the "allCoord overhead" group below pairs each allCoord-using
--- operation with the closest one that does not use it. The difference is the
--- number sized-grid-uvd is about.
+-- compiled. So the cost is measured where it is real instead, in the library's
+-- own instances, which receive @All IsCoordLifted@ at runtime.
+--
+-- == The second group is named for what it actually measures
+--
+-- It used to be called "allCoord overhead", paired so that each member differs
+-- from its neighbour by whether the operation walks the coordinate list. But the two members of a pair also differ in what they do
+-- per cell -- @tabulate@ and @imap@ are given 'coordPosition' as their function
+-- and @pure@ and @fmap@ are not -- and 'coordPosition' turned out to cost far
+-- more than the coordinate it is handed. Reading the gap as allCoord's cost is
+-- what sent sized-grid-uvd looking in the wrong place.
+--
+-- The honest figures, from the @index@ benchmark below (which shares its
+-- coordinate list, so it is 90,000 'coordPosition' calls and nothing else)
+-- against @imap@ over the same 90,000 cells: 'coordPosition' was ~800 bytes a
+-- call, and the coordinate list about 67 bytes a cell. The list is also not
+-- rebuilt in the sense the issue meant -- @V.zipWith@ fuses with the
+-- @V.fromList@ that feeds it, so the coordinates are produced and consumed one
+-- at a time and never all exist at once. Do not "fix" that; see the note on the
+-- instances in SizedGrid.Grid.Grid.
 
 main :: IO ()
 main = do
@@ -127,14 +142,14 @@ main = do
                     299
               ]
         , bgroup
-              "allCoord overhead (each pair differs only by whether allCoord is rebuilt)"
-              [ bench "tabulate 300x300  [rebuilds allCoord]" $
+              "indexed vs unindexed (the gap is coordPosition, not allCoord)"
+              [ bench "tabulate 300x300  [coordPosition per cell]" $
                 whnf (\f -> total (tabulate f :: Grid Big Int)) coordPosition
-              , bench "pure 300x300      [does not]" $
+              , bench "pure 300x300      [no coord at all]" $
                 whnf (\x -> total (pure x :: Grid Big Int)) 1
-              , bench "imap 300x300      [rebuilds allCoord]" $
+              , bench "imap 300x300      [coordPosition per cell]" $
                 whnf (\g -> total (imap (\c x -> coordPosition c + x) g)) bigGrid
-              , bench "fmap 300x300      [does not]" $
+              , bench "fmap 300x300      [no coord at all]" $
                 whnf (\g -> total (fmap (+ 1) g)) bigGrid
               ]
         , bgroup
@@ -143,7 +158,7 @@ main = do
                 whnf (\g -> total (map (index g) (allCoord @Big))) bigGrid
               ]
         , bgroup
-              "indexed traversals (these rebuild allCoord per call)"
+              "indexed traversals"
               [ bench "ifoldl' 300x300" $
                 whnf (ifoldl' (\c acc x -> acc + coordPosition c + x) 0) bigGrid
               , bench "itraverse 100x100" $
