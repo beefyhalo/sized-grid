@@ -12,6 +12,7 @@ module Main where
 
 import           SizedGrid
 
+import           Test.Invariant
 import           Test.Shrink
 import           Test.Utils
 
@@ -259,4 +260,5 @@ main =
               (Proxy @('[ HardWrap 8, HardWrap 3, HardWrap 5]))
               (Proxy @Int))
        , shrinkTests
+       , invariantTests
        ]

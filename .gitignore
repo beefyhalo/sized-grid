@@ -24,3 +24,14 @@ cabal.project.local
 .dolt/
 *.db
 .beads-credential-key
+
+# Nix / direnv
+result
+result-*
+.direnv/
+
+# cabal
+dist-newstyle/
+
+# Editor
+.vscode/

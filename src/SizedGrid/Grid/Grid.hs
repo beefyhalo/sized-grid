@@ -254,3 +254,13 @@ instance ( KnownNat z
                     takeGrid (Proxy :: Proxy z) (dropGrid pTake g)
     shrinkGrid _ = error "Impossible pattern in shrinkGrid"
 
+
+gridWindows :: forall small big rest a.
+               ( KnownNat (MaxCoordSize (small ': rest)), 
+                 CoordNat big `Mod` CoordNat small ~ 0
+               )
+            => Grid (big ': rest) a
+            -> [Grid (small ': rest) a]
+gridWindows (Grid v) =
+    let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))
+    in map Grid $ splitVectorBySize size v

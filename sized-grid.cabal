@@ -1,91 +1,101 @@
-name: sized-grid
-version: 0.2.0.2
-cabal-version: >=1.10
-category: Data
-build-type: Simple
-license: MIT
-license-file: LICENSE
-maintainer: ed@wastell.co.uk
-bug-reports: https://github.com/edwardwas/sized-grid/issues
-synopsis: Multidimensional grids with sized specified at compile time
-author: edwardwas
-homepage: https://github.com/edwardwas/sized-grid
+cabal-version:      3.0
+name:               sized-grid
+version:            0.2.0.2
+category:           Data
+build-type:         Simple
+license:            MIT
+license-file:       LICENSE
+maintainer:         ed@wastell.co.uk
+bug-reports:        https://github.com/edwardwas/sized-grid/issues
+synopsis:           Multidimensional grids with sized specified at compile time
+author:             edwardwas
+homepage:           https://github.com/edwardwas/sized-grid
 description:
   `size-grid` allows you to make finite sized grids and have their size and shape confirmed at compile time
   .
   Consult the readme for a short tutorial and explanation.
+
 extra-source-files:
-    ChangeLog.md
-    README.lhs
-    README.md
+  ChangeLog.md
+  README.lhs
+  README.md
+
+tested-with:        GHC ==9.8.4 || ==9.10.1 || ==9.12.3 || ==9.14.1
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/edwardwas/sized-grid
 
+-- Shared language settings. GHC2024 already implies DataKinds, GADTs,
+-- LambdaCase, MonoLocalBinds, DerivingStrategies, RoleAnnotations and
+-- ExplicitNamespaces on top of GHC2021, which is why the per-module LANGUAGE
+-- headers are far shorter than they used to be.
+common lang
+  default-language:   GHC2024
+  default-extensions:
+    DefaultSignatures
+    FunctionalDependencies
+    PatternSynonyms
+    TypeFamilies
+    UndecidableInstances
+    UndecidableSuperClasses
+    ViewPatterns
+
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints
+
 library
-    exposed-modules:
-        SizedGrid.Ordinal
-        SizedGrid.Coord
-        SizedGrid.Coord.Class
-        SizedGrid.Coord.Periodic
-        SizedGrid.Coord.HardWrap
-        SizedGrid.Grid.Class
-        SizedGrid.Grid.Grid
-        SizedGrid.Grid.Focused
-        SizedGrid
-    build-depends:
-        base,
-        adjunctions,
-        aeson ,
-        comonad,
-        constraints,
-        distributive,
-        generics-sop ,
-        lens ,
-        mtl ,
-        random,
-        vector,
-        vector-space
-    default-language: Haskell2010
-    hs-source-dirs: src
-    ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules:
+    SizedGrid
+    SizedGrid.Coord
+    SizedGrid.Coord.Class
+    SizedGrid.Coord.HardWrap
+    SizedGrid.Coord.Periodic
+    SizedGrid.Grid.Class
+    SizedGrid.Grid.Focused
+    SizedGrid.Grid.Grid
+    SizedGrid.Ordinal
 
-test-suite  tests
-    type: exitcode-stdio-1.0
-    main-is: Main.hs
-    build-depends:
-        base,
-        HUnit,
-        aeson,
-        adjunctions,
-        generics-sop,
-        lens,
-        sized-grid,
-        tasty,
-        tasty-hunit,
-        vector ,
-        vector-space,
-        QuickCheck ,
-        tasty-quickcheck
-    default-language: Haskell2010
-    hs-source-dirs: tests
-    other-modules:
-        Test.Utils
-        Test.Shrink
+  other-modules:   SizedGrid.Internal.Type
+  build-depends:
+    , adjunctions   >=4.4  && <4.5
+    , aeson         >=2.1  && <2.3
+    , base          >=4.19 && <4.23
+    , comonad       >=5.0  && <5.1
+    , constraints   >=0.13 && <0.15
+    , distributive  >=0.6  && <0.7
+    , generics-sop  >=0.5  && <0.6
+    , lens          >=5.2  && <5.4
+    , mtl           >=2.3  && <2.4
+    , random        >=1.2  && <1.4
+    , vector        >=0.13 && <0.14
+    , vector-space  >=0.16 && <0.20
 
--- test-suite  readme
---     type: exitcode-stdio-1.0
---     main-is: README.lhs
---     build-depends:
---         base >=4.9 && <4.13,
---         ansi-terminal >=0.8.0.2 && <0.10,
---         adjunctions >= 4.3 && < 4.5,
---         comonad >=5.0 && <5.1,
---         distributive >=0.5 && <1,
---         lens >=4.15 && <5,
---         markdown-unlit >=0.5.0 && <0.6,
---         sized-grid -any,
---         vector-space >=0.10 && < 2
---     default-language: Haskell2010
---     ghc-options: -pgmL markdown-unlit
+test-suite tests
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is:        Main.hs
+  other-modules:
+    Test.Invariant
+    Test.Shrink
+    Test.Utils
+
+  build-depends:
+    , adjunctions
+    , aeson
+    , base
+    , bytestring        >=0.11 && <0.13
+    , generics-sop
+    , HUnit             >=1.6  && <1.7
+    , lens
+    , QuickCheck        >=2.14 && <2.16
+    , sized-grid
+    , tasty             >=1.4  && <1.6
+    , tasty-hunit       >=0.10 && <0.11
+    , tasty-quickcheck  >=0.10 && <0.12
+    , vector
+    , vector-space
