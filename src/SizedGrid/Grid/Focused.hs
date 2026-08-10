@@ -23,10 +23,13 @@ data FocusedGrid cs a = FocusedGrid
     , focusedGridPosition :: Coord cs
     } deriving (Functor,Foldable,Traversable)
 
+-- | @All Monoid cs@ and @All Semigroup cs@ used to be demanded by both this
+-- instance and `ComonadStore` below. Neither body does anything but `index` and
+-- `tabulate`, which need only the `Representable` instance for `Grid`, so the
+-- two constraints were pure noise -- and noise every caller had to repeat,
+-- since `Comonad` is the whole reason to reach for a `FocusedGrid`.
 instance ( AllSizedKnown cs
          , All IsCoordLifted cs
-         , All Monoid cs
-         , All Semigroup cs
          , SListI cs
          ) =>
          Comonad (FocusedGrid cs) where
@@ -35,8 +38,6 @@ instance ( AllSizedKnown cs
 
 instance ( AllSizedKnown cs
          , All IsCoordLifted cs
-         , All Monoid cs
-         , All Semigroup cs
          , SListI cs
          ) =>
          ComonadStore (Coord cs) (FocusedGrid cs) where

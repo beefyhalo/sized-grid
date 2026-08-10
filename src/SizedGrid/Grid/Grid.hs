@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DeriveTraversable          #-}
@@ -22,7 +20,7 @@ module SizedGrid.Grid.Grid where
 
 import           SizedGrid.Coord
 import           SizedGrid.Coord.Class
-import           SizedGrid.Internal.Type (windowFits)
+import           SizedGrid.Internal.Type (requiring, windowFits)
 
 import           Control.Lens          hiding (index)
 import           Data.Aeson
@@ -195,9 +193,12 @@ splitGrid (Grid v) =
 combineGrid :: Grid '[c] (Grid cs a) -> Grid (c ': cs) a
 combineGrid (Grid v) = Grid (v >>= unGrid)
 
+-- | @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
+-- comes from @CoordNat@ on the `SizedGrid.Coord.Class.IsCoordLifted` instance,
+-- not from `IsCoord`, so the class could not have justified the @n + m@ in the
+-- result even in principle.
 combineHigherDim ::
-       ( IsCoord c)
-    => Grid (c n ': as) x
+       Grid (c n ': as) x
     -> Grid (c m ': as) x
     -> Grid (c (n + m) ': as) x
 combineHigherDim (Grid v1) (Grid v2) = Grid (v1 <> v2)
@@ -205,33 +206,35 @@ combineHigherDim (Grid v1) (Grid v2) = Grid (v1 <> v2)
 -- | @n <= m@ is required: without it @dropGrid \@9@ of a 3-grid typechecked and
 -- produced a grid whose vector was empty while its type claimed @3 - 9@.
 dropGrid ::
-       (KnownNat n, n <= m)
+       forall n m c x. (KnownNat n, n <= m)
     => Proxy n
     -> Grid '[ c m] x
     -> Grid '[ c (m - n)] x
-dropGrid p (Grid v) = Grid $ V.drop (fromIntegral $ natVal p) v
+dropGrid p (Grid v) = requiring @(n <= m) $ Grid $ V.drop (fromIntegral $ natVal p) v
 
 -- | @n <= m@ is required: 'V.take' cannot conjure elements, so without the
 -- constraint @takeGrid \@9@ of a 3-grid returned 3 elements under a type that
 -- promised 9.
 takeGrid ::
-       (KnownNat n, n <= m) => Proxy n -> Grid '[ c m] x -> Grid '[ c n] x
-takeGrid p (Grid v) = Grid $ V.take (fromIntegral $ natVal p) v
+       forall n m c x. (KnownNat n, n <= m)
+    => Proxy n
+    -> Grid '[ c m] x
+    -> Grid '[ c n] x
+takeGrid p (Grid v) = requiring @(n <= m) $ Grid $ V.take (fromIntegral $ natVal p) v
 
 -- | The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and
 -- get a grid whose vector did not match.
 splitHigherDim ::
        forall c as x y a.
-       ( KnownNat x
-       , KnownNat y
+       ( KnownNat y
        , y <= x
        , AllSizedKnown as
-       , IsCoord c
        )
     => Grid (c x ': as) a
     -> (Grid (c y ': as) a, Grid (c (x - y) ': as) a)
 splitHigherDim (Grid v) =
+    requiring @(y <= x) $
     let (a, b) =
             withDict
                 (sizeProof @as)
@@ -296,5 +299,6 @@ gridWindows :: forall small big rest a.
             => Grid (big ': rest) a
             -> [Grid (small ': rest) a]
 gridWindows (Grid v) =
+    requiring @(CoordNat big `Mod` CoordNat small ~ 0) $
     let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))
     in map Grid $ splitVectorBySize size v

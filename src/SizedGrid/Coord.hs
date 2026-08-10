@@ -67,6 +67,13 @@ instance All Eq cs => Eq (Coord cs) where
         and $
         hcollapse $ hcliftA2 (Proxy :: Proxy Eq) (\(I x) (I y) -> K (x == y)) a b
 
+-- | @All Eq cs@ looks like it should follow from @All Ord cs@, but it does not
+-- and cannot: @All c cs@ expands to the type family @AllF c cs@, and reducing
+-- @AllF Eq cs@ from @AllF Ord cs@ needs induction over @cs@, which the
+-- constraint solver will not do for a type variable. A @Dict@-based entailment
+-- (@Data.SOP.Dict.mapAll@) can produce the evidence at the value level, but
+-- superclass evidence for an instance has to be discharged at declaration
+-- time, where no such value is in scope. So both constraints stay.
 instance (All Eq cs, All Ord cs) => Ord (Coord cs) where
     compare (Coord a) (Coord b) =
         mconcat $

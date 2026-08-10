@@ -21,6 +21,24 @@ import           Data.Proxy
 import           GHC.TypeLits
 import           Unsafe.Coerce
 
+-- | Consume a constraint the implementation has no other use for.
+--
+-- Several signatures in "SizedGrid.Grid.Grid" carry a bound (@n <= m@,
+-- @Mod (CoordNat big) (CoordNat small) ~ 0@) whose entire job is to stop the
+-- caller building a `SizedGrid.Grid.Grid.Grid` whose type lies about its size.
+-- The body never mentions such a bound, so @-Wredundant-constraints@ reports
+-- it, and that module used to answer with a blanket
+-- @-Wno-redundant-constraints@ -- which also hid the constraints that really
+-- were dead. Naming the contract instead leaves the warning doing its job:
+--
+-- > takeGrid p (Grid v) = requiring @(n <= m) $ Grid $ V.take (natVal p) v
+--
+-- Building the `Dict` is what consumes the evidence; @id@ alone would report
+-- the constraint as redundant here instead.
+requiring :: forall (c :: Constraint) a. c => a -> a
+requiring x = case Dict @c of Dict -> x
+{-# INLINE requiring #-}
+
 -- | A singleton type for Bools
 data SBool a where
   STrue :: SBool 'True
