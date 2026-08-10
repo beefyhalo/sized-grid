@@ -274,7 +274,11 @@ instance ShrinkableGrid '[] '[] '[] where
 -- windowing a 5-grid into three positions of 3 was rejected. Stating it as an
 -- addition rather than a truncating subtraction also keeps it in reach of the
 -- Nat solver.
-instance ( KnownNat z
+-- @KnownNat x@ is new: 'asSizeProxy' recovers the offset's type-level value by
+-- comparing against the coord's size at runtime, now that an
+-- 'SizedGrid.Ordinal.Ordinal' no longer carries that dictionary in every value.
+instance ( KnownNat x
+         , KnownNat z
          , AllSizedKnown as
          , IsCoord c
          , ShrinkableGrid cs as bs

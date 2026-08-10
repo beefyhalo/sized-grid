@@ -13,6 +13,7 @@ module Main where
 import           SizedGrid
 
 import           Test.Invariant
+import           Test.Ordinal
 import           Test.Shrink
 import           Test.Utils
 
@@ -261,4 +262,5 @@ main =
               (Proxy @Int))
        , shrinkTests
        , invariantTests
+       , ordinalTests
        ]

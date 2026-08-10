@@ -18,7 +18,6 @@ module SizedGrid.Coord.Class where
 import           SizedGrid.Ordinal
 
 import           Control.Lens
-import           Data.Maybe        (fromJust)
 import           Data.Proxy
 import           GHC.TypeLits
 import Data.Kind (Type)
@@ -41,12 +40,24 @@ class IsCoord (c :: Nat -> Type) where
   maxCoordSize :: KnownNat n => Proxy (c n) -> Integer
   maxCoordSize p = natVal (sCoordSized p) - 1
 
-  -- | The maximum value of a coord
-  maxCoord :: KnownNat n => Proxy n -> c n
+  -- | The maximum value of a coord.
+  --
+  -- @1 <= n@ is required because there is no such value otherwise: a @c 0@ has
+  -- no inhabitants at all. Without it this was 'Data.Maybe.fromJust' on
+  -- 'Nothing' for @n ~ 0@.
+  maxCoord :: (KnownNat n, 1 <= n) => Proxy n -> c n
   maxCoord _ = view (re asOrdinal) (maxCoord (Proxy :: Proxy n))
 
+  -- | Recover the coord's value as a type-level 'Nat', with the evidence that
+  -- it is in range.
+  --
+  -- @KnownNat n@ is required because the evidence is now produced by comparing
+  -- against @n@ at runtime ('SizedGrid.Ordinal.reifyOrdinal'). It used to come
+  -- from unpacking the 'SizedGrid.Ordinal.Ordinal' GADT, which is precisely the
+  -- dictionary every ordinal was paying to carry.
   asSizeProxy ::
-         c n
+         KnownNat n
+      => c n
       -> (forall m. (KnownNat m, m + 1 <= n) =>
                         Proxy m -> x)
       -> x
@@ -77,10 +88,9 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
 
 instance IsCoord Ordinal where
     asOrdinal = id
-    zeroPosition = Ordinal @0 Proxy
-    asSizeProxy (Ordinal p) func = func p
-    maxCoord :: forall n proxy . KnownNat n => proxy n -> Ordinal n
-    maxCoord _ = fromJust $ numToOrdinal (maxCoordSize (Proxy :: Proxy (Ordinal n)))
+    zeroPosition = minBound
+    asSizeProxy = reifyOrdinal
+    maxCoord _ = maxBound
 
 -- | Enumerate all possible values of a coord, in order
 allCoordLike :: (1 <= n, IsCoord c, KnownNat n) => [c n]

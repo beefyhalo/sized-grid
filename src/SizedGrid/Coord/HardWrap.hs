@@ -1,13 +1,4 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures             #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module SizedGrid.Coord.HardWrap where
 
@@ -17,15 +8,15 @@ import           SizedGrid.Ordinal
 import           Control.Lens          (iso)
 import           Data.Aeson
 import           Data.AffineSpace
-import           Data.Maybe            (fromJust)
-import           Data.Proxy            (Proxy (..))
 import           GHC.TypeLits
 import           System.Random         (Random (..))
 
 -- | A coordinate that clamps its numbers
 newtype HardWrap (n :: Nat) = HardWrap
     { unHardWrap :: Ordinal n
-    } deriving (Eq,Show,Ord)
+    } deriving (Eq, Ord)
+
+deriving instance KnownNat n => Show (HardWrap n)
 
 deriving instance (KnownNat n, 1 <= n) => Random (HardWrap n)
 deriving instance (KnownNat n, 1 <= n) => Enum (HardWrap n)
@@ -41,11 +32,8 @@ instance IsCoord HardWrap where
 instance (1 <= n, KnownNat n) => Semigroup (HardWrap n) where
   HardWrap a <> HardWrap b =
     HardWrap $
-    fromJust $
-    numToOrdinal $
-    min
-      (maxCoordSize (Proxy @(HardWrap n)))
-      (ordinalToNum a + ordinalToNum b)
+    unsafeOrdinal $
+    min (ordinalSize @n - 1) (ordinalToInt a + ordinalToInt b)
 
 instance (KnownNat n, 1 <= n) => Monoid (HardWrap n) where
   mempty = HardWrap minBound
@@ -57,8 +45,13 @@ instance (KnownNat n, 1 <= n) => Monoid (HardWrap n) where
 -- Clamping belongs in ('.+^') alone, which is what keeps the result in range.
 instance (1 <= n, KnownNat n) => AffineSpace (HardWrap n) where
   type Diff (HardWrap n) = Integer
-  HardWrap a .-. HardWrap b = ordinalToNum a - ordinalToNum b
-  HardWrap a .+^ b = HardWrap $ fromJust $ numToOrdinal $
+  HardWrap a .-. HardWrap b = toInteger $ ordinalToInt a - ordinalToInt b
+  -- The displacement is an unbounded 'Integer', so the clamp happens there:
+  -- reducing to 'Int' first could wrap a large offset into a small one and
+  -- clamp to the wrong end.
+  HardWrap a .+^ b =
+    HardWrap $
+    unsafeOrdinal $
+    fromInteger $
     max 0 $
-    min (maxCoordSize (Proxy @(HardWrap n))) $
-    (ordinalToNum a + b)
+    min (toInteger $ ordinalSize @n - 1) (toInteger (ordinalToInt a) + b)

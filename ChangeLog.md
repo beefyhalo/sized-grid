@@ -5,6 +5,34 @@
 Correctness release. Every change below is breaking, and each one turns a
 silently-wrong result into either a rejected value or a type error.
 
+* `Ordinal` is now a newtype over `Int` rather than a GADT carrying the value
+  as a type-level `Nat`. The old representation put a `Proxy` and two
+  `KnownNat` dictionaries in every value and called `someNatVal` on every
+  construction, so a single coordinate addition allocated a type-level natural.
+  Coordinate arithmetic is now roughly twice as fast and allocates half as
+  much; `toEnum`/`fromEnum` allocates 60% less.
+
+  **Migration:** the `Ordinal` constructor is no longer exported — the range
+  invariant is now maintained by this module rather than by the type checker,
+  so it cannot be. Build with `numToOrdinal` (checked) or `unsafeOrdinal`
+  (unchecked, `assert`-guarded, precondition documented), and read with
+  `ordinalToInt` or `ordinalToNum`. `reifyOrdinal` recovers the value as a
+  type-level `Nat` for the one case that needs it.
+
+  Three signatures gained constraints the GADT used to smuggle in inside its
+  values: `asSizeProxy` requires `KnownNat n`, `maxCoord` requires `1 <= n`
+  (there is no maximum of a `c 0`; it was `fromJust` on `Nothing`), and the
+  `ShrinkableGrid (c x ': cs)` instance requires `KnownNat x`. `Show (Ordinal m)`
+  requires `KnownNat m`, as it must to print the size.
+
+* `Periodic`'s `Enum` instance wrapped modulo `n - 1` instead of `n`, so
+  `toEnum 2 :: Periodic 3` was `0` and `fromEnum . toEnum` was not the identity
+  on the type's own range.
+
+* `[minBound ..]` and `[minBound, x ..]` on an `Ordinal`, and so on a
+  `HardWrap`, no longer throw `Maybe.fromJust: Nothing`. The derived `enumFrom`
+  counted past `maxBound`.
+
 * `HardWrap`'s `(.-.)` now returns a true signed displacement instead of
   clamping to `[0, n-1]`. The clamp remains in `(.+^)`. This restores the
   `AffineSpace` law `b .+^ (a .-. b) == a`, which `HardWrap` previously

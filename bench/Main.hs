@@ -17,6 +17,26 @@
 -- avoids the trap of timing a 'whnf' that stops at the outermost constructor:
 -- @Grid@ is a newtype over a boxed vector, so WHNF of a @tabulate@ would
 -- measure almost nothing.
+--
+-- == Do not compare against the recorded CSV across sessions
+--
+-- @bench\/baseline-ghc9.12.3-aarch64-darwin.csv@ holds the times of the code at
+-- the commit that recorded it, on the machine state of that moment, and that
+-- second half does not keep. Re-running the /same/ code weeks later measured
+-- every benchmark 1.9x slower, uniformly --- including @pure@ and @fmap@, which
+-- touch none of the machinery being worked on. Read against the stale CSV, a
+-- change that made coordinate arithmetic twice as fast looked like a
+-- regression.
+--
+-- So the allocation columns are the ones that transfer between sessions; they
+-- are deterministic. To compare times, measure both sides now:
+--
+-- > git archive HEAD | tar -x -C /tmp/before
+-- > (cd /tmp/before && cabal run bench:benchmarks -- --csv /tmp/before.csv)
+-- > cabal run bench:benchmarks -- --baseline /tmp/before.csv
+--
+-- tasty-bench then prints each result as a percentage of the run it can
+-- actually be compared with.
 module Main (main) where
 
 import           SizedGrid
