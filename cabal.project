@@ -1,2 +1,9 @@
+-- The examples live in the same project so that one `cabal build all` covers
+-- them. They used to carry their own stack.yaml files pinned to lts-11/lts-12
+-- (GHC 8.2/8.4), which is how they came to stop compiling without anyone
+-- noticing.
 packages:
   .
+  sudoko
+  gameOfLife
+  ising-example

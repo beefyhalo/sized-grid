@@ -34,6 +34,14 @@ silently-wrong result into either a rejected value or a type error.
 * Builds with GHC 9.8 through 9.14 via a nix flake; `stack.yaml` and Travis
   configuration removed.
 
+* The `sudoko`, `gameOfLife` and `ising-example` programs build again. They had
+  been pinned to lts-11.2/lts-12.7 (GHC 8.2/8.4) with `base < 4.13` bounds, so
+  no compiler in use could build them. All three are now packages of the root
+  `cabal.project`, so `cabal build all` covers them and they cannot rot
+  unnoticed again. `sudoko` gained a `main` — it previously ended in
+  `main = undefined` — that prints the board and its first row, column and
+  square.
+
 ## 0.2.0.0 -- NOT PUBLISHED
 
 * _WrappedCoord is now an Iso
