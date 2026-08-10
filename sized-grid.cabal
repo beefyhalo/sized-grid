@@ -86,6 +86,7 @@ test-suite tests
   other-modules:
     Test.Invariant
     Test.Shrink
+    Test.Tiling
     Test.Utils
 
   build-depends:

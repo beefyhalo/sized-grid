@@ -4,19 +4,15 @@
 -- type-level shape: each slice is a @Grid@ of a smaller size cut out of the
 -- 9x9 board, and the compiler checks that the shapes tile.
 --
--- 'main' is still a demonstration rather than a solver: 'columns' and
--- 'squares' are built from 'mapLowerDim', which currently takes a cartesian
--- product of the sub-slices instead of zipping them (sized-grid-61o), so any
--- code that forces the whole list of columns will not terminate on a 9x9
--- board. The definitions below are the ones the solver will use once that is
--- fixed, and they all typecheck today.
+-- 'main' validates the board rather than solving it: the search itself is
+-- still to be written.
 module Main where
 
 import           SizedGrid            hiding (All, Compose)
 
 import           Data.Foldable        (toList)
 import           Data.List            (intercalate)
-import           Data.Maybe           (fromJust, isJust, listToMaybe)
+import           Data.Maybe           (catMaybes, fromJust, isJust)
 import           Data.Monoid          (All (..), Any (..))
 
 newtype Symbol = Symbol (Ordinal 9)
@@ -45,15 +41,18 @@ exampleGrid =
          ]))
 
 rows :: Board -> [Grid '[ Ordinal 1, Ordinal 9] (Maybe Symbol)]
-rows = gridWindows
+rows = gridTiles
 
+-- | 'zipLowerDim', not 'mapLowerDim': the nine per-row slices are to be zipped
+-- into nine columns, not multiplied into 9^9 combinations.
 columns :: Board -> [Grid '[ Ordinal 9, Ordinal 1] (Maybe Symbol)]
-columns = mapLowerDim gridWindows
+columns = zipLowerDim gridTiles
 
+-- | Three horizontal bands of three squares each, in band-major order.
 squares :: Board -> [Grid '[ Ordinal 3, Ordinal 3] (Maybe Symbol)]
 squares b = do
-    a :: Grid '[ Ordinal 3, Ordinal 9] (Maybe Symbol) <- gridWindows b
-    mapLowerDim gridWindows a
+    band :: Grid '[ Ordinal 3, Ordinal 9] (Maybe Symbol) <- gridTiles b
+    zipLowerDim gridTiles band
 
 rowAtPoint ::
        Coord '[ Ordinal 9, Ordinal 9]
@@ -97,8 +96,11 @@ sliceSolved as = all isJust as && allUnique as
 gameIsSolved :: Board -> Bool
 gameIsSolved = getAll . withAllSlices (All . sliceSolved . toList)
 
+-- | Only the filled cells are checked for duplicates. Running 'allUnique' over
+-- the @Maybe@s directly calls every partially-filled board invalid, because two
+-- blanks are two equal 'Nothing's.
 gameIsInvalid :: Board -> Bool
-gameIsInvalid = getAny . withAllSlices (Any . not . allUnique . toList)
+gameIsInvalid = getAny . withAllSlices (Any . not . allUnique . catMaybes . toList)
 
 allValues :: Board -> Grid '[ Ordinal 9, Ordinal 9] [Symbol]
 allValues b =
@@ -114,21 +116,22 @@ displayBoard = unlines . map (concatMap displaySymbol) . collapseGrid
 displaySlice :: Foldable f => f (Maybe Symbol) -> String
 displaySlice = intercalate "," . map displaySymbol . toList
 
--- | Forces only the first slice, never the length of the list.
-firstSlice :: Foldable f => [f (Maybe Symbol)] -> String
-firstSlice = maybe "<none>" displaySlice . listToMaybe
+showSlices :: Foldable f => String -> [f (Maybe Symbol)] -> String
+showSlices label slices =
+    unlines $ (label ++ " (" ++ show (length slices) ++ "):")
+            : map (("  " ++) . displaySlice) slices
 
 main :: IO ()
 main = do
     putStrLn "Board:"
     putStr (displayBoard exampleGrid)
     putStrLn ""
-    putStrLn ("first row:    " ++ firstSlice (rows exampleGrid))
-    -- Only the first element is forced. 'columns' and 'squares' currently
-    -- yield 9^9 results rather than 9 (sized-grid-61o), so
-    -- 'length (columns exampleGrid)' would not terminate. The first element of
-    -- that cartesian product is the "take the first window everywhere" choice,
-    -- which coincides with the genuine first column -- so these two lines look
-    -- right, and every later element does not.
-    putStrLn ("first column: " ++ firstSlice (columns exampleGrid))
-    putStrLn ("first square: " ++ firstSlice (squares exampleGrid))
+    -- Each of these is 9 slices. Printing them all is the point: it is what
+    -- makes a slicing bug visible, and it is only affordable because
+    -- 'zipLowerDim' zips the per-row results instead of multiplying them.
+    putStr (showSlices "rows" (rows exampleGrid))
+    putStr (showSlices "columns" (columns exampleGrid))
+    putStr (showSlices "squares" (squares exampleGrid))
+    putStrLn ""
+    putStrLn ("solved:  " ++ show (gameIsSolved exampleGrid))
+    putStrLn ("invalid: " ++ show (gameIsInvalid exampleGrid))
