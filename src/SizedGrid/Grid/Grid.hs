@@ -289,7 +289,6 @@ instance ( KnownNat z
             asSizeProxy c $ \(pTake :: Proxy n) ->
                 case windowFits @n @y @z of
                     Dict -> takeGrid (Proxy :: Proxy z) (dropGrid pTake g)
-    shrinkGrid _ = error "Impossible pattern in shrinkGrid"
 
 
 gridWindows :: forall small big rest a.

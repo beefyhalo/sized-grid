@@ -57,6 +57,15 @@ pattern (:|) a as <- (coordSplit -> (a,as))
 pattern EmptyCoord :: Coord '[]
 pattern EmptyCoord = Coord Nil
 
+-- | Both patterns are total for their own index: a @Coord (c ': cs)@ is always
+-- a ':|' and a @Coord '[]@ is always an 'EmptyCoord'. GHC cannot work that out
+-- for a view pattern on its own, so without these the coverage checker demands
+-- a fallback equation, and the only thing such an equation can do is 'error' on
+-- a value that cannot exist.
+{-# COMPLETE (:|) #-}
+
+{-# COMPLETE EmptyCoord #-}
+
 infixr 5 :|
 
 _WrappedCoord :: Iso' (Coord cs) (NP I cs)
@@ -195,19 +204,23 @@ instance ( All AffineSpace cs
          ) =>
          AffineSpace (Coord cs) where
     type Diff (Coord cs) = CoordDiff cs
+    -- 'productTypeTo' and 'productTypeFrom' rather than the generic 'to' and
+    -- 'from': going through @SOP@ meant taking apart a sum that
+    -- 'IsProductType' already guarantees has one arm, and GHC will not reduce
+    -- @Code (CoordDiff cs)@ far enough to see the other arm is impossible. That
+    -- forced an unreachable @error@ equation on ('.+^'). These two do the same
+    -- job with no sum in the way.
     Coord a .-. Coord b =
         let helper ::
                    All AffineSpace xs => NP I xs -> NP I xs -> NP I (MapDiff xs)
             helper Nil Nil                 = Nil
             helper (I x :* xs) (I y :* ys) = I (x .-. y) :* helper xs ys
-        in to $ SOP $ SOP.Z $ helper a b
+        in productTypeTo $ helper a b
     Coord a .+^ b =
         let helper :: All AffineSpace xs => NP I xs -> NP I (MapDiff xs) -> NP I xs
             helper Nil Nil                 = Nil
             helper (I x :* xs) (I y :* ys) = I (x .+^ y) :* helper xs ys
-        in case from b of
-              SOP (SOP.Z bs) -> Coord $ helper a bs
-              _ -> error "Error in adding Coord. Should be unreachable"
+        in Coord $ helper a $ productTypeFrom b
 
 -- | Generate all possible coords in order
 allCoord ::
@@ -323,7 +336,6 @@ instance (WeakenCoord as bs, IsCoord c, KnownNat m) =>
         bs <- weakenCoord as
         b <- weakenIsCoord a
         return (b :| bs)
-    weakenCoord _ = error "Unreachable pattern in weakenCoord"
 
 class StrengthenCoord as bs where
   strengthenCoord :: Coord as -> Coord bs
@@ -338,4 +350,3 @@ instance ( StrengthenCoord as bs
          ) =>
          StrengthenCoord ((c n) ': as) ((c m) ': bs) where
   strengthenCoord (a :| as) = strengthenIsCoord a :| strengthenCoord as
-  strengthenCoord _         = error "Unreachable pattern in strengthenCoord"

@@ -15,9 +15,11 @@ description:
   .
   Consult the readme for a short tutorial and explanation.
 
-extra-source-files:
+-- README.lhs is a symlink to README.md and is the readme test-suite's main-is,
+-- so it is build input rather than documentation.
+extra-source-files: README.lhs
+extra-doc-files:
   ChangeLog.md
-  README.lhs
   README.md
 
 tested-with:        GHC ==9.8.4 || ==9.10.1 || ==9.12.3 || ==9.14.1
