@@ -17,7 +17,9 @@ description:
 
 -- README.lhs is a symlink to README.md and is the readme test-suite's main-is,
 -- so it is build input rather than documentation.
-extra-source-files: README.lhs
+extra-source-files:
+  bench/baseline-ghc9.12.3-aarch64-darwin.csv
+  README.lhs
 extra-doc-files:
   ChangeLog.md
   README.md
@@ -117,3 +119,25 @@ test-suite readme
 
   build-tool-depends: markdown-unlit:markdown-unlit >=0.5 && <0.7
   ghc-options:        -pgmL markdown-unlit
+
+-- Baseline for the Ordinal-representation, allCoord-caching and unboxed-Grid
+-- work, none of which is judgeable without numbers. tasty-bench rather than
+-- criterion: one small dependency that already shares tasty with the test
+-- suite.
+benchmark benchmarks
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is:        Main.hs
+  build-depends:
+    , adjunctions
+    , aeson
+    , base
+    , comonad
+    , deepseq      >=1.4  && <1.6
+    , lens
+    , sized-grid
+    , tasty-bench  >=0.3  && <0.5
+    , vector-space
+
+  ghc-options:    -with-rtsopts=-T

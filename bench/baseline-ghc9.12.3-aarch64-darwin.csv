@@ -1,0 +1,17 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+"All.coord arithmetic.(.+^) x10000, Periodic 300x300",1566867187,128434154,11544643,1208462,19922944
+"All.coord arithmetic.(.-.) x10000, HardWrap 100x100 (coord list shared)",233511035,20008440,3360021,307,19922944
+"All.coord arithmetic.toEnum/fromEnum x300, HardWrap 300",7159967,443228,79216,7,19922944
+All.allCoord overhead (each pair differs only by whether allCoord is rebuilt).tabulate 300x300  [rebuilds allCoord],23561537500,1907310082,97579176,21347945,37748736
+All.allCoord overhead (each pair differs only by whether allCoord is rebuilt).pure 300x300      [does not],205832519,15051968,720781,55,37748736
+All.allCoord overhead (each pair differs only by whether allCoord is rebuilt).imap 300x300      [rebuilds allCoord],17714287500,1765040258,83502203,9125804,42991616
+All.allCoord overhead (each pair differs only by whether allCoord is rebuilt).fmap 300x300      [does not],758166796,52842828,4320769,1173246,42991616
+"All.grid access.index x90000, 300x300 (coord list shared)",13768693750,1148514390,75581006,6724,42991616
+All.indexed traversals (these rebuild allCoord per call).ifoldl' 300x300,19510137500,872318068,112039284,81422,42991616
+All.indexed traversals (these rebuild allCoord per call).itraverse 100x100,317877343,28395442,3529234,263724,42991616
+All.comonad.extract 50x50,153523,12508,808,0,42991616
+All.comonad.extend neighbourSum 50x50,5421015625,248797500,30552286,812244,45088768
+All.collapse round trip.collapseGrid 100x100,163438720,7318536,2855490,335,45088768
+All.collapse round trip.gridFromList . collapseGrid 100x100,581093359,30069872,4577570,1029535,45088768
+All.json.toJSON 100x100,337965234,27050308,3895460,322000,45088768
+All.json.fromJSON . toJSON 100x100,1645754687,159906810,10517939,2909526,48234496
