@@ -63,14 +63,9 @@ import SizedGrid
 import Control.Comonad
 import Control.Lens
 import Control.Comonad.Store
-import Data.AdditiveGroup
 import Data.AffineSpace
-import Data.Distributive
-import Data.Functor.Rep
-import Data.Semigroup (Semigroup(..))
 import GHC.TypeLits
 import qualified GHC.TypeLits as GHC
-import System.Console.ANSI
 ```
 
 We create a datatype for alive or dead.
@@ -130,12 +125,7 @@ Let's create a glider, and watch it move!
 
 ```haskell
 glider :: 
-      ( KnownNat (CoordNat x GHC.* CoordNat y)
-      , Semigroup x
-      , Semigroup y
-      , Monoid x
-      , Monoid y
-      , IsCoordLifted x
+      ( IsCoordLifted x
       , IsCoordLifted y
       , AffineSpace x
       , AffineSpace y
@@ -152,18 +142,17 @@ glider offset = pure Dead
     & gridIndex (offset .+^ (1,1)) .~ Alive
 ```
 
-We can now make our glider run!
+We can now make our glider run! A generation is just one `applyRule`, so the whole
+simulation is an `iterate`.
 
 ```haskell
-run = 
-    let start :: Grid '[Periodic 10, Periodic 10] TileState 
-        start = glider (mempty .+^ (3,3))
-        doStep grid = do
-          clearScreen
-          putStrLn $ displayGrid grid
-          _ <- getLine
-          doStep $ applyRule gameOfLife grid
-    in doStep start
+start :: Grid '[Periodic 10, Periodic 10] TileState
+start = glider (mempty .+^ (3,3))
 
-main = return ()
+generations :: Grid '[Periodic 10, Periodic 10] TileState 
+      -> [Grid '[Periodic 10, Periodic 10] TileState]
+generations = iterate (applyRule gameOfLife)
+
+main :: IO ()
+main = mapM_ (putStrLn . displayGrid) $ take 4 $ generations start
 ```

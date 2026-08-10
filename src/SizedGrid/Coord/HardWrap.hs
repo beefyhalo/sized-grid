@@ -61,4 +61,4 @@ instance (1 <= n, KnownNat n) => AffineSpace (HardWrap n) where
   HardWrap a .+^ b = HardWrap $ fromJust $ numToOrdinal $
     max 0 $
     min (maxCoordSize (Proxy @(HardWrap n))) $
-    ((ordinalToNum a) + fromIntegral b)
+    (ordinalToNum a + b)

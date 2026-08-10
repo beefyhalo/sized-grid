@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -22,10 +21,6 @@ import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Maybe            (fromJust)
 import           Data.Proxy
-#if MIN_VERSION_base(4,11,0)
-#else
-import           Data.Semigroup
-#endif
 import           GHC.TypeLits
 import           System.Random
 
@@ -73,10 +68,10 @@ instance (1 <= n, KnownNat n) => AffineSpace (Periodic n) where
     type Diff (Periodic n) = Integer
     Periodic a .-. Periodic b =
         (ordinalToNum a - ordinalToNum b) `mod`
-        (fromIntegral $ maxCoordSize (Proxy @(Periodic n)) + 1)
+        (maxCoordSize (Proxy @(Periodic n)) + 1)
     Periodic a .+^ b =
         Periodic $
         fromJust $
         numToOrdinal $
         (ordinalToNum a + b) `mod`
-        (fromIntegral $ maxCoordSize (Proxy @(Periodic n)) + 1)
+        (maxCoordSize (Proxy @(Periodic n)) + 1)

@@ -99,3 +99,19 @@ test-suite tests
     , tasty-quickcheck  >=0.10 && <0.12
     , vector
     , vector-space
+
+-- Compiles README.lhs so the tutorial cannot rot unnoticed. markdown-unlit is
+-- what turns the ```haskell fences into the literate source GHC sees.
+test-suite readme
+  import:             lang
+  type:               exitcode-stdio-1.0
+  main-is:            README.lhs
+  build-depends:
+    , base
+    , comonad
+    , lens
+    , sized-grid
+    , vector-space
+
+  build-tool-depends: markdown-unlit:markdown-unlit >=0.5 && <0.7
+  ghc-options:        -pgmL markdown-unlit

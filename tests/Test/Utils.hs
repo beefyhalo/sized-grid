@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE KindSignatures      #-}
@@ -13,10 +12,6 @@ module Test.Utils where
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal
 
-#if MIN_VERSION_base(4,11,0)
-#else
-import           Data.Semigroup
-#endif
 import           Control.Lens
 import           Data.AdditiveGroup
 import           Data.Aeson
