@@ -13,7 +13,14 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module SizedGrid.Ordinal where
+module SizedGrid.Ordinal
+  ( Ordinal(..)
+  , numToOrdinal
+  , ordinalToNum
+  , strengthenOrdinal
+  , weakenOrdinal
+  , _Ordinal
+  ) where
 
 import           Control.Lens            (Prism', prism')
 import           Control.Monad           (guard)

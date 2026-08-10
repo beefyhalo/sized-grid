@@ -6,7 +6,9 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-module SizedGrid.Grid.Focused where
+module SizedGrid.Grid.Focused
+  ( FocusedGrid(..)
+  ) where
 
 import           SizedGrid.Coord
 import           SizedGrid.Coord.Class

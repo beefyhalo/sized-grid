@@ -15,7 +15,39 @@
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module SizedGrid.Coord where
+-- | Unlike `SizedGrid.Grid.Grid.Grid`, `Coord`\'s constructor is safe to export:
+-- an @NP I cs@ is correct by construction for its own index, so there is no
+-- length invariant a caller could break.
+module SizedGrid.Coord
+  ( -- * Coordinates
+    Coord(..)
+  , pattern (:|)
+  , pattern EmptyCoord
+  , coordSplit
+  , _WrappedCoord
+    -- * Building and taking apart
+  , singleCoord
+  , appendCoord
+  , coordHead
+  , coordTail
+  , tranposeCoord
+  , zeroCoord
+  , allCoord
+  , coordPosition
+    -- * Neighbourhoods
+  , moorePoints
+  , vonNeumanPoints
+    -- * Changing the size of a coord
+  , WeakenCoord(..)
+  , StrengthenCoord(..)
+    -- * Type-level machinery
+  , Length
+  , MaxCoordSize
+  , CoordDiff
+  , MapDiff
+  , AllDiffSame
+  , AllSizedKnown(..)
+  ) where
 
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal

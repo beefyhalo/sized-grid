@@ -20,6 +20,33 @@ silently-wrong result into either a rejected value or a type error.
   silently truncate. Its constraints are now `(AllGridSizeKnown cs, SListI cs)`,
   matching `ToJSON`.
 
+* `Grid` is now abstract: the `Grid` constructor and the `unGrid` field are no
+  longer exported. Anyone could previously build a `Grid` whose vector length
+  disagreed with `MaxCoordSize cs`, which is the one invariant this library
+  exists to enforce — the `FromJSON` and `takeGrid` bugs above were both
+  instances of it. Every module now has an explicit export list, and
+  `-Wmissing-export-lists` is on so a module added later cannot quietly
+  re-expose what it imports.
+
+  **Migration:**
+
+  | was | now |
+  | --- | --- |
+  | `unGrid g` | `gridVector g` |
+  | `Grid v` (length checked at runtime) | `gridFromVector v :: Maybe (Grid cs a)` |
+  | `Grid v` (length known, not checkable) | `unsafeGridFromVector v`, from `SizedGrid.Grid.Unsafe` |
+  | `Grid . V.scanl1' f . unGrid` | `scanl1Grid f` |
+
+  `SizedGrid.Grid.Unsafe` is deliberately not re-exported by `SizedGrid`, so
+  opting out of the invariant shows up in an import list. Reading is not unsafe
+  and needs no such import: `gridVector` is exported normally.
+
+* New: `gridFromVector`, the checked counterpart to the old constructor;
+  `gridVector`, the read-only accessor; and `scanl1Grid`, a length-preserving
+  row-major scan. `scanl1Grid` exists because prefix sums were the one thing
+  real code could not express without reaching through the abstraction —
+  compose it with `mapLowerDim` to scan each row independently.
+
 * `takeGrid` and `dropGrid` now require `n <= m`.
 
 * `splitHigherDim`'s second component is now `Grid (c (x - y) ': as) a`. It was

@@ -10,7 +10,9 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-module SizedGrid.Coord.Periodic where
+module SizedGrid.Coord.Periodic
+  ( Periodic(..)
+  ) where
 
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal

@@ -8,7 +8,9 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Main where
+module Main
+  ( main
+  ) where
 
 import           SizedGrid
 
