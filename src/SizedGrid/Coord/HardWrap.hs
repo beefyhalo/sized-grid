@@ -51,13 +51,13 @@ instance (KnownNat n, 1 <= n) => Monoid (HardWrap n) where
   mempty = HardWrap minBound
   mappend = (<>)
 
+-- | The difference of two coords is a signed displacement, not a coord, so it
+-- is not clamped: clamping it broke @b .+^ (a .-. b) == a@ for every pair with
+-- @a < b@ (the difference came back 0, so the round trip landed on @b@).
+-- Clamping belongs in ('.+^') alone, which is what keeps the result in range.
 instance (1 <= n, KnownNat n) => AffineSpace (HardWrap n) where
   type Diff (HardWrap n) = Integer
-  HardWrap a .-. HardWrap b =
-    max 0 $
-    min
-      (fromIntegral $ maxCoordSize (Proxy @(HardWrap n)))
-      (ordinalToNum a - ordinalToNum b)
+  HardWrap a .-. HardWrap b = ordinalToNum a - ordinalToNum b
   HardWrap a .+^ b = HardWrap $ fromJust $ numToOrdinal $
     max 0 $
     min (maxCoordSize (Proxy @(HardWrap n))) $

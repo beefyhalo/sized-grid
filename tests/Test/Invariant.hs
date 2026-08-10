@@ -38,7 +38,7 @@ assertWellSized what g =
 
 -- | A grid decoded from JSON must either be well sized or not exist.
 assertRejects ::
-     forall (cs :: [Type]). (KnownNat (MaxCoordSize cs), All IsCoordLifted cs)
+     forall (cs :: [Type]). (AllGridSizeKnown cs, SListI cs)
   => String
   -> ByteString
   -> Assertion
@@ -82,20 +82,27 @@ invariantTests =
         , testCase "ragged rows" $
           assertRejects @'[ Ordinal 3, Ordinal 3] "ragged rows" "[[1,2],[3,4],[5,6]]"
         ]
+      -- The two cases that used to fail at runtime here are now rejected by the
+      -- compiler, so they cannot be expressed as runtime tests any more:
+      --
+      -- >  takeGrid (Proxy @9) oneByThree :: Grid '[Ordinal 9] Int
+      -- >    error: Cannot satisfy: 9 <= 3
+      --
+      -- >  let (_ :: Grid '[Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
+      -- >   in b :: Grid '[Ordinal 7, Ordinal 3] Int
+      -- >    error: Cannot match 'Ordinal 7' with 'Ordinal (3 - 1)'
+      --
+      -- Pinning that down properly needs a compile-fail harness; see
+      -- sized-grid-cti. What is left below is the positive half: the sizes the
+      -- signatures now force are the sizes the vectors actually have.
     , testGroup
-        "take/split must not claim more than they hold"
-        [ testCase "takeGrid beyond the source length" $
-          assertWellSized "takeGrid @9 of a 3-grid" (takeGrid (Proxy @9) oneByThree :: Grid '[ Ordinal 9] Int)
-        , testCase "takeGrid within the source length" $
+        "take/split hold the invariant they now promise"
+        [ testCase "takeGrid within the source length" $
           assertWellSized "takeGrid @2 of a 3-grid" (takeGrid (Proxy @2) oneByThree :: Grid '[ Ordinal 2] Int)
-        , testCase "splitHigherDim, honest annotation" $
+        , testCase "dropGrid within the source length" $
+          assertWellSized "dropGrid @2 of a 3-grid" (dropGrid (Proxy @2) oneByThree :: Grid '[ Ordinal 1] Int)
+        , testCase "splitHigherDim remainder is forced to x - y" $
           let (_ :: Grid '[ Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
            in assertWellSized "splitHigherDim snd" (b :: Grid '[ Ordinal 2, Ordinal 3] Int)
-          -- The second component's size variable is free in splitHigherDim's
-          -- signature, so this dishonest annotation still typechecks. It should
-          -- not: 3 - 1 is 2, not 7.
-        , testCase "splitHigherDim, dishonest annotation" $
-          let (_ :: Grid '[ Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
-           in assertWellSized "splitHigherDim snd @7" (b :: Grid '[ Ordinal 7, Ordinal 3] Int)
         ]
     ]

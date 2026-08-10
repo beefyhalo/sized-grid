@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               sized-grid
-version:            0.2.0.2
+version:            0.3.0.0
 category:           Data
 build-type:         Simple
 license:            MIT
@@ -61,18 +61,18 @@ library
 
   other-modules:   SizedGrid.Internal.Type
   build-depends:
-    , adjunctions   >=4.4  && <4.5
-    , aeson         >=2.1  && <2.3
-    , base          >=4.19 && <4.23
-    , comonad       >=5.0  && <5.1
-    , constraints   >=0.13 && <0.15
-    , distributive  >=0.6  && <0.7
-    , generics-sop  >=0.5  && <0.6
-    , lens          >=5.2  && <5.4
-    , mtl           >=2.3  && <2.4
-    , random        >=1.2  && <1.4
-    , vector        >=0.13 && <0.14
-    , vector-space  >=0.16 && <0.20
+    , adjunctions  >=4.4  && <4.5
+    , aeson        >=2.1  && <2.3
+    , base         >=4.19 && <4.23
+    , comonad      >=5.0  && <5.1
+    , constraints  >=0.13 && <0.15
+    , distributive >=0.6  && <0.7
+    , generics-sop >=0.5  && <0.6
+    , lens         >=5.2  && <5.4
+    , mtl          >=2.3  && <2.4
+    , random       >=1.2  && <1.4
+    , vector       >=0.13 && <0.14
+    , vector-space >=0.16 && <0.20
 
 test-suite tests
   import:         lang

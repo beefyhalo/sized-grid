@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -69,3 +70,23 @@ magic f =
 -- | Runtime proof that n - m is an insance of KnownNat if n and m are
 takeNat :: (KnownNat n, KnownNat m) :- KnownNat (n - m)
 takeNat = magic (-)
+
+-- | The two facts @shrinkGrid@ needs in order to call @dropGrid@ then
+-- @takeGrid@, which GHC's Nat solver cannot derive on its own.
+--
+-- At the use site the window offset @n@ comes from @asSizeProxy@ on a coord of
+-- size @x@, so @n + 1 <= x@, and the @ShrinkableGrid@ instance requires
+-- @x + z <= y + 1@. Together:
+--
+-- > n + 1 + z <= x + z <= y + 1        so   n + z <= y
+--
+-- which gives both @n <= y@ (drop stays in range) and @z <= y - n@ (the window
+-- fits in what is left). That is ordinary linear arithmetic, but the second
+-- wanted mentions a truncating subtraction over an existential @n@, which is
+-- out of reach of ghc-typelits-natnormalise. So it is asserted here, in the
+-- same spirit as 'takeAddIsId' above.
+--
+-- Soundness rests entirely on the @x + z <= y + 1@ constraint on the instance,
+-- which /is/ checked at every call site.
+windowFits :: forall n y z. Dict (n <= y, z <= (y - n))
+windowFits = unsafeCoerce (Dict :: Dict (0 <= 0, 0 <= 0))

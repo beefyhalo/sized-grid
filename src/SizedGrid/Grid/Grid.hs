@@ -22,6 +22,7 @@ module SizedGrid.Grid.Grid where
 
 import           SizedGrid.Coord
 import           SizedGrid.Coord.Class
+import           SizedGrid.Internal.Type (windowFits)
 
 import           Control.Lens          hiding (index)
 import           Data.Aeson
@@ -142,13 +143,27 @@ instance (AllGridSizeKnown cs, ToJSON a, SListI cs) => ToJSON (Grid cs a) where
           (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize (Tail cs))))
           v
 
-instance (All IsCoordLifted cs, FromJSON a) => FromJSON (Grid cs a) where
+-- | Decoding validates the length at every dimension, so a successfully decoded
+-- grid always satisfies @V.length (unGrid g) == MaxCoordSize cs@. Without the
+-- check a short or ragged array decoded to a `Grid` whose vector disagreed with
+-- its type, which then made `index` throw and ('<*>') silently truncate.
+--
+-- The constraints match `ToJSON`\'s: the `KnownNat` evidence is what makes the
+-- check possible.
+instance (AllGridSizeKnown cs, SListI cs, FromJSON a) =>
+         FromJSON (Grid cs a) where
   parseJSON v =
     case (shape :: Shape cs) of
       ShapeNil -> Grid . V.singleton <$> parseJSON v
       ShapeCons _ -> do
         a :: [Grid (Tail cs) a] <- parseJSON v
-        return $ Grid $ foldMap unGrid a
+        let expected =
+              fromIntegral $ GHC.natVal (Proxy @(CoordNat (Head cs))) :: Int
+        if length a == expected
+          then return $ Grid $ foldMap unGrid a
+          else fail $
+               "Grid: expected " ++
+               show expected ++ " elements, got " ++ show (length a)
 
 transposeGrid ::
      ( IsCoord h
@@ -187,18 +202,27 @@ combineHigherDim ::
     -> Grid (c (n + m) ': as) x
 combineHigherDim (Grid v1) (Grid v2) = Grid (v1 <> v2)
 
+-- | @n <= m@ is required: without it @dropGrid \@9@ of a 3-grid typechecked and
+-- produced a grid whose vector was empty while its type claimed @3 - 9@.
 dropGrid ::
-       KnownNat n
+       (KnownNat n, n <= m)
     => Proxy n
     -> Grid '[ c m] x
     -> Grid '[ c (m - n)] x
 dropGrid p (Grid v) = Grid $ V.drop (fromIntegral $ natVal p) v
 
-takeGrid :: KnownNat n => Proxy n -> Grid '[c m] x -> Grid '[c n] x
+-- | @n <= m@ is required: 'V.take' cannot conjure elements, so without the
+-- constraint @takeGrid \@9@ of a 3-grid returned 3 elements under a type that
+-- promised 9.
+takeGrid ::
+       (KnownNat n, n <= m) => Proxy n -> Grid '[ c m] x -> Grid '[ c n] x
 takeGrid p (Grid v) = Grid $ V.take (fromIntegral $ natVal p) v
 
+-- | The second component is @x - y@, not a free type variable. It used to be
+-- free, which let the caller annotate the remainder with any size at all and
+-- get a grid whose vector did not match.
 splitHigherDim ::
-       forall c as x y z a.
+       forall c as x y a.
        ( KnownNat x
        , KnownNat y
        , y <= x
@@ -206,7 +230,7 @@ splitHigherDim ::
        , IsCoord c
        )
     => Grid (c x ': as) a
-    -> (Grid (c y ': as) a, Grid (c z ': as) a)
+    -> (Grid (c y ': as) a, Grid (c (x - y) ': as) a)
 splitHigherDim (Grid v) =
     let (a, b) =
             withDict
@@ -238,11 +262,20 @@ class ShrinkableGrid (cs :: [Type]) (as :: [Type]) (bs :: [Type]) where
 instance ShrinkableGrid '[] '[] '[] where
   shrinkGrid _ (Grid v) = Grid v
 
+-- | @x + z <= y + 1@ says: a window of @z@ taken at any of the @x@ offsets
+-- still fits inside the source of size @y@.
+--
+-- This was previously written @z <= x - y + 1@, which has @x@ and @y@ the wrong
+-- way round. It only ever typechecked because the sole test case used
+-- @x == y == 3@, where both readings collapse to @z <= 1@; the honest case of
+-- windowing a 5-grid into three positions of 3 was rejected. Stating it as an
+-- addition rather than a truncating subtraction also keeps it in reach of the
+-- Nat solver.
 instance ( KnownNat z
          , AllSizedKnown as
          , IsCoord c
          , ShrinkableGrid cs as bs
-         , z <= (x  - y + 1)
+         , x + z <= y + 1
          ) =>
          ShrinkableGrid (c x ': cs) (c y ': as) (c z ': bs) where
     shrinkGrid (c :| cs) =
@@ -251,7 +284,8 @@ instance ( KnownNat z
         helper :: Grid '[ c y] a -> Grid '[ c z] a
         helper g =
             asSizeProxy c $ \(pTake :: Proxy n) ->
-                    takeGrid (Proxy :: Proxy z) (dropGrid pTake g)
+                case windowFits @n @y @z of
+                    Dict -> takeGrid (Proxy :: Proxy z) (dropGrid pTake g)
     shrinkGrid _ = error "Impossible pattern in shrinkGrid"
 
 
