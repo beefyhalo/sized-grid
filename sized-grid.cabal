@@ -50,9 +50,13 @@ common lang
     UndecidableSuperClasses
     ViewPatterns
 
+  -- -Wmissing-export-lists is what keeps the Grid constructor sealed. Without
+  -- it a module added later with a bare 'module M where' re-exposes whatever it
+  -- imports, and the seal is only as good as the leakiest module.
   ghc-options:
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
-    -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints
 
 library
   import:          lang
@@ -66,9 +70,15 @@ library
     SizedGrid.Grid.Class
     SizedGrid.Grid.Focused
     SizedGrid.Grid.Grid
+    SizedGrid.Grid.Unsafe
     SizedGrid.Ordinal
 
-  other-modules:   SizedGrid.Internal.Type
+  -- SizedGrid.Internal.Grid holds the Grid constructor. It is hidden rather
+  -- than exposed so that "SizedGrid.Grid.Unsafe" can be the only public route
+  -- to it; see the header of either module.
+  other-modules:
+    SizedGrid.Internal.Grid
+    SizedGrid.Internal.Type
   build-depends:
     , adjunctions  >=4.4  && <4.5
     , aeson        >=2.1  && <2.3

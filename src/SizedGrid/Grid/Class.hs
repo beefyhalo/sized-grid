@@ -6,12 +6,17 @@
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE UndecidableInstances   #-}
 
-module SizedGrid.Grid.Class where
+module SizedGrid.Grid.Class
+  ( IsGrid(..)
+  ) where
 
 import           SizedGrid.Coord
 import           SizedGrid.Coord.Class
 import           SizedGrid.Grid.Focused
 import           SizedGrid.Grid.Grid
+-- (& ix .~) replaces one element, so the length is unchanged. That is the whole
+-- of the obligation unsafeGridFromVector carries, discharged here by inspection.
+import           SizedGrid.Grid.Unsafe  (unsafeGridFromVector)
 
 import           Control.Lens           hiding (index)
 import           Data.Functor.Rep
@@ -31,7 +36,9 @@ instance (AllSizedKnown cs, All IsCoordLifted cs) =>
     gridIndex coord =
         lens
             (\g -> index g coord)
-            (\(Grid v) a -> Grid (v & ix (coordPosition coord) .~ a))
+            (\g a ->
+                 unsafeGridFromVector
+                     (gridVector g & ix (coordPosition coord) .~ a))
     asGrid = id
     asFocusedGrid =
         lens (\g -> FocusedGrid g zeroCoord) (\_ fg -> focusedGrid fg)

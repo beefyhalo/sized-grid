@@ -13,7 +13,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 
-module SizedGrid.Coord.Class where
+module SizedGrid.Coord.Class
+  ( IsCoord(..)
+  , IsCoordLifted(..)
+  , allCoordLike
+  ) where
 
 import           SizedGrid.Ordinal
 

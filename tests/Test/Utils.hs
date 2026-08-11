@@ -7,7 +7,17 @@
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
 
-module Test.Utils where
+module Test.Utils
+  ( eq1Laws
+  , aesonLaws
+  , semigroupLaws
+  , monoidLaws
+  , additiveGroupLaws
+  , affineSpaceLaws
+  , applicativeLaws
+  , traversalLaws
+  , isCoordLaws
+  ) where
 
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal

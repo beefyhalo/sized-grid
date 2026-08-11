@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.Shrink where
+module Test.Shrink
+  ( shrinkTests
+  ) where
 
 import           Data.Maybe       (fromJust)
 import           SizedGrid

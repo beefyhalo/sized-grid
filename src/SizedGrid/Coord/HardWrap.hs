@@ -1,6 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module SizedGrid.Coord.HardWrap where
+module SizedGrid.Coord.HardWrap
+  ( HardWrap(..)
+  ) where
 
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal

@@ -12,9 +12,11 @@ module Test.Invariant
   ) where
 
 import           SizedGrid
+import           SizedGrid.Grid.Unsafe (unsafeGridFromVector)
 
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)
+import           Data.Functor.Identity (Identity (..))
 import           Data.Maybe           (fromJust, isNothing)
 import           Data.Functor.Rep (tabulate)
 import           Data.Kind         (Type)
@@ -34,7 +36,7 @@ assertWellSized what g =
   assertEqual
     (what ++ ": vector length must equal MaxCoordSize")
     (fromIntegral (natVal (Proxy @(MaxCoordSize cs))) :: Int)
-    (V.length (unGrid g))
+    (V.length (gridVector g))
 
 -- | A grid decoded from JSON must either be well sized or not exist.
 assertRejects ::
@@ -104,5 +106,57 @@ invariantTests =
         , testCase "splitHigherDim remainder is forced to x - y" $
           let (_ :: Grid '[ Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
            in assertWellSized "splitHigherDim snd" (b :: Grid '[ Ordinal 2, Ordinal 3] Int)
+        ]
+    , testGroup
+        "gridFromVector checks the length the constructor used to assume"
+        [ testCase "a vector of exactly MaxCoordSize is accepted" $
+          assertEqual
+            "9 elements build the 3x3"
+            (Just threeByThree)
+            (gridFromVector (V.fromList [1 .. 9]))
+        , testCase "an accepted vector holds the invariant" $
+          assertWellSized "gridFromVector" $
+          fromJust (gridFromVector (V.fromList [1 .. 9]) :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))
+        , testCase "too few elements are rejected" $
+          assertBool "8 elements must not build a 3x3" $
+          isNothing (gridFromVector (V.fromList [1 .. 8]) :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))
+        , testCase "too many elements are rejected" $
+          assertBool "10 elements must not build a 3x3" $
+          isNothing (gridFromVector (V.fromList [1 .. 10]) :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))
+        , testCase "gridVector is the left inverse of gridFromVector" $
+          let v = V.fromList [1 .. 9] :: V.Vector Int
+           in assertEqual
+                "round trip"
+                v
+                (gridVector (fromJust (gridFromVector v :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))))
+        ]
+      -- The escape hatch is deliberately in its own module. It is the only way
+      -- left to build a `Grid` from a raw vector without a length check, so the
+      -- one thing worth pinning down is that it is genuinely an identity on the
+      -- representation -- code reaching for it is doing so to keep a length it
+      -- already knows is right.
+    , testCase "unsafeGridFromVector round-trips through gridVector" $
+      assertEqual
+        "unsafeGridFromVector . gridVector == id"
+        threeByThree
+        (unsafeGridFromVector (gridVector threeByThree))
+      -- The reach-through that motivated all of this: ../aoc/src/2018/11.hs
+      -- built prefix sums as @Grid . V.scanl1' (+) . unGrid@ because the
+      -- library had no length-preserving scan. It now does, so the escape hatch
+      -- is not needed for it.
+    , testGroup
+        "scanl1Grid is length-preserving, so it needs no escape hatch"
+        [ testCase "scans a one-dimensional grid" $
+          assertEqual
+            "running sums of 1,2,3"
+            (gridFromList [1, 3, 6] :: Maybe (Grid '[ Ordinal 3] Int))
+            (Just (scanl1Grid (+) oneByThree))
+        , testCase "preserves the invariant on a 3x3" $
+          assertWellSized "scanl1Grid" (scanl1Grid (+) threeByThree)
+        , testCase "mapLowerDim gives per-row prefix sums" $
+          assertEqual
+            "each row scanned independently"
+            (gridFromList [[1, 3, 6], [4, 9, 15], [7, 15, 24]] :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))
+            (Just (runIdentity (mapLowerDim (Identity . scanl1Grid (+)) threeByThree)))
         ]
     ]
