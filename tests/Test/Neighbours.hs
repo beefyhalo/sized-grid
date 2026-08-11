@@ -208,8 +208,42 @@ vonNeumannTests =
               assertEqual "all distinct" 15 (length (nub ns))
         ]
 
+-- | 'Ordinal' has no 'Data.AffineSpace.AffineSpace' instance, so the old
+-- @moorePoints@ could not be called on a coord containing one at all: its
+-- @All AffineSpace cs@ was unsatisfiable. These ask only for
+-- @All IsCoordLifted cs@, so they can. The ChangeLog claims this; this is the
+-- evidence.
+ordinalTests :: TestTree
+ordinalTests =
+    testGroup
+        "Ordinal axes are supported, which moorePoints could not be"
+        [ testCase "neighbours of an Ordinal corner" $
+              assertEqual
+                  ""
+                  [ord 0 1, ord 1 0, ord 1 1]
+                  (neighbours (ord 0 0))
+        , testCase "neighbours of an Ordinal interior cell" $
+              assertEqual "" 8 (length (neighbours (ord 2 2)))
+        , testCase "an Ordinal axis is bounded, so it fails at the edge" $
+              assertEqual
+                  ""
+                  Nothing
+                  (offsetIsCoord
+                       (fromJust (numToOrdinal (0 :: Int)) :: Ordinal 5)
+                       (-1))
+        ]
+  where
+    ord :: Int -> Int -> Coord '[Ordinal 5, Ordinal 5]
+    ord r c =
+        fromJust (numToOrdinal r) :| fromJust (numToOrdinal c) :| EmptyCoord
+
 neighbourTests :: TestTree
 neighbourTests =
     testGroup
         "Neighbours"
-        [offsetIsCoordTests, offsetCoordTests, mooreTests, vonNeumannTests]
+        [ offsetIsCoordTests
+        , offsetCoordTests
+        , mooreTests
+        , vonNeumannTests
+        , ordinalTests
+        ]
