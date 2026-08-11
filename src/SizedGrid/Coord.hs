@@ -25,6 +25,7 @@ module SizedGrid.Coord
   , offsetCoord
   , neighbours
   , mooreNeighbours
+  , vonNeumannNeighbours
   , moorePoints
   , vonNeumanPoints
     -- * Changing the size of a coord
@@ -453,6 +454,23 @@ stepsWithin r (Coord cs) = fmap Coord <$> go cs
 -- which four were distinct.
 mooreNeighbours :: All IsCoordLifted cs => Int -> Coord cs -> [Coord cs]
 mooreNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0]
+
+-- | The von Neumann neighbourhood: the coordinates whose distances, summed over
+-- every axis, come to at most @r@, excluding the centre. In two dimensions
+-- @vonNeumannNeighbours 1@ is the four orthogonally adjacent cells; in three
+-- dimensions it is six.
+--
+-- There is deliberately no @neighbours4@. The count is a fact about how many
+-- dimensions the coordinate has, not about the operation, so a name carrying it
+-- would state a two-dimensional assumption this library does not make.
+--
+-- On a torus axis with @2 * r >= n@ a cell can be nearer the other way round
+-- than its offset suggests, and this counts the shorter route, so the result is
+-- smaller than "every combination of offsets summing to @r@" would give. That
+-- is the honest distance on a torus: on a 3-cycle every other cell really is
+-- one step away.
+vonNeumannNeighbours :: All IsCoordLifted cs => Int -> Coord cs -> [Coord cs]
+vonNeumannNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0, s <= r]
 
 -- | The Moore neighbourhood at radius one: the surrounding cells, diagonals
 -- included, excluding the centre. The overwhelmingly common case of

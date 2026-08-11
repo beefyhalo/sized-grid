@@ -15,17 +15,24 @@ import           Test.Arbitrary        ()
 
 import           Data.List             (nub)
 import           Data.Maybe            (fromJust)
+import           GHC.TypeLits          (KnownNat)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty, (===))
 
 -- | The bounded space: off-grid is 'Nothing'.
-hw :: Int -> HardWrap 5
-hw = HardWrap . fromJust . numToOrdinal
+hwOf :: KnownNat n => Int -> HardWrap n
+hwOf = HardWrap . fromJust . numToOrdinal
 
 -- | The torus: every offset succeeds.
+peOf :: KnownNat n => Int -> Periodic n
+peOf = Periodic . fromJust . numToOrdinal
+
+hw :: Int -> HardWrap 5
+hw = hwOf
+
 pe :: Int -> Periodic 5
-pe = Periodic . fromJust . numToOrdinal
+pe = peOf
 
 offsetIsCoordTests :: TestTree
 offsetIsCoordTests =
@@ -151,8 +158,58 @@ mooreTests =
               all (\c' -> c `elem` neighbours c') (neighbours c)
         ]
 
+-- | Three dimensions, to keep the tests honest about von Neumann counts: a
+-- radius-1 von Neumann neighbourhood has four cells in 2D but six in 3D, which
+-- is exactly why the function is not called @neighbours4@.
+hwc3 :: Int -> Int -> Int -> Coord '[HardWrap 5, HardWrap 5, HardWrap 5]
+hwc3 x y z = hw x :| hw y :| hw z :| EmptyCoord
+
+-- | A torus small enough that offsets -2 and +2 land on the same cell.
+pec4 :: Int -> Int -> Coord '[Periodic 4, Periodic 4]
+pec4 r c = peOf r :| peOf c :| EmptyCoord
+
+-- | A 3-cycle: every other cell is one step away whichever way you walk.
+pec3 :: Int -> Int -> Coord '[Periodic 3, Periodic 3]
+pec3 r c = peOf r :| peOf c :| EmptyCoord
+
+vonNeumannTests :: TestTree
+vonNeumannTests =
+    testGroup
+        "vonNeumannNeighbours"
+        [ testCase "radius 1 in 2D is the four orthogonal cells" $
+              assertEqual
+                  ""
+                  [hwc 1 2, hwc 2 1, hwc 2 3, hwc 3 2]
+                  (vonNeumannNeighbours 1 (hwc 2 2))
+        , testCase "radius 1 in 3D is six cells, not four" $
+              assertEqual "" 6 (length (vonNeumannNeighbours 1 (hwc3 2 2 2)))
+        , testCase "a bounded corner has only the two cells that exist" $
+              assertEqual "" [hwc 0 1, hwc 1 0] (vonNeumannNeighbours 1 (hwc 0 0))
+        , testCase "radius 2 in 2D is the twelve cells within manhattan 2" $
+              assertEqual "" 12 (length (vonNeumannNeighbours 2 (hwc 2 2)))
+        , testCase "radius 0 is empty" $
+              assertEqual "" [] (vonNeumannNeighbours 0 (hwc 2 2))
+        , testProperty "is a subset of the Moore neighbourhood" $ \(c :: Coord '[HardWrap 5, HardWrap 5]) ->
+              all (`elem` mooreNeighbours 2 c) (vonNeumannNeighbours 2 c)
+        , testProperty "is a subset of the Moore neighbourhood on a torus" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
+              all (`elem` mooreNeighbours 2 c) (vonNeumannNeighbours 2 c)
+        , -- On a 3-cycle every other cell is one step away whichever way you
+          -- walk, so a radius-2 von Neumann ball is the entire grid.
+          testCase "a small torus counts the shorter way round" $
+              assertEqual
+                  ""
+                  8
+                  (length (vonNeumannNeighbours 2 (pec3 0 0)))
+        , -- Offsets -2 and +2 reach the same cell on a Periodic 4 axis. If the
+          -- axis enumeration kept both, the product would contain repeats.
+          testCase "colliding offsets on a torus do not duplicate cells" $ do
+              let ns = mooreNeighbours 2 (pec4 0 0)
+              assertEqual "every other cell, once" 15 (length ns)
+              assertEqual "all distinct" 15 (length (nub ns))
+        ]
+
 neighbourTests :: TestTree
 neighbourTests =
     testGroup
         "Neighbours"
-        [offsetIsCoordTests, offsetCoordTests, mooreTests]
+        [offsetIsCoordTests, offsetCoordTests, mooreTests, vonNeumannTests]
