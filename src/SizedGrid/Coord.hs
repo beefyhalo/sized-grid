@@ -26,8 +26,6 @@ module SizedGrid.Coord
   , neighbours
   , mooreNeighbours
   , vonNeumannNeighbours
-  , moorePoints
-  , vonNeumanPoints
     -- * Changing the size of a coord
   , WeakenCoord(..)
   , StrengthenCoord(..)
@@ -477,48 +475,6 @@ vonNeumannNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0, s <= r]
 -- 'mooreNeighbours'.
 neighbours :: All IsCoordLifted cs => Coord cs -> [Coord cs]
 neighbours = mooreNeighbours 1
-
--- | Calculate the Moore neighbourhood around a point. Includes the center
-moorePoints ::
-     forall a cs. (Enum a, Num a, AllDiffSame a cs, All AffineSpace cs)
-  => a
-  -> Coord cs
-  -> [Coord cs]
-moorePoints n (Coord cs) =
-  let helper :: (All AffineSpace xs, AllDiffSame a xs) => NP I xs -> [NP I xs]
-      helper Nil = [Nil]
-      helper (I a :* as) = do
-        delta :: a <- [-n .. n]
-        next <- helper as
-        return (I (a .+^ delta) :* next)
-  in map Coord $ helper cs
-
--- | Calculate the von Neuman neighbourhood around a point. Includes the center
-vonNeumanPoints ::
-     forall a cs.
-     ( Enum a
-     , Num a
-     , Ord a
-     , All Integral (MapDiff cs)
-     , AllDiffSame a cs
-     , All AffineSpace cs
-     , Ord (CoordDiff cs)
-     , IsProductType (CoordDiff cs) (MapDiff cs)
-     , AdditiveGroup (CoordDiff cs)
-     )
-  => a
-  -> Coord cs
-  -> [Coord cs]
-vonNeumanPoints n c =
-    let helper :: Coord cs -> Bool
-        helper new =
-            sum
-                (hcollapse $
-                 hcmap
-                     (Proxy :: Proxy Integral)
-                     (\(I a) -> K (abs $ fromIntegral a)) $
-                 from (min (new .-. c) (c .-. new))) <= n
-    in filter helper $ moorePoints n c
 
 -- | Swap x and y for a coord in 2D space
 tranposeCoord :: Coord '[a,b] -> Coord '[b,a]

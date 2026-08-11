@@ -5,6 +5,45 @@
 Correctness release. Every change below is breaking, and each one turns a
 silently-wrong result into either a rejected value or a type error.
 
+* The neighbourhood API is replaced. `moorePoints` and `vonNeumanPoints` are
+  **removed**, and `offsetCoord`, `neighbours`, `mooreNeighbours` and
+  `vonNeumannNeighbours` take over.
+
+  The old pair had three problems, and every observed caller worked around all
+  three. They included the centre, so callers wrote `filter (/= c)`. They were
+  built on `(.+^)`, which clamps on a bounded coord, so an off-grid offset
+  folded back onto an edge cell and callers wrote `nubOrd` — at a corner of a
+  `HardWrap 5` grid, `moorePoints 1` returned nine results of which four were
+  distinct. And they demanded up to eight constraints, so some callers gave up
+  and hand-rolled the whole thing.
+
+  The replacements exclude the centre, never duplicate, and ask only for
+  `All IsCoordLifted cs`. They also work on `Ordinal` axes, which the old ones
+  could not: `Ordinal` has no `AffineSpace` instance, so `All AffineSpace cs`
+  was unsatisfiable.
+
+  **Migration:** `filter (/= c) (moorePoints 1 c)` becomes `neighbours c`, and
+  a `nubOrd` in the same pipeline can go with it. `moorePoints n c` becomes
+  `mooreNeighbours n c` and `vonNeumanPoints n c` becomes
+  `vonNeumannNeighbours n c` (note the second `n` in von Neumann), both of
+  which now exclude the centre. Removal rather than deprecation is deliberate:
+  the behaviour changed under an otherwise compatible signature, so the names
+  had to go for the change to be a compile error rather than a silent one.
+
+* New: `offsetIsCoord`, a method of `IsCoord`, and `offsetCoord` over a whole
+  `Coord`. These are the checked counterpart of `(.+^)`: they return `Nothing`
+  when the offset leaves the space rather than clamping back into it.
+
+  Each axis applies its own boundary policy, so on a
+  `Coord '[HardWrap 5, Periodic 5]` the torus axis wraps while the bounded axis
+  refuses. The default for a coord type is the bounds check; `Periodic`
+  overrides it and is total.
+
+  `(.+^)` is unchanged. `AffineSpace` requires it to be total, and clamping is
+  its honest total form; `offsetCoord` is the operation for callers who need to
+  be told about the edge. `offsetCoord` takes the same `Diff (Coord cs)`, so it
+  is a drop-in wherever that distinction matters.
+
 * `Ordinal` is now a newtype over `Int` rather than a GADT carrying the value
   as a type-level `Nat`. The old representation put a `Proxy` and two
   `KnownNat` dictionaries in every value and called `someNatVal` on every

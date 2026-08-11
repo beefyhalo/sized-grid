@@ -39,7 +39,9 @@ There is a deliberately small number of functions that work over `Grid`: we inst
 
 We also have a `FocusedGrid` type, which is like `Grid` but has a certain focused position. This means that we lose many instances, but we gain `Comonad` and `ComonadStore`. 
 
-When dealing with areas around `Coord`s, we can use `moorePoints` and `vonNeumanPoints` to generate [Moore](https://en.wikipedia.org/wiki/Moore_neighborhood) and [von Neuman](https://en.wikipedia.org/wiki/Von_Neumann_neighborhood) neighbourhoods. Note that these include the center point.
+When dealing with areas around `Coord`s, `neighbours` gives the surrounding cells: the [Moore](https://en.wikipedia.org/wiki/Moore_neighborhood) neighbourhood at radius one, excluding the centre. `mooreNeighbours` and `vonNeumannNeighbours` take a radius, the latter generating a [von Neumann](https://en.wikipedia.org/wiki/Von_Neumann_neighborhood) neighbourhood instead.
+
+Each axis applies its own boundary policy, so a `HardWrap` axis simply has fewer neighbours at its edges while a `Periodic` axis always has the full complement. Nothing is ever duplicated and the centre is never included, so there is no result to repair. For a single step in a chosen direction, `offsetCoord` is `(.+^)` that reports leaving the grid instead of clamping back onto it.
 
 We introduce two new typeclasses: `IsCoord` and `IsGrid`. `IsGrid` has `gridIndex`, which allows us to get a single element of the grid and lenses to convert between `FocusedGrid` and `Grid`. `IsCoord` has `CoordSized`, which is the size of the coord and an iso to convert between `Ordinal` and the `Coord`.
 
@@ -105,7 +107,7 @@ applyRule ::
     -> grid cs TileState
 applyRule rule = over asFocusedGrid $ 
     extend $ \fg -> rule (extract fg) $ map (\p -> peek p fg) $ 
-        filter (/= pos fg) $ moorePoints (1 :: Integer) $ pos fg
+        neighbours $ pos fg
 
 ```
 

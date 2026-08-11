@@ -64,7 +64,7 @@ applyRule ::
 applyRule rule =
     extend $ \fg ->
         runRule rule (extract fg) $
-        map (\p -> peek p fg) $ filter (/= pos fg) $ moorePoints (1 :: Integer) $ pos fg
+        map (\p -> peek p fg) $ neighbours $ pos fg
 
 data DisplayInfo = DisplayInfo {
   tileSize :: Float

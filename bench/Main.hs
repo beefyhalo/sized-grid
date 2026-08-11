@@ -78,9 +78,11 @@ total = foldl' (+) 0
 
 -- | A game-of-life shaped step: read the Moore neighbourhood and fold it.
 -- Mirrors the 'experiment'/'peek' pattern in the consumer's rules.
+--
+-- This reads eight cells rather than the nine 'moorePoints' used to return:
+-- that one included the centre, and every caller filtered it back out.
 neighbourSum :: FocusedGrid Step Int -> Int
-neighbourSum fg =
-    total [peek p fg | p <- moorePoints (1 :: Integer) (pos fg)]
+neighbourSum fg = total [peek p fg | p <- neighbours (pos fg)]
 
 -- | Repeated coordinate offset. Recursive rather than a fold so the
 -- intermediate 'Coord's cannot be fused away.

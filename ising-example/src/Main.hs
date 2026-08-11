@@ -74,7 +74,7 @@ singleEnergy PhysicalOptions {..} fg =
   -0.5 * coupling *
   sum
     (map (\p -> spinNumber (peek p fg) * spinNumber (extract fg)) $
-     filter (/= (pos fg)) $ vonNeumanPoints 1 (pos fg))
+     vonNeumannNeighbours 1 (pos fg))
 
 totalEnergy ::
      IsGrid GridType (grid GridType)
