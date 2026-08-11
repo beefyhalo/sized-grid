@@ -35,3 +35,15 @@ dist-newstyle/
 
 # Editor
 .vscode/
+
+# Claude Code session state. The worktrees directory is per-session scratch and
+# must never be committed; settings.json is deliberately shared and stays
+# tracked.
+#
+# '.claude/*' rather than '.claude/': git does not descend into an excluded
+# directory, so under '.claude/' the negation below silently does nothing and
+# even 'git add .claude/settings.json' is refused. Matching the contents
+# instead leaves the directory traversable, which is what makes the negation
+# work.
+.claude/*
+!.claude/settings.json
