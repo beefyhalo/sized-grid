@@ -14,6 +14,7 @@ module Main
 
 import           SizedGrid
 
+import           Test.Arbitrary ()
 import           Test.Invariant
 import           Test.Ordinal
 import           Test.Shrink
@@ -25,32 +26,13 @@ import           Control.Monad         (replicateM)
 import           Data.Maybe            (isNothing)
 import           Data.Functor.Rep
 import           Data.Proxy
-import qualified Data.Vector           as V
-import           Generics.SOP          hiding (S, Z)
-import qualified GHC.Generics          as GHC
 import           GHC.TypeLits
 import qualified GHC.TypeLits          as GHC
-import           Test.QuickCheck       (Arbitrary (..), Arbitrary1 (..),
-                                        Property, oneof, property, (.&&.),
-                                        (===))
+import           Test.QuickCheck       (Arbitrary (..), Property, property,
+                                        (.&&.), (===))
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
-
-instance (1 <= n, KnownNat n) => Arbitrary (Periodic n) where
-  arbitrary = Periodic <$> oneof (map pure [minBound .. maxBound])
-
-instance (1 <= n, KnownNat n) => Arbitrary (HardWrap n) where
-  arbitrary = HardWrap <$> oneof (map pure [minBound .. maxBound])
-
-instance (All Arbitrary cs, SListI cs) => Arbitrary (Coord cs) where
-  arbitrary = Coord <$> hsequence (hcpure (Proxy @Arbitrary) arbitrary)
-
-instance AllSizedKnown cs => Arbitrary1 (Grid cs) where
-  liftArbitrary g = sequenceA  (pure g)
-
-instance (AllSizedKnown cs, Arbitrary a) => Arbitrary (Grid cs a) where
-  arbitrary = liftArbitrary arbitrary
 
 assertOrderd :: Ord a => [a] -> Assertion
 assertOrderd =

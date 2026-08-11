@@ -105,6 +105,7 @@ test-suite tests
   hs-source-dirs: tests
   main-is:        Main.hs
   other-modules:
+    Test.Arbitrary
     Test.Invariant
     Test.Ordinal
     Test.Shrink
