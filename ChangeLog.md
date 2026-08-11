@@ -86,8 +86,40 @@ silently-wrong result into either a rejected value or a type error.
   wrong way round; it only ever typechecked because the sole test used
   `x == y`.
 
+* `gridWindows` is now `gridTiles`. It cuts a grid into *disjoint tiles* along
+  its outermost axis and always did; the old name promised a sliding window,
+  which is a different operation and still does not exist.
+
+  **Migration:** rename the call. The behaviour is unchanged.
+
+* New `zipLowerDim`, for tiling the second axis:
+
+  ```haskell
+  zipLowerDim :: AllSizedKnown as
+              => (Grid as x -> [Grid bs y]) -> Grid (c ': as) x -> [Grid (c ': bs) y]
+  ```
+
+  `mapLowerDim` combines its per-sub-grid results with `traverse`, so at
+  `f ~ []` it is the list applicative: a *cartesian product*. `mapLowerDim
+  gridTiles` on a 9x9 board yields 9^9 = 387,420,489 grids, one for every way
+  of picking a cell from each row, rather than the 9 columns the caller meant —
+  which in practice means it never terminates. `zipLowerDim` zips positionally
+  and gives the 9. `mapLowerDim`'s haddock now says which applicatives are
+  safe, and both functions are covered by tests.
+
+* `splitVectorBySize` rejects a chunk size of zero, which previously looped
+  forever taking empty prefixes.
+
 * Builds with GHC 9.8 through 9.14 via a nix flake; `stack.yaml` and Travis
   configuration removed.
+
+* The `sudoko`, `gameOfLife` and `ising-example` programs build again. They had
+  been pinned to lts-11.2/lts-12.7 (GHC 8.2/8.4) with `base < 4.13` bounds, so
+  no compiler in use could build them. All three are now packages of the root
+  `cabal.project`, so `cabal build all` covers them and they cannot rot
+  unnoticed again. `sudoko` gained a `main` — it previously ended in
+  `main = undefined` — that prints the board with all nine of its rows, columns
+  and squares and reports whether it is solved or invalid.
 
 ## 0.2.0.0 -- NOT PUBLISHED
 

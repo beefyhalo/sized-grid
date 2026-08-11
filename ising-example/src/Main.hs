@@ -22,21 +22,17 @@ import           Control.Comonad.Store
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Random
-import           Data.AdditiveGroup
 import           Data.AffineSpace
-import           Data.Monoid                            ((<>))
+import           Data.Maybe            (fromMaybe)
 import           Data.Proxy
-import           Generics.SOP                           hiding (Proxy (..))
-import qualified GHC.TypeLits                           as GHC
+import qualified GHC.TypeLits          as GHC
 import           Graphics.Gloss
-import           Graphics.Gloss.Interface.Pure.Simulate
-import           Pipes                                  hiding (Proxy (..),
-                                                         each)
-import qualified Pipes.Prelude                          as P
-import           System.Random
+import           Pipes                 hiding (Proxy, each)
+import qualified Pipes.Prelude         as P
 
 data Spin = Up | Down deriving (Eq,Show,Enum,Bounded)
 
+flipSpin :: Spin -> Spin
 flipSpin Up   = Down
 flipSpin Down = Up
 
@@ -65,6 +61,7 @@ instance Random Spin where
 type GridType = '[Periodic 60, Periodic 60]
 --type GridType = '[Periodic (AsPeano 1), Periodic (AsPeano 1)]
 
+gridSize :: Integer
 gridSize = GHC.natVal (Proxy :: Proxy (MaxCoordSize GridType))
 
 randomGrid ::
@@ -92,7 +89,7 @@ energyAtPoint ::
   -> grid GridType Spin
   -> Coord GridType
   -> Double
-energyAtPoint po g pos = singleEnergy po $ seek pos $ g ^. asFocusedGrid
+energyAtPoint po g c = singleEnergy po $ seek c $ g ^. asFocusedGrid
 
 attempFlip ::
      (IsGrid GridType (grid GridType), MonadRandom m)
@@ -100,10 +97,10 @@ attempFlip ::
   -> grid GridType Spin
   -> Coord GridType
   -> m (grid GridType Spin)
-attempFlip po start pos = do
-  let startEnergy = energyAtPoint po start pos
-      newGrid = start & gridIndex pos %~ flipSpin
-      newEnergy = energyAtPoint po newGrid pos
+attempFlip po start c = do
+  let startEnergy = energyAtPoint po start c
+      newGrid = start & gridIndex c %~ flipSpin
+      newEnergy = energyAtPoint po newGrid c
       acceptProb = min 1 $ exp (startEnergy - newEnergy)
   a :: Double <- getRandom
   return
@@ -134,6 +131,7 @@ data SimulationState = SimulationState
     } deriving (Show)
 makeLenses ''SimulationState
 
+displaySimulation :: PhysicalOptions -> SimulationState -> IO ()
 displaySimulation po startSimulationState =
     let draw = ifoldMapOf (current . itraversed) drawHelper
         drawHelper p a =
@@ -148,9 +146,12 @@ displaySimulation po startSimulationState =
                     $ color c (translate 1 1 $ rectangleSolid 8 8)
         update vp dt old
             | old ^. elapsedSinceLastStep + dt >= old ^. stepPerTime =
-                let (Just newGrid, g') = runRand (P.last (runSimulation po 1)) (old ^. gen)
+                -- P.last is Nothing only for an empty producer, which cannot
+                -- happen here, but pattern-matching on Just would make that an
+                -- unexplained crash rather than a dropped frame.
+                let (newGrid, g') = runRand (P.last (runSimulation po 1)) (old ^. gen)
                 in update vp (dt - old ^. stepPerTime) $
-                   old & (current .~ newGrid) &
+                   old & (current %~ \c -> fromMaybe c newGrid) &
                    (elapsedSinceLastStep -~ old ^. stepPerTime) &
                    (gen .~ g')
             | otherwise = old & elapsedSinceLastStep +~ dt
@@ -162,6 +163,7 @@ displaySimulation po startSimulationState =
            (translate (-350) (-350) . draw)
            update
 
+main :: IO ()
 main =
     let po = PhysicalOptions 10
     in do g <- newStdGen

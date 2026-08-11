@@ -99,9 +99,12 @@ sizeProxyTests =
     assertEqual
       ""
       [0 .. 4]
+      -- A generator rather than a lazy @let Just o = ...@: matching in a list
+      -- comprehension is total (a 'Nothing' drops the element), and the
+      -- expected @[0 .. 4]@ still fails the assertion if one ever does.
       [ asSizeProxy o natVal
       | i <- [0 .. 4]
-      , let Just (o :: Ordinal 5) = numToOrdinal (i :: Int)
+      , Just (o :: Ordinal 5) <- [numToOrdinal (i :: Int)]
       ]
   , testCase "asSizeProxy through a Periodic" $
     assertEqual

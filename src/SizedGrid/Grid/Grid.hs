@@ -40,10 +40,11 @@ module SizedGrid.Grid.Grid
   , dropGrid
   , takeGrid
   , mapLowerDim
+  , zipLowerDim
   , scanl1Grid
-    -- * Windows
+    -- * Windows and tiles
   , ShrinkableGrid(..)
-  , gridWindows
+  , gridTiles
     -- * Vector helpers
   , splitVectorBySize
   ) where

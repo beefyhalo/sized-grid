@@ -17,6 +17,7 @@ import           SizedGrid
 import           Test.Invariant
 import           Test.Ordinal
 import           Test.Shrink
+import           Test.Tiling
 import           Test.Utils
 
 import           Control.Lens          hiding (index)
@@ -313,6 +314,7 @@ main =
               (Proxy @('[ HardWrap 8, HardWrap 3, HardWrap 5]))
               (Proxy @Int))
        , shrinkTests
+       , tilingTests
        , invariantTests
        , ordinalTests
        ]

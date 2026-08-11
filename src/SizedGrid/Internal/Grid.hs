@@ -54,10 +54,11 @@ module SizedGrid.Internal.Grid
   , dropGrid
   , takeGrid
   , mapLowerDim
+  , zipLowerDim
   , scanl1Grid
-    -- * Windows
+    -- * Windows and tiles
   , ShrinkableGrid(..)
-  , gridWindows
+  , gridTiles
     -- * Vector helpers
   , splitVectorBySize
   ) where
@@ -66,6 +67,7 @@ import           SizedGrid.Coord
 import           SizedGrid.Coord.Class
 import           SizedGrid.Internal.Type (requiring, windowFits)
 
+import           Control.Applicative   (ZipList (..))
 import           Control.Lens          hiding (index)
 import           Data.Aeson
 import           Data.Constraint
@@ -228,9 +230,18 @@ type family AllGridSizeKnown cs :: Constraint where
                         , AllGridSizeKnown (Tail cs))
 
 
--- | Convert a vector into a list of `Vector`s, where all the elements of the list have the given size.
+-- | Convert a vector into a list of `Vector`s, where all the elements of the
+-- list have the given size.
+--
+-- If @n@ does not divide the length, the final chunk is short. Every caller in
+-- this module is protected from that by the size invariant on 'Grid', so the
+-- short chunk is unreachable for them -- but it is a silent malformation rather
+-- than a failure, so do not rely on it.
+--
+-- A size of zero would otherwise loop forever taking empty prefixes.
 splitVectorBySize :: Int -> V.Vector a -> [V.Vector a]
 splitVectorBySize n v
+  | n <= 0 = error $ "splitVectorBySize: chunk size must be positive, got " ++ show n
   | V.length v >= n = V.take n v : splitVectorBySize n (V.drop n v)
   | V.null v = []
   | otherwise = [v]
@@ -378,6 +389,17 @@ splitHigherDim (Grid v) =
                      v)
      in (Grid a, Grid b)
 
+-- | Split a grid into its @CoordNat c@ sub-grids along the outermost axis,
+-- apply @f@ to each, and glue the results back together.
+--
+-- The effects of @f@ are combined with @traverse@, so the choice of @f@ decides
+-- how the per-sub-grid results are combined, and the obvious choice is usually
+-- the wrong one. With @f ~ []@ this is the list applicative -- a cartesian
+-- product of one result per sub-grid, @n ^ n@ grids for @n@ sub-grids each
+-- returning @n@ results, not @n@ grids. That is almost never what a caller
+-- taking slices means; use 'zipLowerDim' for that. @f ~ Identity@ (a
+-- length-preserving map over each sub-grid) and @f ~ Maybe@ (a fallible one)
+-- behave as expected.
 mapLowerDim ::
        forall as bs x y c f. (AllSizedKnown as, Applicative f)
     => (Grid as x -> f (Grid bs y))
@@ -391,6 +413,24 @@ mapLowerDim f (Grid v) =
          splitVectorBySize
              (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as))))
              v)
+
+-- | 'mapLowerDim' where @f@ returns many results per sub-grid and they should
+-- be zipped positionally rather than multiplied: the @k@th result is built from
+-- the @k@th result of every sub-grid.
+--
+-- This is what slicing a grid along its second axis needs. @zipLowerDim
+-- 'gridTiles'@ on a 9x9 board gives the 9 columns; @mapLowerDim 'gridTiles'@
+-- gives 387,420,489 grids, one for every way of picking a cell from each row.
+--
+-- The result is as long as the shortest per-sub-grid list, so it is only the
+-- expected length when @f@ returns the same number of results for every
+-- sub-grid -- which 'gridTiles' does, since its count is fixed by the types.
+zipLowerDim ::
+       forall as bs x y c. AllSizedKnown as
+    => (Grid as x -> [Grid bs y])
+    -> Grid (c ': as) x
+    -> [Grid (c ': bs) y]
+zipLowerDim f = getZipList . mapLowerDim (ZipList . f)
 
 class ShrinkableGrid (cs :: [Type]) (as :: [Type]) (bs :: [Type]) where
   shrinkGrid :: Coord cs -> Grid as x -> Grid bs x
@@ -429,13 +469,30 @@ instance ( KnownNat x
                     Dict -> takeGrid (Proxy :: Proxy z) (dropGrid pTake g)
 
 
-gridWindows :: forall small big rest a.
-               ( KnownNat (MaxCoordSize (small ': rest)), 
+-- | Cut a grid into disjoint tiles along its outermost axis: an @Ordinal 9@
+-- axis tiled by @Ordinal 3@ gives three tiles, not seven overlapping windows.
+-- The tiles partition the source, so concatenating them reproduces it.
+--
+-- This was called @gridWindows@, which said the opposite of what it does. A
+-- sliding window and a disjoint tiling are different operations; this is the
+-- tiling. Sliding windows are 'shrinkGrid' at each offset (sized-grid-3t6).
+--
+-- @CoordNat big \`Mod\` CoordNat small ~ 0@ makes a tiling that does not divide
+-- evenly a type error, so the result is always exactly
+-- @CoordNat big \`Div\` CoordNat small@ tiles with no short remainder.
+--
+-- To tile along the /second/ axis, reach for 'zipLowerDim' and not
+-- 'mapLowerDim':
+--
+-- > rows    = gridTiles                :: Board -> [Grid '[Ordinal 1, Ordinal 9] a]
+-- > columns = zipLowerDim gridTiles    :: Board -> [Grid '[Ordinal 9, Ordinal 1] a]
+gridTiles :: forall small big rest a.
+               ( KnownNat (MaxCoordSize (small ': rest)),
                  CoordNat big `Mod` CoordNat small ~ 0
                )
             => Grid (big ': rest) a
             -> [Grid (small ': rest) a]
-gridWindows (Grid v) =
+gridTiles (Grid v) =
     requiring @(CoordNat big `Mod` CoordNat small ~ 0) $
     let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))
     in map Grid $ splitVectorBySize size v

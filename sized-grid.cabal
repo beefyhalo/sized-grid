@@ -102,6 +102,7 @@ test-suite tests
     Test.Invariant
     Test.Ordinal
     Test.Shrink
+    Test.Tiling
     Test.Utils
 
   build-depends:

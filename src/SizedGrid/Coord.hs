@@ -34,6 +34,8 @@ module SizedGrid.Coord
   , zeroCoord
   , allCoord
   , coordPosition
+  , coordFromPosition
+  , coordSpaceSize
     -- * Neighbourhoods
   , moorePoints
   , vonNeumanPoints
