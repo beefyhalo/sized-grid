@@ -75,6 +75,13 @@ silently-wrong result into either a rejected value or a type error.
   real code could not express without reaching through the abstraction —
   compose it with `mapLowerDim` to scan each row independently.
 
+* New: `coordSpaceSize`, the number of coordinates in a `Coord cs` — that is,
+  `MaxCoordSize` as a value — and `coordFromPosition`, the inverse of
+  `coordPosition`. `coordSpaceSize` asks only for `All IsCoordLifted cs` rather
+  than `KnownNat (MaxCoordSize cs)`, so it is available in the indexed
+  traversals, which is what lets `tabulate` size its vector up front instead of
+  growing it by doubling.
+
 * `takeGrid` and `dropGrid` now require `n <= m`.
 
 * `splitHigherDim`'s second component is now `Grid (c (x - y) ': as) a`. It was
