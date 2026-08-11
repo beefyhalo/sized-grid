@@ -52,15 +52,15 @@ import           Data.Functor.Rep       (index, tabulate)
 import           Test.Tasty.Bench
 
 -- | ../aoc/src/2018/11.hs works at this size: 90,000 cells.
-type Big = '[HardWrap 300, HardWrap 300]
+type Big = '[Clamped 300, Clamped 300]
 
 -- | ../aoc/src/2015/18.hs and ../aoc/src/2018/18.hs: 10,000 cells.
-type Mid = '[HardWrap 100, HardWrap 100]
+type Mid = '[Clamped 100, Clamped 100]
 
 -- | Small enough that the comonadic step stays interactive: 2,500 cells.
-type Step = '[HardWrap 50, HardWrap 50]
+type Step = '[Clamped 50, Clamped 50]
 
--- | Periodic, so walking never saturates the way HardWrap's clamp would.
+-- | Periodic, so walking never saturates the way Clamped's clamp would.
 type Walk = '[Periodic 300, Periodic 300]
 
 bigGrid :: Grid Big Int
@@ -134,13 +134,13 @@ main = do
               "coord arithmetic"
               [ bench "(.+^) x10000, Periodic 300x300" $
                 whnf (\n -> walk n zeroCoord) 10000
-              , bench "(.-.) x10000, HardWrap 100x100 (coord list shared)" $
+              , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 whnf
                     (\o -> total [fromIntegral (fst (c .-. o)) | c <- allCoord @Mid])
                     zeroCoord
-              , bench "toEnum/fromEnum x300, HardWrap 300" $
+              , bench "toEnum/fromEnum x300, Clamped 300" $
                 whnf
-                    (\n -> total [fromEnum (toEnum i :: HardWrap 300) | i <- [0 .. n]])
+                    (\n -> total [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n]])
                     299
               ]
         , bgroup

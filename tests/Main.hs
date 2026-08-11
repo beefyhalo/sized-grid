@@ -239,8 +239,8 @@ main =
            , aesonLaws p
            , isCoordLaws p
            ]
-      hardWrap =
-        let p = Proxy @(HardWrap 10)
+      clamped =
+        let p = Proxy @(Clamped 10)
         in [ semigroupLaws p
            , monoidLaws p
            , affineSpaceLaws p
@@ -248,7 +248,7 @@ main =
            , isCoordLaws p
            ]
       coord =
-        let p = Proxy @(Coord '[ HardWrap 10, Periodic 20])
+        let p = Proxy @(Coord '[ Clamped 10, Periodic 20])
         in [ semigroupLaws p
            , monoidLaws p
            , affineSpaceLaws p
@@ -269,16 +269,16 @@ main =
   in defaultMain $
      testGroup
        "tests"
-       [ testGroup "Periodic 20" periodic
-       , testGroup "HardWrap 20" hardWrap
-       , testGroup "Coord [HardWrap 10, Periodic 20]" coord
+       [ testGroup "Periodic 10" periodic
+       , testGroup "Clamped 10" clamped
+       , testGroup "Coord [Clamped 10, Periodic 20]" coord
        , testGroup "Coord [Periodic 10, Periodic 20]" coord2
        , testGroup "2D Coords" $
-         twoDimensionalCoordTests (Proxy @(Coord '[ HardWrap 10, Periodic 10]))
+         twoDimensionalCoordTests (Proxy @(Coord '[ Clamped 10, Periodic 10]))
        , testGroup
            "Coord creation"
            (coordCreationTests
-              (Proxy @(Coord '[ HardWrap 10, Periodic 10]))
+              (Proxy @(Coord '[ Clamped 10, Periodic 10]))
               (Proxy @Int))
        , testGroup
            "Grid"
@@ -294,7 +294,7 @@ main =
        , testGroup
            "Splitting"
            (splitTests
-              (Proxy @('[ HardWrap 8, HardWrap 3, HardWrap 5]))
+              (Proxy @('[ Clamped 8, Clamped 3, Clamped 5]))
               (Proxy @Int))
        , shrinkTests
        , tilingTests

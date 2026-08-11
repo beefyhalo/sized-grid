@@ -29,8 +29,8 @@ import           Test.QuickCheck (Arbitrary (..), Arbitrary1 (..), oneof)
 instance (1 <= n, KnownNat n) => Arbitrary (Periodic n) where
   arbitrary = Periodic <$> oneof (map pure [minBound .. maxBound])
 
-instance (1 <= n, KnownNat n) => Arbitrary (HardWrap n) where
-  arbitrary = HardWrap <$> oneof (map pure [minBound .. maxBound])
+instance (1 <= n, KnownNat n) => Arbitrary (Clamped n) where
+  arbitrary = Clamped <$> oneof (map pure [minBound .. maxBound])
 
 instance (All Arbitrary cs, SListI cs) => Arbitrary (Coord cs) where
   arbitrary = Coord <$> hsequence (hcpure (Proxy @Arbitrary) arbitrary)

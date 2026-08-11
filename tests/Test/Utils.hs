@@ -112,7 +112,7 @@ affineSpaceLaws _ =
       takeSelf a = a .-. a === zeroV
       -- The law that actually pins down (.-.): a difference must be able to
       -- carry you back. Clamping (.-.) satisfies both laws above but not this
-      -- one, which is how HardWrap's clamped subtraction went unnoticed.
+      -- one, which is how Clamped's clamped subtraction went unnoticed.
       subtractThenAdd :: a -> a -> Property
       subtractThenAdd a b = a === b .+^ (a .-. b)
   in testGroup

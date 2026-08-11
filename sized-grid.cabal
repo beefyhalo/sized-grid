@@ -70,8 +70,8 @@ library
   exposed-modules:
     SizedGrid
     SizedGrid.Coord
+    SizedGrid.Coord.Clamped
     SizedGrid.Coord.Class
-    SizedGrid.Coord.HardWrap
     SizedGrid.Coord.Periodic
     SizedGrid.Grid.Class
     SizedGrid.Grid.Focused

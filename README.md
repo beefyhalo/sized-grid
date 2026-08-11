@@ -14,15 +14,15 @@ The core datatype of this library is `Grid (cs :: '[k]) (a :: *)`. `cs` is a typ
 
 * `Ordinal n`: An ordinal can be an integral number between 0 and n - 1. As numbers outside the grid are not possible, this has the most restrictive API. One can convert between an Ordinal and a number of ordinalToNum and numToOrdinal.
 
-* `HardWrap n`: Like Oridnal, HardWrap can only hold intergral numbers between 0 and n - 1, but it allows a more permissive API by clamping values outside of its range. It is an instance of `Semigroup` and `Monoid`, where `mempty` is 0 and `<>` is addition. 
+* `Clamped n`: Like `Ordinal`, `Clamped` can only hold integral numbers between 0 and n - 1, but it allows a more permissive API by clamping values outside of its range to the nearest end. It is an instance of `Semigroup` and `Monoid`, where `mempty` is 0 and `<>` is saturating addition.
 
-* `Periodic n`: This is the most permissive. When a value is generated outside the given range, it wraps that around using modular arithmetic. Is is an instance of `Semigroup` and `Monoid` like `HardWrap`, but also of `AdditiveGroup` allowing negation.
+* `Periodic n`: This is the most permissive. When a value is generated outside the given range, it wraps that around using modular arithmetic. Is is an instance of `Semigroup` and `Monoid` like `Clamped`, but also of `AdditiveGroup` allowing negation.
 
-`HardWrap` and `Periodic` are both instances of `AffineSpace`, with their `Diff` being `Integer`. This means there are many occasions where one doesn't have to work directly with these values (which can be cumbersome) and can instead work with their differences as regular numbers.
+`Clamped` and `Periodic` are both instances of `AffineSpace`, with their `Diff` being `Integer`. This means there are many occasions where one doesn't have to work directly with these values (which can be cumbersome) and can instead work with their differences as regular numbers.
 
 The last type value of `Grid` is the type of each element. 
 
-The other main type is `Coord cs`, where `cs` is, again, a type level list of coordinate types. For example, `Coord '[Periodic 3, HardWrap 4]` is a coordinate in a 3 by 4 2D space. The different types (`Periodic` and `HardWrap`) tell how to handle combining theses different numbers. `Coord cs` is an instance of `Semigroup`, `Monoid` and `AdditiveGroup` as long as each of the coordinates is also an instance of that typeclass. `Coord` is also an instance of of `AffineSpace`, where `Diff` is a n-tuple, meaning we can pattern match and do all sorts of nice things.
+The other main type is `Coord cs`, where `cs` is, again, a type level list of coordinate types. For example, `Coord '[Periodic 3, Clamped 4]` is a coordinate in a 3 by 4 2D space. The different types (`Periodic` and `Clamped`) tell how to handle combining theses different numbers. `Coord cs` is an instance of `Semigroup`, `Monoid` and `AdditiveGroup` as long as each of the coordinates is also an instance of that typeclass. `Coord` is also an instance of of `AffineSpace`, where `Diff` is a n-tuple, meaning we can pattern match and do all sorts of nice things.
 
 For working directly with `Coord`s, one can construct them with `singleCoord` and `appendCoord` and consume and update them with `coordHead` and `coordTail`. They are also instances of `FieldN` from lens, allowing one to directly update or get a certain dimension.
 
@@ -41,7 +41,7 @@ We also have a `FocusedGrid` type, which is like `Grid` but has a certain focuse
 
 When dealing with areas around `Coord`s, `neighbours` gives the surrounding cells: the [Moore](https://en.wikipedia.org/wiki/Moore_neighborhood) neighbourhood at radius one, excluding the centre. `mooreNeighbours` and `vonNeumannNeighbours` take a radius, the latter generating a [von Neumann](https://en.wikipedia.org/wiki/Von_Neumann_neighborhood) neighbourhood instead.
 
-Each axis applies its own boundary policy, so a `HardWrap` axis simply has fewer neighbours at its edges while a `Periodic` axis always has the full complement. Nothing is ever duplicated and the centre is never included, so there is no result to repair. For a single step in a chosen direction, `offsetCoord` is `(.+^)` that reports leaving the grid instead of clamping back onto it.
+Each axis applies its own boundary policy, so a `Clamped` axis simply has fewer neighbours at its edges while a `Periodic` axis always has the full complement. Nothing is ever duplicated and the centre is never included, so there is no result to repair. For a single step in a chosen direction, `offsetCoord` is `(.+^)` that reports leaving the grid instead of clamping back onto it.
 
 We introduce two new typeclasses: `IsCoord` and `IsGrid`. `IsGrid` has `gridIndex`, which allows us to get a single element of the grid and lenses to convert between `FocusedGrid` and `Grid`. `IsCoord` has `CoordSized`, which is the size of the coord and an iso to convert between `Ordinal` and the `Coord`.
 

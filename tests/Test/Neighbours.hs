@@ -21,14 +21,14 @@ import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty, (===))
 
 -- | The bounded space: off-grid is 'Nothing'.
-hwOf :: KnownNat n => Int -> HardWrap n
-hwOf = HardWrap . fromJust . numToOrdinal
+hwOf :: KnownNat n => Int -> Clamped n
+hwOf = Clamped . fromJust . numToOrdinal
 
 -- | The torus: every offset succeeds.
 peOf :: KnownNat n => Int -> Periodic n
 peOf = Periodic . fromJust . numToOrdinal
 
-hw :: Int -> HardWrap 5
+hw :: Int -> Clamped 5
 hw = hwOf
 
 pe :: Int -> Periodic 5
@@ -39,14 +39,14 @@ offsetIsCoordTests =
     testGroup
         "offsetIsCoord is the checked counterpart of (.+^)"
         [ testCase "a zero offset is the identity" $ do
-              assertEqual "HardWrap" (Just (hw 2)) (offsetIsCoord (hw 2) 0)
+              assertEqual "Clamped" (Just (hw 2)) (offsetIsCoord (hw 2) 0)
               assertEqual "Periodic" (Just (pe 2)) (offsetIsCoord (pe 2) 0)
         , testCase "an in-range offset moves" $ do
-              assertEqual "HardWrap" (Just (hw 3)) (offsetIsCoord (hw 2) 1)
+              assertEqual "Clamped" (Just (hw 3)) (offsetIsCoord (hw 2) 1)
               assertEqual "Periodic" (Just (pe 3)) (offsetIsCoord (pe 2) 1)
-        , testCase "HardWrap fails off the low edge instead of clamping" $
+        , testCase "Clamped fails off the low edge instead of clamping" $
               assertEqual "" Nothing (offsetIsCoord (hw 0) (-1))
-        , testCase "HardWrap fails off the high edge instead of clamping" $
+        , testCase "Clamped fails off the high edge instead of clamping" $
               assertEqual "" Nothing (offsetIsCoord (hw 4) 1)
         , testCase "Periodic wraps at the low edge" $
               assertEqual "" (Just (pe 4)) (offsetIsCoord (pe 0) (-1))
@@ -64,7 +64,7 @@ offsetIsCoordTests =
                   (offsetIsCoord (pe 1) (5 ^ (20 :: Int)))
         ]
 
-hwc :: Int -> Int -> Coord '[HardWrap 5, HardWrap 5]
+hwc :: Int -> Int -> Coord '[Clamped 5, Clamped 5]
 hwc r c = hw r :| hw c :| EmptyCoord
 
 pec :: Int -> Int -> Coord '[Periodic 5, Periodic 5]
@@ -72,7 +72,7 @@ pec r c = pe r :| pe c :| EmptyCoord
 
 -- | One bounded axis and one torus axis, to pin down that the policy is read
 -- per axis rather than once for the whole coordinate.
-mixc :: Int -> Int -> Coord '[HardWrap 5, Periodic 5]
+mixc :: Int -> Int -> Coord '[Clamped 5, Periodic 5]
 mixc r c = hw r :| pe c :| EmptyCoord
 
 offsetCoordTests :: TestTree
@@ -80,7 +80,7 @@ offsetCoordTests =
     testGroup
         "offsetCoord applies each axis's own boundary policy"
         [ testCase "a zero offset is the identity" $ do
-              assertEqual "HardWrap" (Just (hwc 2 2)) (offsetCoord (hwc 2 2) (0, 0))
+              assertEqual "Clamped" (Just (hwc 2 2)) (offsetCoord (hwc 2 2) (0, 0))
               assertEqual "Periodic" (Just (pec 2 2)) (offsetCoord (pec 2 2) (0, 0))
         , testCase "an in-range offset moves on every axis" $
               assertEqual "" (Just (hwc 3 3)) (offsetCoord (hwc 2 2) (1, 1))
@@ -103,7 +103,7 @@ mooreTests =
     testGroup
         "mooreNeighbours"
         [ testCase "the centre is not its own neighbour" $ do
-              assertBool "HardWrap" (hwc 2 2 `notElem` neighbours (hwc 2 2))
+              assertBool "Clamped" (hwc 2 2 `notElem` neighbours (hwc 2 2))
               assertBool "Periodic" (pec 2 2 `notElem` neighbours (pec 2 2))
         , testCase "a bounded grid has 3 neighbours at a corner" $
               assertEqual "" 3 (length (neighbours (hwc 0 0)))
@@ -115,7 +115,7 @@ mooreTests =
               assertEqual "corner" 8 (length (neighbours (pec 0 0)))
               assertEqual "interior" 8 (length (neighbours (pec 2 2)))
         , -- The measurement recorded on sized-grid-7gs: moorePoints 1 at a
-          -- corner of a HardWrap 5 x HardWrap 5 returned nine results of which
+          -- corner of a Clamped 5 x Clamped 5 returned nine results of which
           -- only four were distinct, because (.+^) clamped every off-grid
           -- offset back onto an edge cell. Callers had to nubOrd it away.
           testCase "regression: a corner yields no clamped duplicates" $ do
@@ -146,13 +146,13 @@ mooreTests =
               assertEqual "" 24 (length (mooreNeighbours 2 (hwc 2 2)))
         , testCase "radius 0 is empty" $
               assertEqual "" [] (mooreNeighbours 0 (hwc 2 2))
-        , testProperty "never contains duplicates" $ \(c :: Coord '[HardWrap 5, HardWrap 5]) ->
+        , testProperty "never contains duplicates" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
               length (nub (neighbours c)) === length (neighbours c)
         , testProperty "a torus neighbourhood has no duplicates either" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
               length (nub (neighbours c)) === length (neighbours c)
-        , testProperty "never contains the centre" $ \(c :: Coord '[HardWrap 5, HardWrap 5]) ->
+        , testProperty "never contains the centre" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
               c `notElem` neighbours c
-        , testProperty "is symmetric on a bounded grid" $ \(c :: Coord '[HardWrap 5, HardWrap 5]) ->
+        , testProperty "is symmetric on a bounded grid" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
               all (\c' -> c `elem` neighbours c') (neighbours c)
         , testProperty "is symmetric on a torus" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
               all (\c' -> c `elem` neighbours c') (neighbours c)
@@ -161,7 +161,7 @@ mooreTests =
 -- | Three dimensions, to keep the tests honest about von Neumann counts: a
 -- radius-1 von Neumann neighbourhood has four cells in 2D but six in 3D, which
 -- is exactly why the function is not called @neighbours4@.
-hwc3 :: Int -> Int -> Int -> Coord '[HardWrap 5, HardWrap 5, HardWrap 5]
+hwc3 :: Int -> Int -> Int -> Coord '[Clamped 5, Clamped 5, Clamped 5]
 hwc3 x y z = hw x :| hw y :| hw z :| EmptyCoord
 
 -- | A torus small enough that offsets -2 and +2 land on the same cell.
@@ -189,7 +189,7 @@ vonNeumannTests =
               assertEqual "" 12 (length (vonNeumannNeighbours 2 (hwc 2 2)))
         , testCase "radius 0 is empty" $
               assertEqual "" [] (vonNeumannNeighbours 0 (hwc 2 2))
-        , testProperty "is a subset of the Moore neighbourhood" $ \(c :: Coord '[HardWrap 5, HardWrap 5]) ->
+        , testProperty "is a subset of the Moore neighbourhood" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
               all (`elem` mooreNeighbours 2 c) (vonNeumannNeighbours 2 c)
         , testProperty "is a subset of the Moore neighbourhood on a torus" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
               all (`elem` mooreNeighbours 2 c) (vonNeumannNeighbours 2 c)
