@@ -206,22 +206,23 @@ isCoordLaws ::
      forall c n. (IsCoord c, 1 <= n, KnownNat n)
   => Proxy (c n)
   -> TestTree
-isCoordLaws p =
+isCoordLaws _ =
   testCase "IsCoord Laws" $ do
-    assertEqual
-      "Max coord size is sCoordSized"
-      (maxCoordSize (Proxy :: Proxy (c n)))
-      (natVal (sCoordSized p) - 1)
+    -- The old first law here compared 'maxCoordSize' against
+    -- @natVal . sCoordSized@. Both sides are now the same expression --
+    -- 'maxCoordSize' is @natVal@ of its visible argument, minus one -- so the
+    -- law had become a tautology and is dropped. "Max size equality" below is
+    -- the one with content: it ties the number to the value 'maxCoord'.
     assertEqual
       "zeroPosition is Zero"
       (0 :: Int)
       (ordinalToNum $ view asOrdinal (zeroPosition @c @n))
     assertEqual
-      "Size Proxy Zero"
+      "reifyCoord of zeroPosition is 0"
       (0 :: Integer)
-      (asSizeProxy (zeroPosition @c @n) natVal)
+      (reifyCoord (zeroPosition @c @n) (\m -> natVal (Proxy @m)))
     assertEqual
       "Max size equality"
-      (ordinalToNum $ view (asOrdinal @c) (maxCoord (Proxy @n)))
-      (maxCoordSize p)
+      (ordinalToNum $ view (asOrdinal @c) (maxCoord :: c n))
+      (maxCoordSize n)
 

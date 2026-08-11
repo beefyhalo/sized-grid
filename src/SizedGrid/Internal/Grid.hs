@@ -1,20 +1,5 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE FunctionalDependencies     #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE PartialTypeSignatures      #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE UndecidableInstances       #-}
+-- GHC2024 plus the default-extensions in sized-grid.cabal cover everything this
+-- module used to list.
 
 -- |
 -- Module      :  SizedGrid.Internal.Grid
@@ -347,24 +332,32 @@ combineHigherDim ::
     -> Grid (c (n + m) ': as) x
 combineHigherDim (Grid v1) (Grid v2) = Grid (v1 <> v2)
 
--- | @n <= m@ is required: without it @dropGrid \@9@ of a 3-grid typechecked and
+-- | Drop the first @n@ elements of a one-dimensional grid:
+--
+-- > dropGrid 2 g   -- rather than dropGrid (Proxy @2) g
+--
+-- @n <= m@ is required: without it @dropGrid 9@ of a 3-grid typechecked and
 -- produced a grid whose vector was empty while its type claimed @3 - 9@.
 dropGrid ::
-       forall n m c x. (KnownNat n, n <= m)
-    => Proxy n
-    -> Grid '[ c m] x
+       forall m c x. forall n -> (KnownNat n, n <= m)
+    => Grid '[ c m] x
     -> Grid '[ c (m - n)] x
-dropGrid p (Grid v) = requiring @(n <= m) $ Grid $ V.drop (fromIntegral $ natVal p) v
+dropGrid n (Grid v) =
+    requiring @(n <= m) $ Grid $ V.drop (fromIntegral $ natVal (Proxy @n)) v
 
--- | @n <= m@ is required: 'V.take' cannot conjure elements, so without the
--- constraint @takeGrid \@9@ of a 3-grid returned 3 elements under a type that
+-- | Keep the first @n@ elements of a one-dimensional grid:
+--
+-- > takeGrid 2 g   -- rather than takeGrid (Proxy @2) g
+--
+-- @n <= m@ is required: 'V.take' cannot conjure elements, so without the
+-- constraint @takeGrid 9@ of a 3-grid returned 3 elements under a type that
 -- promised 9.
 takeGrid ::
-       forall n m c x. (KnownNat n, n <= m)
-    => Proxy n
-    -> Grid '[ c m] x
+       forall m c x. forall n -> (KnownNat n, n <= m)
+    => Grid '[ c m] x
     -> Grid '[ c n] x
-takeGrid p (Grid v) = requiring @(n <= m) $ Grid $ V.take (fromIntegral $ natVal p) v
+takeGrid n (Grid v) =
+    requiring @(n <= m) $ Grid $ V.take (fromIntegral $ natVal (Proxy @n)) v
 
 -- | The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and
@@ -448,7 +441,7 @@ instance ShrinkableGrid '[] '[] '[] where
 -- addition rather than a truncating subtraction also keeps it in reach of the
 -- Nat solver.
 --
--- @KnownNat x@ is new: 'asSizeProxy' recovers the offset's type-level value by
+-- @KnownNat x@ is new: 'reifyCoord' recovers the offset's type-level value by
 -- comparing against the coord's size at runtime, now that an
 -- 'SizedGrid.Ordinal.Ordinal' no longer carries that dictionary in every value.
 instance ( KnownNat x
@@ -464,9 +457,9 @@ instance ( KnownNat x
       where
         helper :: Grid '[ c y] a -> Grid '[ c z] a
         helper g =
-            asSizeProxy c $ \(pTake :: Proxy n) ->
+            reifyCoord c $ \n ->
                 case windowFits @n @y @z of
-                    Dict -> takeGrid (Proxy :: Proxy z) (dropGrid pTake g)
+                    Dict -> takeGrid z (dropGrid n g)
 
 
 -- | Cut a grid into disjoint tiles along its outermost axis: an @Ordinal 9@

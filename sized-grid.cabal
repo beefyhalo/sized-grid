@@ -24,7 +24,9 @@ extra-doc-files:
   ChangeLog.md
   README.md
 
-tested-with:        GHC ==9.8.4 || ==9.10.1 || ==9.12.3 || ==9.14.1
+-- GHC 9.8 is no longer supported: RequiredTypeArguments, which is how sizes are
+-- passed throughout the API, arrived in GHC 9.10.
+tested-with:        GHC ==9.10.1 || ==9.12.3 || ==9.14.1
 
 source-repository head
   type:     git
@@ -40,10 +42,14 @@ common lang
   -- fields, so a type abstraction is the only way to name the head and tail of
   -- the list it refines. GHC 9.12 still accepts that under TypeApplications but
   -- warns; from 9.14 it is required.
+  -- RequiredTypeArguments is how sizes are passed: 'takeGrid 3 g' rather than
+  -- 'takeGrid (Proxy @3) g'. It is on for every component because the tests and
+  -- the README call those functions too.
   default-extensions:
     DefaultSignatures
     FunctionalDependencies
     PatternSynonyms
+    RequiredTypeArguments
     TypeAbstractions
     TypeFamilies
     UndecidableInstances
@@ -82,7 +88,7 @@ library
   build-depends:
     , adjunctions  >=4.4  && <4.5
     , aeson        >=2.1  && <2.3
-    , base         >=4.19 && <4.23
+    , base         >=4.20 && <4.23
     , comonad      >=5.0  && <5.1
     , constraints  >=0.13 && <0.15
     , distributive >=0.6  && <0.7

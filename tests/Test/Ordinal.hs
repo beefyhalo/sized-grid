@@ -26,7 +26,7 @@ ordinalTests =
     "Ordinal"
     [ testGroup "numToOrdinal is the range check" numToOrdinalTests
     , testGroup "Enum covers the range and stops at the end" enumTests
-    , testGroup "asSizeProxy recovers the value" sizeProxyTests
+    , testGroup "reifyCoord recovers the value" sizeProxyTests
     , testGroup "Coord arithmetic stays in range" arithmeticTests
     ]
 
@@ -51,7 +51,7 @@ numToOrdinalTests =
   , testCase "ordinalSize is the type-level size" $
     assertEqual "" 5 (ordinalSize @5)
   , testCase "maxCoord of the smallest possible coord" $
-    assertEqual "" 0 (ordinalToInt (maxCoord (Proxy @1) :: Ordinal 1))
+    assertEqual "" 0 (ordinalToInt (maxCoord :: Ordinal 1))
   ]
 
 enumTests :: [TestTree]
@@ -95,22 +95,24 @@ sizeProxyTests =
   -- The GADT handed this back by unpacking a value. It is now recomputed with
   -- 'someNatVal' and a runtime comparison, so it needs testing away from zero,
   -- where an off-by-one would still look right.
-  [ testCase "asSizeProxy at every value of an Ordinal 5" $
+  [ testCase "reifyCoord at every value of an Ordinal 5" $
     assertEqual
       ""
       [0 .. 4]
       -- A generator rather than a lazy @let Just o = ...@: matching in a list
       -- comprehension is total (a 'Nothing' drops the element), and the
       -- expected @[0 .. 4]@ still fails the assertion if one ever does.
-      [ asSizeProxy o natVal
+      [ reifyCoord o (\m -> natVal (Proxy @m))
       | i <- [0 .. 4]
       , Just (o :: Ordinal 5) <- [numToOrdinal (i :: Int)]
       ]
-  , testCase "asSizeProxy through a Periodic" $
+  , testCase "reifyCoord through a Periodic" $
     assertEqual
       ""
       3
-      (asSizeProxy (view (re asOrdinal) (toEnum 3) :: Periodic 5) natVal)
+      (reifyCoord
+           (view (re asOrdinal) (toEnum 3) :: Periodic 5)
+           (\m -> natVal (Proxy @m)))
   ]
 
 arithmeticTests :: [TestTree]

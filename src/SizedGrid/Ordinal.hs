@@ -24,7 +24,7 @@
 -- precondition.
 --
 -- The one thing the GADT gave away for free was recovering the value as a type,
--- which 'SizedGrid.Coord.Class.asSizeProxy' needs. 'reifyOrdinal' does that on
+-- which 'SizedGrid.Coord.Class.reifyCoord' needs. 'reifyOrdinal' does that on
 -- demand, so the 'someNatVal' cost is paid at the one call site that wants it
 -- instead of by every value that might.
 module SizedGrid.Ordinal
@@ -116,8 +116,11 @@ ordinalToNum = fromIntegral . ordinalToInt
 -- | Recover an ordinal's value as a type-level 'Nat', with the evidence that it
 -- is in range.
 --
+-- The value is handed to the continuation as a required type argument, so the
+-- caller writes @reifyOrdinal o $ \\m -> ...@ and @m@ is a type.
+--
 -- This is the operation the old GADT representation carried in every value. The
--- library needs it in exactly one place --- 'SizedGrid.Coord.Class.asSizeProxy',
+-- library needs it in exactly one place --- 'SizedGrid.Coord.Class.reifyCoord',
 -- used by 'SizedGrid.Grid.Grid.shrinkGrid' to turn a window offset into a
 -- @dropGrid@ --- so it is reconstructed here on demand.
 --
@@ -128,16 +131,15 @@ ordinalToNum = fromIntegral . ordinalToInt
 reifyOrdinal ::
        forall n x. KnownNat n
     => Ordinal n
-    -> (forall m. (KnownNat m, m + 1 <= n) =>
-                      Proxy m -> x)
+    -> (forall m -> (KnownNat m, m + 1 <= n) => x)
     -> x
 reifyOrdinal (UnsafeOrdinal i) func =
     case someNatVal (toInteger i) of
         Nothing -> invariantViolated i (natVal (Proxy @n))
-        Just (SomeNat (p :: Proxy k)) ->
+        Just (SomeNat (_ :: Proxy k)) ->
             (case cmpNat (Proxy @(k + 1)) (Proxy @n) of
-                 LTI -> func p
-                 EQI -> func p
+                 LTI -> func k
+                 EQI -> func k
                  GTI -> invariantViolated i (natVal (Proxy @n))) \\
             plusNat @k @1
 

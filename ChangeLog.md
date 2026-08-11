@@ -82,6 +82,47 @@ silently-wrong result into either a rejected value or a type error.
   traversals, which is what lets `tabulate` size its vector up front instead of
   growing it by doubling.
 
+* Sizes are passed as required type arguments rather than as `Proxy` values, so
+  `takeGrid 2 g` replaces `takeGrid (Proxy @2) g`. No function in the public API
+  takes a `Data.Proxy.Proxy` any more.
+
+  The rule the API now follows: a type argument is *visible* when inference
+  cannot recover it, and *absent* when it can.
+
+  | was | now |
+  | --- | --- |
+  | `takeGrid (Proxy @2) g` | `takeGrid 2 g` |
+  | `dropGrid (Proxy @2) g` | `dropGrid 2 g` |
+  | `maxCoordSize (Proxy @(Periodic 10))` | `maxCoordSize 10` |
+  | `maxCoord (Proxy @10) :: Periodic 10` | `maxCoord :: Periodic 10` |
+  | `asSizeProxy c $ \(p :: Proxy m) -> ...` | `reifyCoord c $ \m -> ...` |
+  | `reifyOrdinal o $ \(p :: Proxy m) -> ...` | `reifyOrdinal o $ \m -> ...` |
+
+  `sCoordSized` is deleted; it existed only to turn one `Proxy` into another.
+
+  `maxCoordSize` is no longer a method of `IsCoord`. It never depended on the
+  coord type and no instance ever overrode it, and none could sensibly:
+  `asOrdinal` is an `Iso' (c n) (Ordinal n)`, so a lawful coord of size `n` has
+  exactly `n` inhabitants. Keeping it a method would have meant either an
+  ambiguous class variable or writing the coord type out as a visible argument,
+  which collides with the data constructor of the same name.
+
+  `maxCoord` takes no argument at all: its result type already fixes both the
+  coord type and the size.
+
+  `asSizeProxy` is now `reifyCoord` — the name went with the `Proxy` it was
+  named for, and it does to a coord what `reifyOrdinal` does to an `Ordinal`.
+
+  **This raises the minimum to GHC 9.10**, where `RequiredTypeArguments`
+  arrived. `tested-with` and the `base` lower bound have been updated; 9.8 is no
+  longer supported.
+
+* The per-module `LANGUAGE` headers are gone wherever `GHC2024` and the
+  package's `default-extensions` already implied them — 64 lines across six
+  modules, including all 17 of `SizedGrid.Internal.Grid`'s and 16 of
+  `SizedGrid.Coord`'s. What remains is only what is genuinely per-module, which
+  is `AllowAmbiguousTypes` in three modules and `OverloadedStrings` in one.
+
 * `takeGrid` and `dropGrid` now require `n <= m`.
 
 * `splitHigherDim`'s second component is now `Grid (c (x - y) ': as) a`. It was

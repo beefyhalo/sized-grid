@@ -1,30 +1,32 @@
-{-# LANGUAGE AllowAmbiguousTypes  #-}
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE DefaultSignatures    #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE InstanceSigs         #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE RankNTypes           #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeApplications     #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeOperators        #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module SizedGrid.Coord.Class
   ( IsCoord(..)
   , IsCoordLifted(..)
+  , maxCoordSize
   , allCoordLike
   ) where
 
 import           SizedGrid.Ordinal
 
 import           Control.Lens
-import           Data.Proxy
+import           Data.Kind     (Type)
 import           GHC.TypeLits
-import Data.Kind (Type)
+
+-- | The largest value a coord of size @n@ can hold, which is @n - 1@.
+--
+-- This used to be a method of `IsCoord` taking a @Proxy (c n)@. It never
+-- depended on @c@ and no instance overrode it, and it could not: `asOrdinal` is
+-- an @Iso' (c n) (Ordinal n)@, so a lawful coord type has exactly @n@
+-- inhabitants whatever else it does. The size is now given visibly:
+--
+-- > maxCoordSize 10 == 9
+--
+-- The rule this follows throughout the library: a type argument is visible when
+-- inference cannot recover it, and absent when it can. Compare `maxCoord`,
+-- which needs no argument at all because its result type says everything.
+maxCoordSize :: forall n -> KnownNat n => Integer
+maxCoordSize n = fromIntegral (ordinalSize @n) - 1
 
 -- | Everything that can be uses as a Coordinate. The only required function is `asOrdinal` and the type instance of `CoordSized`: the rest can be derived automatically.
 class IsCoord (c :: Nat -> Type) where
@@ -36,36 +38,39 @@ class IsCoord (c :: Nat -> Type) where
   default zeroPosition :: Monoid (c n) => c n
   zeroPosition = mempty
 
-  -- | Retrive a `Proxy` of the size
-  sCoordSized :: Proxy (c n) -> Proxy n
-  sCoordSized _ = Proxy
-
-  -- | The largest possible number expressable
-  maxCoordSize :: KnownNat n => Proxy (c n) -> Integer
-  maxCoordSize p = natVal (sCoordSized p) - 1
-
   -- | The maximum value of a coord.
+  --
+  -- The result type fixes both the coord type and its size, so there is nothing
+  -- left to pass: the @Proxy n@ this used to take carried no information the
+  -- caller had not already written down in the type of the result.
   --
   -- @1 <= n@ is required because there is no such value otherwise: a @c 0@ has
   -- no inhabitants at all. Without it this was 'Data.Maybe.fromJust' on
   -- 'Nothing' for @n ~ 0@.
-  maxCoord :: (KnownNat n, 1 <= n) => Proxy n -> c n
-  maxCoord _ = view (re asOrdinal) (maxCoord (Proxy :: Proxy n))
+  maxCoord :: (KnownNat n, 1 <= n) => c n
+  maxCoord = review asOrdinal maxCoord
 
   -- | Recover the coord's value as a type-level 'Nat', with the evidence that
-  -- it is in range.
+  -- it is in range, and hand it to the continuation as a required type
+  -- argument:
   --
-  -- @KnownNat n@ is required because the evidence is now produced by comparing
+  -- > reifyCoord c $ \\m -> ...   -- m is a type, with KnownNat m and m + 1 <= n
+  --
+  -- This was @asSizeProxy@, whose continuation took a @Proxy m@. The name went
+  -- with the 'Data.Proxy.Proxy'; it reifies a value as a type, which is what
+  -- 'SizedGrid.Ordinal.reifyOrdinal' is called for doing to an
+  -- 'SizedGrid.Ordinal.Ordinal'.
+  --
+  -- @KnownNat n@ is required because the evidence is produced by comparing
   -- against @n@ at runtime ('SizedGrid.Ordinal.reifyOrdinal'). It used to come
   -- from unpacking the 'SizedGrid.Ordinal.Ordinal' GADT, which is precisely the
   -- dictionary every ordinal was paying to carry.
-  asSizeProxy ::
+  reifyCoord ::
          KnownNat n
       => c n
-      -> (forall m. (KnownNat m, m + 1 <= n) =>
-                        Proxy m -> x)
+      -> (forall m -> (KnownNat m, m + 1 <= n) => x)
       -> x
-  asSizeProxy c = asSizeProxy (view asOrdinal c)
+  reifyCoord c = reifyCoord (view asOrdinal c)
 
   weakenIsCoord :: KnownNat m => c n -> Maybe (c m)
   weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
@@ -93,8 +98,8 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
 instance IsCoord Ordinal where
     asOrdinal = id
     zeroPosition = minBound
-    asSizeProxy = reifyOrdinal
-    maxCoord _ = maxBound
+    reifyCoord = reifyOrdinal
+    maxCoord = maxBound
 
 -- | Enumerate all possible values of a coord, in order
 allCoordLike :: (1 <= n, IsCoord c, KnownNat n) => [c n]

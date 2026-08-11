@@ -87,7 +87,7 @@ invariantTests =
       -- The two cases that used to fail at runtime here are now rejected by the
       -- compiler, so they cannot be expressed as runtime tests any more:
       --
-      -- >  takeGrid (Proxy @9) oneByThree :: Grid '[Ordinal 9] Int
+      -- >  takeGrid 9 oneByThree :: Grid '[Ordinal 9] Int
       -- >    error: Cannot satisfy: 9 <= 3
       --
       -- >  let (_ :: Grid '[Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
@@ -100,9 +100,9 @@ invariantTests =
     , testGroup
         "take/split hold the invariant they now promise"
         [ testCase "takeGrid within the source length" $
-          assertWellSized "takeGrid @2 of a 3-grid" (takeGrid (Proxy @2) oneByThree :: Grid '[ Ordinal 2] Int)
+          assertWellSized "takeGrid 2 of a 3-grid" (takeGrid 2 oneByThree :: Grid '[ Ordinal 2] Int)
         , testCase "dropGrid within the source length" $
-          assertWellSized "dropGrid @2 of a 3-grid" (dropGrid (Proxy @2) oneByThree :: Grid '[ Ordinal 1] Int)
+          assertWellSized "dropGrid 2 of a 3-grid" (dropGrid 2 oneByThree :: Grid '[ Ordinal 1] Int)
         , testCase "splitHigherDim remainder is forced to x - y" $
           let (_ :: Grid '[ Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
            in assertWellSized "splitHigherDim snd" (b :: Grid '[ Ordinal 2, Ordinal 3] Int)

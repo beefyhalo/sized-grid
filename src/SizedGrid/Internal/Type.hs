@@ -1,9 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
 
 -- |
 -- Module      :  SizedGrid.Internal.Type
@@ -29,7 +24,7 @@ import           Unsafe.Coerce
 -- | The two facts @shrinkGrid@ needs in order to call @dropGrid@ then
 -- @takeGrid@, which GHC's Nat solver cannot derive on its own.
 --
--- At the use site the window offset @n@ comes from @asSizeProxy@ on a coord of
+-- At the use site the window offset @n@ comes from @reifyCoord@ on a coord of
 -- size @x@, so @n + 1 <= x@, and the @ShrinkableGrid@ instance requires
 -- @x + z <= y + 1@. Together:
 --
@@ -55,7 +50,7 @@ windowFits = unsafeCoerce (Dict :: Dict (0 <= 0, 0 <= 0))
 -- @-Wno-redundant-constraints@ -- which also hid the constraints that really
 -- were dead. Naming the contract instead leaves the warning doing its job:
 --
--- > takeGrid p (Grid v) = requiring @(n <= m) $ Grid $ V.take (natVal p) v
+-- > takeGrid n (Grid v) = requiring @(n <= m) $ Grid $ V.take (natVal (Proxy @n)) v
 --
 -- Building the `Dict` is what consumes the evidence; @id@ alone would report
 -- the constraint as redundant here instead.
