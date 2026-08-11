@@ -16,6 +16,7 @@ import           SizedGrid
 
 import           Test.Arbitrary ()
 import           Test.Invariant
+import           Test.Neighbours
 import           Test.Ordinal
 import           Test.Shrink
 import           Test.Tiling
@@ -297,6 +298,7 @@ main =
               (Proxy @Int))
        , shrinkTests
        , tilingTests
+       , neighbourTests
        , invariantTests
        , ordinalTests
        ]

@@ -22,6 +22,7 @@ module SizedGrid.Coord
   , coordFromPosition
   , coordSpaceSize
     -- * Neighbourhoods
+  , offsetCoord
   , moorePoints
   , vonNeumanPoints
     -- * Changing the size of a coord
@@ -339,6 +340,45 @@ coordDigits p =
 type family AllDiffSame a xs :: Constraint where
   AllDiffSame _ '[] = ()
   AllDiffSame a (x ': xs) = (Diff x ~ a, AllDiffSame a xs)
+
+-- | Move by a signed displacement, or 'Nothing' if that leaves the grid.
+--
+-- The checked counterpart of @('.+^')@, and a drop-in for it: it takes the same
+-- @'Diff' ('Coord' cs)@, so @offsetCoord c d@ replaces @c '.+^' d@ wherever the
+-- caller wants to be told about the edge rather than silently pushed back from
+-- it.
+--
+-- Each axis applies its own boundary policy, through
+-- 'SizedGrid.Coord.Class.offsetIsCoord'. The whole offset succeeds only if
+-- every axis does, so on a coord mixing a bounded axis with a torus axis the
+-- torus half can wrap while the bounded half refuses:
+--
+-- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[HardWrap 5, Periodic 5]) (0, -1)
+-- >   == Just (0 :| 4 :| EmptyCoord)
+-- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[HardWrap 5, Periodic 5]) (-1, -1)
+-- >   == Nothing
+offsetCoord ::
+       ( All IsCoordLifted cs
+       , AllDiffSame Integer cs
+       , IsProductType (CoordDiff cs) (MapDiff cs)
+       )
+    => Coord cs
+    -> Diff (Coord cs)
+    -> Maybe (Coord cs)
+offsetCoord (Coord cs) d = Coord <$> helper cs (productTypeFrom d)
+  where
+    -- The coord drives the recursion, not the displacement: matching 'Nil' or
+    -- ':*' on the first argument is what refines @xs@ far enough for GHC to
+    -- reduce @MapDiff xs@ and match the second. The same shape as the helpers
+    -- in the 'AffineSpace' instance above, and for the same reason.
+    helper ::
+           (All IsCoordLifted xs, AllDiffSame Integer xs)
+        => NP I xs
+        -> NP I (MapDiff xs)
+        -> Maybe (NP I xs)
+    helper Nil Nil = Just Nil
+    helper (I x :* xs) (I dx :* dxs) =
+        (\y ys -> I y :* ys) <$> offsetIsCoord x dx <*> helper xs dxs
 
 -- | Calculate the Moore neighbourhood around a point. Includes the center
 moorePoints ::

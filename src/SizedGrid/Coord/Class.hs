@@ -72,6 +72,33 @@ class IsCoord (c :: Nat -> Type) where
       -> x
   reifyCoord c = reifyCoord (view asOrdinal c)
 
+  -- | Offset by a signed displacement, or 'Nothing' if that leaves the space.
+  --
+  -- This is the checked counterpart of @('Data.AffineSpace..+^')@. That
+  -- operation has to be total to satisfy 'Data.AffineSpace.AffineSpace', so on
+  -- a bounded coord it clamps, and a caller who wanted to know it had gone off
+  -- the edge cannot tell: every off-grid offset folds back onto an edge cell.
+  -- This one reports it instead.
+  --
+  -- The default is the bounds check, which is what a coord type with real
+  -- edges wants. A coord whose space has no edges overrides it and is total:
+  -- 'SizedGrid.Coord.Periodic.Periodic' wraps, so its 'offsetIsCoord' is
+  -- always 'Just'.
+  --
+  -- @1 <= n@ because a @c 0@ has no inhabitants to offset, and because the
+  -- instances that delegate to @('Data.AffineSpace..+^')@ need it.
+  -- No @default@ signature: the bounds check needs only @KnownNat n@, which
+  -- the method already provides. A @default@ line is for a default that needs
+  -- /more/ than the method promises, and writing one here would only restate
+  -- @1 <= n@ where it is unused.
+  offsetIsCoord :: (KnownNat n, 1 <= n) => c n -> Integer -> Maybe (c n)
+  offsetIsCoord c d =
+      -- Through 'Integer' rather than 'Int': 'numToOrdinal' compares against
+      -- the size in 'Integer', so a displacement too wide for an 'Int' is
+      -- rejected rather than wrapped into range.
+      review asOrdinal <$>
+      numToOrdinal (toInteger (ordinalToInt (c ^. asOrdinal)) + d)
+
   weakenIsCoord :: KnownNat m => c n -> Maybe (c m)
   weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
 

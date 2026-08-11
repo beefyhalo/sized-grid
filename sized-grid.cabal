@@ -107,6 +107,7 @@ test-suite tests
   other-modules:
     Test.Arbitrary
     Test.Invariant
+    Test.Neighbours
     Test.Ordinal
     Test.Shrink
     Test.Tiling

@@ -41,6 +41,10 @@ instance (1 <= n, KnownNat n) => Enum (Periodic n) where
 
 instance IsCoord Periodic where
   asOrdinal = iso unPeriodic Periodic
+  -- A torus has no edges, so the checked offset never fails. Delegating to
+  -- ('.+^') keeps the one definition of what wrapping means in the
+  -- 'AffineSpace' instance below, where the law tests already cover it.
+  offsetIsCoord c d = Just (c .+^ d)
 
 instance (1 <= n, KnownNat n) => Semigroup (Periodic n) where
     Periodic a <> Periodic b =
