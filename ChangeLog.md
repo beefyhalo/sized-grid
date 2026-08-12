@@ -3,7 +3,23 @@
 ## 0.3.0.0 -- NOT PUBLISHED
 
 Correctness release. Every change below is breaking, and each one turns a
-silently-wrong result into either a rejected value or a type error.
+silently-wrong result — or a name that invited one — into either a rejected
+value or a type error.
+
+* `HardWrap` is renamed to `Clamped`, and `SizedGrid.Coord.HardWrap` to
+  `SizedGrid.Coord.Clamped`. The type clamps out-of-range values to the nearest
+  end; it has never wrapped. `Periodic` is the one that wraps.
+
+  The name was read the wrong way twice, both times producing a wrong answer
+  rather than an error: `(.-.)` was written to clamp negative differences to
+  `0`, which broke the `AffineSpace` law for every pair with `a < b`, and a
+  downstream Manhattan-distance function silently returned `0`. Both are fixed
+  below, but the name that suggested them is fixed here.
+
+  **Migration:** `HardWrap` becomes `Clamped` and the field `unHardWrap`
+  becomes `unClamped`; the behaviour is unchanged. No deprecated alias is
+  provided, because the point of the rename is that the old name reads as a
+  claim about behaviour that was never true.
 
 * The neighbourhood API is replaced. `moorePoints` and `vonNeumanPoints` are
   **removed**, and `offsetCoord`, `neighbours`, `mooreNeighbours` and
@@ -13,7 +29,7 @@ silently-wrong result into either a rejected value or a type error.
   three. They included the centre, so callers wrote `filter (/= c)`. They were
   built on `(.+^)`, which clamps on a bounded coord, so an off-grid offset
   folded back onto an edge cell and callers wrote `nubOrd` — at a corner of a
-  `HardWrap 5` grid, `moorePoints 1` returned nine results of which four were
+  `Clamped 5` grid, `moorePoints 1` returned nine results of which four were
   distinct. And they demanded up to eight constraints, so some callers gave up
   and hand-rolled the whole thing.
 
@@ -35,7 +51,7 @@ silently-wrong result into either a rejected value or a type error.
   when the offset leaves the space rather than clamping back into it.
 
   Each axis applies its own boundary policy, so on a
-  `Coord '[HardWrap 5, Periodic 5]` the torus axis wraps while the bounded axis
+  `Coord '[Clamped 5, Periodic 5]` the torus axis wraps while the bounded axis
   refuses. The default for a coord type is the bounds check; `Periodic`
   overrides it and is total.
 
@@ -69,12 +85,12 @@ silently-wrong result into either a rejected value or a type error.
   on the type's own range.
 
 * `[minBound ..]` and `[minBound, x ..]` on an `Ordinal`, and so on a
-  `HardWrap`, no longer throw `Maybe.fromJust: Nothing`. The derived `enumFrom`
+  `Clamped`, no longer throw `Maybe.fromJust: Nothing`. The derived `enumFrom`
   counted past `maxBound`.
 
-* `HardWrap`'s `(.-.)` now returns a true signed displacement instead of
+* `Clamped`'s `(.-.)` now returns a true signed displacement instead of
   clamping to `[0, n-1]`. The clamp remains in `(.+^)`. This restores the
-  `AffineSpace` law `b .+^ (a .-. b) == a`, which `HardWrap` previously
+  `AffineSpace` law `b .+^ (a .-. b) == a`, which `Clamped` previously
   violated for every pair with `a < b`.
 
   **Migration:** code that relied on the clamp to compute an absolute value —

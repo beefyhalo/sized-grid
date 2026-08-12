@@ -83,11 +83,11 @@ enumTests =
       ""
       [0, 1, 2]
       (map (fromEnum . (toEnum :: Int -> Periodic 3)) [3, 4, 5])
-  , testCase "HardWrap toEnum round trips over its own range" $
+  , testCase "Clamped toEnum round trips over its own range" $
     assertEqual
       ""
       [0 .. 4]
-      (map (fromEnum . (toEnum :: Int -> HardWrap 5)) [0 .. 4])
+      (map (fromEnum . (toEnum :: Int -> Clamped 5)) [0 .. 4])
   ]
 
 sizeProxyTests :: [TestTree]
@@ -134,16 +134,16 @@ arithmeticTests =
       ""
       3
       ((toEnum 1 :: Periodic 5) .-. toEnum 3)
-  , testCase "HardWrap .+^ clamps a huge positive offset to maxBound" $
+  , testCase "Clamped .+^ clamps a huge positive offset to maxBound" $
     assertEqual
       ""
       4
-      (fromEnum (zeroPosition @HardWrap @5 .+^ 2 ^ (70 :: Int)))
-  , testCase "HardWrap .+^ clamps a huge negative offset to minBound" $
+      (fromEnum (zeroPosition @Clamped @5 .+^ 2 ^ (70 :: Int)))
+  , testCase "Clamped .+^ clamps a huge negative offset to minBound" $
     assertEqual
       ""
       0
-      (fromEnum ((maxBound :: HardWrap 5) .+^ negate (2 ^ (70 :: Int))))
-  , testCase "HardWrap .-. is a signed displacement, unclamped" $
-    assertEqual "" (-3) ((toEnum 1 :: HardWrap 5) .-. toEnum 4)
+      (fromEnum ((maxBound :: Clamped 5) .+^ negate (2 ^ (70 :: Int))))
+  , testCase "Clamped .-. is a signed displacement, unclamped" $
+    assertEqual "" (-3) ((toEnum 1 :: Clamped 5) .-. toEnum 4)
   ]

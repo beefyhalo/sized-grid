@@ -354,9 +354,9 @@ type family AllDiffSame a xs :: Constraint where
 -- every axis does, so on a coord mixing a bounded axis with a torus axis the
 -- torus half can wrap while the bounded half refuses:
 --
--- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[HardWrap 5, Periodic 5]) (0, -1)
+-- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Periodic 5]) (0, -1)
 -- >   == Just (0 :| 4 :| EmptyCoord)
--- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[HardWrap 5, Periodic 5]) (-1, -1)
+-- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Periodic 5]) (-1, -1)
 -- >   == Nothing
 offsetCoord ::
        ( All IsCoordLifted cs
@@ -440,7 +440,7 @@ stepsWithin r (Coord cs) = fmap Coord <$> go cs
 -- Each axis applies its own boundary policy, so a bounded axis simply has fewer
 -- neighbours near its edges while a torus axis always has the full complement:
 --
--- > length (mooreNeighbours 1 c)   -- Coord '[HardWrap 5, HardWrap 5]
+-- > length (mooreNeighbours 1 c)   -- Coord '[Clamped 5, Clamped 5]
 -- >   == 3 at a corner, 5 on an edge, 8 in the interior
 -- > length (mooreNeighbours 1 c)   -- Coord '[Periodic 5, Periodic 5]
 -- >   == 8 everywhere
