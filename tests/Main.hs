@@ -19,6 +19,7 @@ import           Test.Boundary
 import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
+import           Test.Ray
 import           Test.Shrink
 import           Test.Tiling
 import           Test.Utils
@@ -301,6 +302,7 @@ main =
        , tilingTests
        , neighbourTests
        , boundaryTests
+       , rayTests
        , invariantTests
        , ordinalTests
        ]

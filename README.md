@@ -47,6 +47,8 @@ The same policy answers where the edges are. `onBoundary` and `isCorner` say whe
 
 Because `Grid cs` is `TraversableWithIndex (Coord cs)`, these predicates also give you the interior of a grid as an optic, with no extra API: `itraversed . indices (not . onBoundary)` reads and writes exactly the interior cells, and swapping the predicate gives the border.
 
+To walk rather than step, `coordRay c d` is the ray from `c` in direction `d` — `c .+^ d`, `c .+^ 2d`, and so on for as long as the grid lasts — so `take 3 (coordRay c d)` is three steps that way, and shorter than three exactly when there was not room. When you need to know where a walk stopped rather than only that it did, `offsetCoordUpTo n c d` answers `Left` with the last coordinate still on the grid and the number of steps that succeeded. On an all-`Periodic` coord nothing can stop the walk, so the ray is infinite and lazy.
+
 We introduce two new typeclasses: `IsCoord` and `IsGrid`. `IsGrid` has `gridIndex`, which allows us to get a single element of the grid and lenses to convert between `FocusedGrid` and `Grid`. `IsCoord` has `CoordSized`, which is the size of the coord and an iso to convert between `Ordinal` and the `Coord`.
 
 Example - Game of Life

@@ -164,6 +164,45 @@ value or a type error.
   capability. It is documented on `interiorCoords` and exercised by the test
   suite instead.
 
+* New: an offset that reports where it hit the edge. `offsetCoordUpTo n c d`
+  takes up to `n` steps of `d` and answers
+  `Either (OffGrid cs) (Coord cs)` — `Right` is the coordinate `n` whole steps
+  away, `Left` carries `lastInside` (the final coordinate still on the grid)
+  and `stepsTaken` (how many succeeded). `coordRay c d` is the same walk with
+  no bound: `c .+^ d`, `c .+^ 2d`, … for as long as the grid lasts.
+
+  This is purely additive. `offsetCoord` is unchanged and is still the right
+  answer when the caller does not care where the edge was; it is now also the
+  law `offsetCoord c d == either (const Nothing) Just (offsetCoordUpTo 1 c d)`.
+
+  Following `manifolds`' `(.+^|)`, which answers a displacement with
+  `Either (Boundary m, Scalar (Needle m)) (Interior m)`: either you arrived in
+  the interior, or here is the boundary you met and how far along you got.
+  `offsetCoord` throws all of that away — `Nothing` says an offset left the
+  grid but not where, not on which axis, and not how many steps succeeded
+  first — so any consumer that needed it rediscovered it by hand. The observed
+  workaround was worse than a loop: an `aoc` day wanting "three steps that way,
+  or nothing" embedded the coordinate into a grid one cell larger, offset three
+  times there, weakened back, and drove the type-level arithmetic with three
+  `Dict` entailments. `take 3 (coordRay c d)` is that, and a ray is the shape
+  every raycasting, beam-tracing or line-of-sight problem has.
+
+  A step is a whole `d`, not a subdivision of one, which is why
+  `offsetCoordUpTo` counts steps rather than taking a fraction of a
+  displacement the way its continuous model does. On a lattice there is nothing
+  between `c` and `c .+^ d` to stop at unless `d` is itself a multiple of a
+  shorter displacement, so a caller who wants the finer walk passes the finer
+  `d`. That is also why `lastInside` is on the boundary when `d` is one cell
+  wide and need not be otherwise, and where it is, `axisBoundaries . lastInside`
+  names the edge the walk met.
+
+  A `Periodic` axis never refuses a step, so on an all-`Periodic` coord every
+  walk is `Right` and every ray is infinite — a torus has no boundary to
+  report, which is the same fact `axisBoundary` states for a single value, and
+  the list is lazy, so take what you need. Mixed coords are the interesting
+  case: the bounded axis decides when the walk ends while the torus axis keeps
+  wrapping.
+
 * `Ordinal` is now a newtype over `Int` rather than a GADT carrying the value
   as a type-level `Nat`. The old representation put a `Proxy` and two
   `KnownNat` dictionaries in every value and called `someNatVal` on every
