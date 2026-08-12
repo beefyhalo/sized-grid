@@ -60,6 +60,38 @@ value or a type error.
   be told about the edge. `offsetCoord` takes the same `Diff (Coord cs)`, so it
   is a drop-in wherever that distinction matters.
 
+* New: the distances the library already computed and then threw away.
+  `coordDistance` (Chebyshev, the metric `mooreNeighbours` is a ball in),
+  `coordManhattan` (the metric `vonNeumannNeighbours` is a ball in),
+  `axisDistance` for a single axis and `axisDistances` for the per-axis
+  breakdown. `axisSteps` and `stepsWithin` are now exported too — the latter is
+  the general primitive both neighbourhood functions are one-liners over, and
+  the one a BFS-shaped consumer wants because it carries the distances.
+
+  This is purely additive. Nothing that existed changed behaviour.
+
+  `axisSteps` had worked out the true per-axis distance since the neighbourhood
+  rewrite, taking the shorter route where a torus axis offers two, and
+  `stepsWithin` summed it across axes; then `mooreNeighbours` and
+  `vonNeumannNeighbours` both discarded the number and no export exposed it. A
+  correct, wrap-aware, mixed-boundary-policy distance was sitting in the library
+  where no caller could reach it.
+
+  The scalar behind them is `axisDistanceIsCoord`, a new method of `IsCoord`,
+  following `offsetIsCoord`: the default measures straight, which is right for
+  an axis with real edges, and `Periodic` overrides it to take the shorter way
+  round. So on a `Coord '[Clamped 5, Periodic 5]` the bounded axis measures
+  straight while the torus axis wraps, in the same coordinate — the answer a
+  caller cannot easily write by hand, and the reason this is worth exporting
+  rather than leaving every consumer to reimplement it against `natVal`.
+
+  The distance is *not* built on `stepsWithin`, which is radius-bounded and
+  would make an O(d) question cost O(r^d). It is a second implementation of the
+  "shorter route wins" rule, so the test suite pins it to the enumeration:
+  `axisDistance c v` must equal the distance `axisSteps` records for every `v`
+  it reaches, and both neighbourhood functions must be exactly the balls of the
+  corresponding metric.
+
 * `Ordinal` is now a newtype over `Int` rather than a GADT carrying the value
   as a type-level `Nat`. The old representation put a `Proxy` and two
   `KnownNat` dictionaries in every value and called `someNatVal` on every

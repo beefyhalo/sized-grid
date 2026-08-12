@@ -26,6 +26,13 @@ module SizedGrid.Coord
   , neighbours
   , mooreNeighbours
   , vonNeumannNeighbours
+  , axisSteps
+  , stepsWithin
+    -- * Distance
+  , axisDistance
+  , axisDistances
+  , coordDistance
+  , coordManhattan
     -- * Changing the size of a coord
   , WeakenCoord(..)
   , StrengthenCoord(..)
@@ -475,6 +482,50 @@ vonNeumannNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0, s <= r]
 -- 'mooreNeighbours'.
 neighbours :: All IsCoordLifted cs => Coord cs -> [Coord cs]
 neighbours = mooreNeighbours 1
+
+-- | The number of steps between two values on a single axis, by the shorter
+-- route if the axis offers more than one.
+--
+-- The lifted form of 'axisDistanceIsCoord', so each axis type answers for its
+-- own boundary policy: a bounded axis measures straight, a
+-- 'SizedGrid.Coord.Periodic.Periodic' one takes the shorter way round.
+axisDistance :: forall x. IsCoordLifted x => x -> x -> Int
+axisDistance = axisDistanceIsCoord @(CoordContainer x) @(CoordNat x)
+
+-- | The per-axis distances between two coords, first axis first.
+--
+-- Both metrics below are folds of this, and it is the honest primitive when a
+-- caller wants something neither of them provides --- a weighted metric, or the
+-- axis that differs most.
+axisDistances :: forall cs. All IsCoordLifted cs => Coord cs -> Coord cs -> [Int]
+axisDistances (Coord as) (Coord bs) =
+    hcollapse $ hczipWith (Proxy @IsCoordLifted) step as bs
+  where
+    step :: IsCoordLifted x => I x -> I x -> K Int x
+    step (I a) (I b) = K (axisDistance a b)
+
+-- | The Chebyshev distance: the largest per-axis distance, counting a diagonal
+-- step as one. This is the metric 'mooreNeighbours' is a ball in ---
+-- @mooreNeighbours r c@ is every coord whose 'coordDistance' from @c@ is in
+-- @[1, r]@.
+--
+-- On a coord with no axes at all the distance is zero, which is the only answer
+-- a space with one point can give.
+--
+-- Each axis applies its own boundary policy, so on a
+-- @Coord '[Clamped 5, Periodic 5]@ the bounded axis measures straight while the
+-- torus axis takes the shorter way round. That mixture is the case a caller
+-- cannot easily write by hand, and it is the reason this is exported rather
+-- than left as something every consumer reimplements against 'natVal'.
+coordDistance :: All IsCoordLifted cs => Coord cs -> Coord cs -> Int
+coordDistance a b = foldl' max 0 (axisDistances a b)
+
+-- | The Manhattan distance: the per-axis distances summed, counting a diagonal
+-- step as two. This is the metric 'vonNeumannNeighbours' is a ball in ---
+-- @vonNeumannNeighbours r c@ is every coord whose 'coordManhattan' from @c@ is
+-- in @[1, r]@.
+coordManhattan :: All IsCoordLifted cs => Coord cs -> Coord cs -> Int
+coordManhattan a b = sum (axisDistances a b)
 
 -- | Swap x and y for a coord in 2D space
 tranposeCoord :: Coord '[a,b] -> Coord '[b,a]

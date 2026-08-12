@@ -45,6 +45,20 @@ instance IsCoord Periodic where
   -- ('.+^') keeps the one definition of what wrapping means in the
   -- 'AffineSpace' instance below, where the law tests already cover it.
   offsetIsCoord c d = Just (c .+^ d)
+  -- Two ways round, and the shorter one is the distance. The default measures
+  -- straight, which would report @n - 1@ for two cells that are actually
+  -- adjacent across the seam.
+  --
+  -- The instance signature is what brings @n@ into scope for @ordinalSize@:
+  -- the instance head is @IsCoord Periodic@, so the size lives only in the
+  -- method's own @forall@. It drops the class's @1 <= n@, which this body does
+  -- not use --- an instance signature may be more general, and carrying the
+  -- constraint here would only earn a redundancy warning.
+  axisDistanceIsCoord :: forall n. KnownNat n => Periodic n -> Periodic n -> Int
+  axisDistanceIsCoord (Periodic a) (Periodic b) =
+      let size = ordinalSize @n
+          d = abs (ordinalToInt a - ordinalToInt b)
+      in min d (size - d)
 
 instance (1 <= n, KnownNat n) => Semigroup (Periodic n) where
     Periodic a <> Periodic b =

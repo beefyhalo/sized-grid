@@ -99,6 +99,24 @@ class IsCoord (c :: Nat -> Type) where
       review asOrdinal <$>
       numToOrdinal (toInteger (ordinalToInt (c ^. asOrdinal)) + d)
 
+  -- | The number of steps between two values on this axis, by the shorter
+  -- route if the axis offers more than one.
+  --
+  -- This is the scalar the neighbourhood functions are built on. It is a method
+  -- for the same reason 'offsetIsCoord' is: the answer is a property of the
+  -- boundary policy, not of the two values. The default measures straight,
+  -- which is right for an axis with real edges, and
+  -- 'SizedGrid.Coord.Periodic.Periodic' overrides it to take the shorter way
+  -- round --- on a 3-cycle every other cell really is one step away.
+  --
+  -- Consistency with 'offsetIsCoord' is the law: @axisDistanceIsCoord a b@ is
+  -- the least @abs d@ for which @offsetIsCoord a d == Just b@. That is what
+  -- 'SizedGrid.Coord.axisSteps' computes by enumeration, and the two agreeing
+  -- is a property test rather than something the types can enforce.
+  axisDistanceIsCoord :: (KnownNat n, 1 <= n) => c n -> c n -> Int
+  axisDistanceIsCoord a b =
+      abs (ordinalToInt (a ^. asOrdinal) - ordinalToInt (b ^. asOrdinal))
+
   weakenIsCoord :: KnownNat m => c n -> Maybe (c m)
   weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
 

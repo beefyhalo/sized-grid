@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,9 +14,9 @@ module Test.Neighbours
 import           SizedGrid
 import           Test.Arbitrary        ()
 
-import           Data.List             (nub)
+import           Data.List             (nub, sort)
 import           Data.Maybe            (fromJust)
-import           GHC.TypeLits          (KnownNat)
+import           GHC.TypeLits          (KnownNat, type (<=))
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty, (===))
@@ -237,6 +238,173 @@ ordinalTests =
     ord r c =
         fromJust (numToOrdinal r) :| fromJust (numToOrdinal c) :| EmptyCoord
 
+-- | Tests for the exported distances (@sized-grid-lcl@).
+--
+-- The library computed these all along --- 'axisSteps' works out the true
+-- per-axis distance and 'stepsWithin' sums it --- and then both neighbourhood
+-- functions discarded the number and nothing exported it. The first group below
+-- is the one that matters: 'axisDistance' is a second, independent
+-- implementation of the "shorter route wins" rule, so it has to be pinned to the
+-- enumeration rather than trusted to agree with it.
+axisDistanceTests :: TestTree
+axisDistanceTests =
+    testGroup
+        "axisDistance agrees with the axisSteps enumeration"
+        [ -- The law in the haddock for 'axisDistanceIsCoord': the distance is
+          -- the least @abs d@ for which @offsetIsCoord a d == Just b@, which is
+          -- exactly what 'axisSteps' works out by trying every offset.
+          --
+          -- Checked exhaustively rather than by QuickCheck: these axes have five
+          -- inhabitants, so every start value and every reachable target fits in
+          -- a list comprehension, which is both cheaper and stronger than
+          -- sampling. It also covers 'Ordinal', which has no 'Arbitrary'
+          -- instance and so cannot be reached by a property at all.
+          testCase "every step axisSteps records is the distance" $ do
+              assertBool "Clamped 5" (agreesEverywhere @Clamped @5 5)
+              assertBool "Periodic 5" (agreesEverywhere @Periodic @5 5)
+              assertBool "Ordinal 5" (agreesEverywhere @Ordinal @5 5)
+              -- A 4-cycle is where offsets -2 and +2 collide, and a 3-cycle is
+              -- where every other cell is one step away. Both are the cases the
+              -- naive @abs (i - j)@ gets wrong.
+              assertBool "Periodic 4" (agreesEverywhere @Periodic @4 4)
+              assertBool "Periodic 3" (agreesEverywhere @Periodic @3 3)
+        , testCase "a bounded axis measures straight" $ do
+              assertEqual "0 to 4" 4 (axisDistance (hw 0) (hw 4))
+              assertEqual "1 to 3" 2 (axisDistance (hw 1) (hw 3))
+        , testCase "a torus axis takes the shorter way round" $ do
+              assertEqual "0 to 4 is one step back" 1 (axisDistance (pe 0) (pe 4))
+              assertEqual "0 to 3 is two steps back" 2 (axisDistance (pe 0) (pe 3))
+              assertEqual "0 to 2 is two steps forward" 2 (axisDistance (pe 0) (pe 2))
+        , testCase "on a 3-cycle every other cell is one step away" $ do
+              assertEqual "0 to 1" 1 (axisDistance (peOf 0 :: Periodic 3) (peOf 1))
+              assertEqual "0 to 2" 1 (axisDistance (peOf 0 :: Periodic 3) (peOf 2))
+        , testProperty "a distance is zero only from a value to itself" $ \(c :: Clamped 5) ->
+              axisDistance c c === 0
+        , testProperty "is symmetric on a torus" $ \(a :: Periodic 5) b ->
+              axisDistance a b === axisDistance b a
+        ]
+  where
+    -- Every value of the axis, against every target 'axisSteps' can reach from
+    -- it within @r@.
+    agreesEverywhere ::
+           forall c n. (IsCoord c, KnownNat n, 1 <= n) => Int -> Bool
+    agreesEverywhere r =
+        and [ axisDistance c v == d
+            | c <- allCoordLike @n @c
+            , (d, v) <- axisSteps r c
+            ]
+
+-- | The two exported metrics are exactly the balls the two neighbourhood
+-- functions already enumerate. This is the strongest evidence available that
+-- the distances are right, because the neighbourhoods are covered by the tests
+-- above and were reviewed when they landed.
+metricTests :: TestTree
+metricTests =
+    testGroup
+        "coordDistance and coordManhattan are the neighbourhood metrics"
+        [ testProperty "mooreNeighbours r is the coordDistance ball" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
+              ballAgrees coordDistance mooreNeighbours 2 c
+        , testProperty "on a torus too" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
+              ballAgrees coordDistance mooreNeighbours 2 c
+        , testProperty "and on mixed axes" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              ballAgrees coordDistance mooreNeighbours 2 c
+        , testProperty "vonNeumannNeighbours r is the coordManhattan ball" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
+              ballAgrees coordManhattan vonNeumannNeighbours 2 c
+        , testProperty "on a torus too" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
+              ballAgrees coordManhattan vonNeumannNeighbours 2 c
+        , testProperty "and on mixed axes" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              ballAgrees coordManhattan vonNeumannNeighbours 2 c
+        ]
+  where
+    -- @f r c@ is every coord whose distance from @c@ is in @[1, r]@.
+    ballAgrees ::
+           (All Eq cs, All Ord cs, All IsCoordLifted cs)
+        => (Coord cs -> Coord cs -> Int)
+        -> (Int -> Coord cs -> [Coord cs])
+        -> Int
+        -> Coord cs
+        -> Bool
+    ballAgrees dist f r c =
+        sort (f r c) ==
+        sort [c' | c' <- allCoord, let d = dist c c', d > 0, d <= r]
+
+-- | The mixed-axis case from the acceptance criteria on @sized-grid-lcl@: the
+-- bounded axis measures straight while the torus axis takes the shorter way
+-- round, in the same coordinate. This is the answer a caller cannot easily
+-- write by hand, and the reason the distance is worth exporting at all.
+mixedPolicyTests :: TestTree
+mixedPolicyTests =
+    testGroup
+        "each axis applies its own boundary policy"
+        [ testCase "the torus axis wraps, the bounded axis does not" $ do
+              -- Row 0 -> 4 on a Clamped axis is 4 steps; column 0 -> 4 on a
+              -- Periodic axis is 1 step back across the seam.
+              assertEqual "per axis" [4, 1] (axisDistances (mixc 0 0) (mixc 4 4))
+              assertEqual "chebyshev" 4 (coordDistance (mixc 0 0) (mixc 4 4))
+              assertEqual "manhattan" 5 (coordManhattan (mixc 0 0) (mixc 4 4))
+        , testCase "the all-bounded coord measures straight on both axes" $ do
+              assertEqual "chebyshev" 4 (coordDistance (hwc 0 0) (hwc 4 4))
+              assertEqual "manhattan" 8 (coordManhattan (hwc 0 0) (hwc 4 4))
+        , testCase "the all-torus coord wraps on both axes" $ do
+              assertEqual "chebyshev" 1 (coordDistance (pec 0 0) (pec 4 4))
+              assertEqual "manhattan" 2 (coordManhattan (pec 0 0) (pec 4 4))
+        , testCase "a diagonal is one Chebyshev step and two Manhattan steps" $ do
+              assertEqual "chebyshev" 1 (coordDistance (hwc 2 2) (hwc 3 3))
+              assertEqual "manhattan" 2 (coordManhattan (hwc 2 2) (hwc 3 3))
+        ]
+
+-- | Both exported distances are metrics. Manhattan and Chebyshev are the sum
+-- and the maximum of the per-axis distances, and each axis metric is itself a
+-- metric --- @abs (i - j)@ on a line, @min d (n - d)@ on a cycle --- so both
+-- inherit the laws. Worth stating because the torus case is where a
+-- hand-rolled distance stops satisfying them.
+metricLawTests :: TestTree
+metricLawTests =
+    testGroup
+        "both distances are metrics"
+        [ testProperty "identity: zero only to itself (Chebyshev)" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              coordDistance c c === 0
+        , testProperty "identity: zero only to itself (Manhattan)" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              coordManhattan c c === 0
+        , testProperty "zero distance means equal" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
+              (coordManhattan a b == 0) === (a == b)
+        , testProperty "symmetry (Chebyshev)" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
+              coordDistance a b === coordDistance b a
+        , testProperty "symmetry (Manhattan)" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
+              coordManhattan a b === coordManhattan b a
+        , testProperty "triangle inequality (Chebyshev)" $ \(a :: Coord '[Clamped 5, Periodic 5]) b c ->
+              coordDistance a c <= coordDistance a b + coordDistance b c
+        , testProperty "triangle inequality (Manhattan)" $ \(a :: Coord '[Clamped 5, Periodic 5]) b c ->
+              coordManhattan a c <= coordManhattan a b + coordManhattan b c
+        , testProperty "Chebyshev never exceeds Manhattan" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
+              coordDistance a b <= coordManhattan a b
+        , -- A step to an adjacent cell is one in both metrics only when it is
+          -- along a single axis; the point of having both is that a diagonal
+          -- costs one and two respectively.
+          testProperty "every Moore neighbour is one Chebyshev step away" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              all (\n -> coordDistance c n == 1) (neighbours c)
+        , testProperty "every von Neumann neighbour is one Manhattan step away" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              all (\n -> coordManhattan c n == 1) (vonNeumannNeighbours 1 c)
+        ]
+
+-- | 'stepsWithin' is now exported too: it is the general primitive both
+-- neighbourhood functions are one-liners over, and the one a BFS-shaped
+-- consumer wants because it carries the distances.
+stepsWithinTests :: TestTree
+stepsWithinTests =
+    testGroup
+        "stepsWithin is exported and carries the distances"
+        [ testCase "the centre is the only entry at distance zero" $
+              assertEqual
+                  ""
+                  [(0, hwc 2 2)]
+                  [e | e@(s, _) <- stepsWithin 2 (hwc 2 2), s == 0]
+        , testProperty "the recorded total is the Manhattan distance" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              all (\(s, n) -> coordManhattan c n == s) (stepsWithin 2 c)
+        , testProperty "dropping the centre gives the Moore neighbourhood" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+              [n | (s, n) <- stepsWithin 2 c, s > 0] === mooreNeighbours 2 c
+        ]
+
 neighbourTests :: TestTree
 neighbourTests =
     testGroup
@@ -246,4 +414,9 @@ neighbourTests =
         , mooreTests
         , vonNeumannTests
         , ordinalTests
+        , axisDistanceTests
+        , metricTests
+        , mixedPolicyTests
+        , metricLawTests
+        , stepsWithinTests
         ]
