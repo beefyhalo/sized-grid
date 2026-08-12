@@ -45,7 +45,7 @@ import           Control.Comonad
 import           Control.Comonad.Store  (peek, pos)
 import           Control.DeepSeq        (NFData (..))
 import           Control.Exception      (evaluate)
-import           Control.Lens           (ifoldl', imap, itraverse)
+import           Control.Lens           (ifoldl', imap, itraverse, view)
 import           Data.Aeson             (Result (..), fromJSON, toJSON)
 import           Data.AffineSpace       ((.+^), (.-.))
 import           Data.Functor.Rep       (index, tabulate)
@@ -88,7 +88,7 @@ neighbourSum fg = total [peek p fg | p <- neighbours (pos fg)]
 -- intermediate 'Coord's cannot be fused away.
 walk :: Int -> Coord Walk -> Int
 walk 0 c = coordPosition c
-walk k c = walk (k - 1) (c .+^ (1, 1))
+walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
 
 -- Note on why there is no standalone @allCoord@ benchmark.
 --
@@ -136,7 +136,7 @@ main = do
                 whnf (\n -> walk n zeroCoord) 10000
               , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 whnf
-                    (\o -> total [fromIntegral (fst (c .-. o)) | c <- allCoord @Mid])
+                    (\o -> total [fromIntegral (view coordHead (c .-. o)) | c <- allCoord @Mid])
                     zeroCoord
               , bench "toEnum/fromEnum x300, Clamped 300" $
                 whnf

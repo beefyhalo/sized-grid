@@ -113,7 +113,7 @@ drawWorld DisplayInfo{..} ws =
     in ifoldMapOf
            (grid . itraversed)
            (\p a ->
-                let (x, y) = p .-. mempty
+                let (x :| y :| EmptyCoord) = p .-. mempty
                 in translate (tileSize * fromIntegral x) (tileSize * fromIntegral y) $
                    image a)
            ws

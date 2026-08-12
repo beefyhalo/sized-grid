@@ -60,6 +60,40 @@ value or a type error.
   be told about the edge. `offsetCoord` takes the same `Diff (Coord cs)`, so it
   is a drop-in wherever that distinction matters.
 
+* `Diff (Coord cs)` is now `Coord (MapDiff cs)` — a coordinate again, holding
+  one `Diff` per axis — instead of an n-tuple. The `CoordDiff` type family and
+  its seven hand-written instances are **removed**.
+
+  `CoordDiff` was an open family with one `type instance` per arity, and it
+  stopped at six. That ceiling was real: a seven-axis `Coord` had no `Diff`, so
+  no `AffineSpace` instance and no `offsetCoord`, and the only fix available to
+  a caller was an orphan instance plus a seven-tuple for something the library
+  should supply. `MapDiff` already recursed, so the replacement needs no
+  per-arity code and has no ceiling.
+
+  This follows `manifolds`, where `Needle` is an associated type and a product
+  gets its own structurally. Reusing `Coord` rather than introducing a new
+  product type means the displacement inherits `(:|)`, `EmptyCoord`, `Show`,
+  `Eq`, `Ord`, `AdditiveGroup` and `Random` from the instances that already
+  exist.
+
+  It also removes `IsProductType (CoordDiff cs) (MapDiff cs)` from every
+  signature that offsets, including `offsetCoord`'s, which is why `generics-sop`
+  no longer appears in the context of functions that have no other reason to
+  mention it. The `AffineSpace` instance now asks for
+  `(All AffineSpace cs, All AdditiveGroup (MapDiff cs))`: one constraint where
+  there were two.
+
+  **Migration:** a tuple literal is no longer a displacement. `c .+^ (-1, -1)`
+  becomes `c .+^ ((-1) :| (-1) :| EmptyCoord)`, and destructuring
+  `let (dx, dy) = a .-. b` becomes `let (dx :| dy :| EmptyCoord) = a .-. b`.
+  Where the tuple reads better, the new `coordFromTuple` and `coordToTuple`
+  convert explicitly: `c .+^ coordFromTuple (-1, -1)`. Those two are the only
+  signatures left carrying `IsProductType`, and they are arity-generic — one
+  function covers a pair and a seven-axis coord — so they add back no per-arity
+  code. The conversion is deliberately *not* an implicit part of the class;
+  that is what put the constraint in every consumer's context to begin with.
+
 * New: the distances the library already computed and then threw away.
   `coordDistance` (Chebyshev, the metric `mooreNeighbours` is a ball in),
   `coordManhattan` (the metric `vonNeumannNeighbours` is a ball in),

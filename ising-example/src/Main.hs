@@ -139,7 +139,7 @@ displaySimulation po startSimulationState =
                     if a == Up
                         then red
                         else blue
-                (x, y) = p .-. mempty
+                (x :| y :| EmptyCoord) = p .-. mempty
             in translate
                    (8 * fromIntegral x)
                    (8 * fromIntegral y)
