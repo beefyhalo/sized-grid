@@ -156,6 +156,14 @@ value or a type error.
   vacuous `True` from `isCorner` would break `isCorner c ==> onBoundary c` on
   the one coordinate where it is easiest to get wrong.
 
+  There is deliberately no interior-restricted `Grid` traversal to go with
+  `interiorCoords`. `Grid cs` is already `TraversableWithIndex (Coord cs)`, so
+  `itraversed . indices (not . onBoundary)` is one, it reads and writes where an
+  enumeration only reads, and swapping the predicate gives the border. Naming
+  that composition would add a signature and a second way to say it and no
+  capability. It is documented on `interiorCoords` and exercised by the test
+  suite instead.
+
 * `Ordinal` is now a newtype over `Int` rather than a GADT carrying the value
   as a type-level `Nat`. The old representation put a `Proxy` and two
   `KnownNat` dictionaries in every value and called `someNatVal` on every

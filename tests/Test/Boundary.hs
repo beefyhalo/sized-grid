@@ -14,6 +14,10 @@ module Test.Boundary
 import           SizedGrid
 import           Test.Arbitrary        ()
 
+import           Control.Lens          (IndexedTraversal', asIndex, indices,
+                                        itraversed, lengthOf, sumOf, toListOf,
+                                        (&), (.~))
+import           Data.Functor.Rep      (tabulate)
 import           Data.List             (sort)
 import           Data.Maybe            (fromJust, isNothing)
 import           GHC.TypeLits          (KnownNat)
@@ -220,6 +224,52 @@ interiorTests =
                   (interiorCoords @'[Periodic 2, Periodic 2])
         ]
 
+-- | A grid traversal restricted to the interior needs no new API: 'Grid' is
+-- already @TraversableWithIndex (Coord cs)@, so it is 'itraversed' filtered by
+-- 'onBoundary'. Unlike 'interiorCoords' it reads /and/ writes, which is the
+-- half an enumeration cannot give.
+--
+-- These tests exist because 'interiorCoords' recommends the composition in its
+-- haddock, and a documented composition that nothing exercises is a claim, not
+-- a fact.
+interiorTraversalTests :: TestTree
+interiorTraversalTests =
+    testGroup
+        "the interior of a Grid is itraversed filtered by onBoundary"
+        [ testCase "it reaches exactly the interior cells" $
+              assertEqual "" 9 (lengthOf interior ones)
+        , testCase "its indices are interiorCoords" $
+              assertEqual
+                  ""
+                  (interiorCoords @'[Clamped 5, Clamped 5])
+                  (toListOf (itraversed . indices (not . onBoundary) . asIndex) ones)
+        , testCase "writing through it leaves the boundary alone" $ do
+              let g = ones & interior .~ 9
+              assertEqual "interior" 81 (sumOf interior g)
+              assertEqual "boundary" 16 (sumOf boundary g)
+        , testCase "the boundary is the same optic with the predicate flipped" $
+              assertEqual "" 16 (lengthOf boundary ones)
+        , testCase "isCorner picks out the four corners" $
+              assertEqual "" 4 (lengthOf (itraversed . indices isCorner) ones)
+        , testCase "on a torus the interior is the whole grid" $
+              assertEqual
+                  ""
+                  25
+                  (lengthOf
+                       (itraversed . indices (not . onBoundary))
+                       (tabulate (const (1 :: Int)) ::
+                            Grid '[ Periodic 5, Periodic 5] Int))
+        ]
+  where
+    ones :: Grid '[ Clamped 5, Clamped 5] Int
+    ones = tabulate (const 1)
+    interior ::
+           IndexedTraversal' (Coord '[ Clamped 5, Clamped 5]) (Grid '[ Clamped 5, Clamped 5] Int) Int
+    interior = itraversed . indices (not . onBoundary)
+    boundary ::
+           IndexedTraversal' (Coord '[ Clamped 5, Clamped 5]) (Grid '[ Clamped 5, Clamped 5] Int) Int
+    boundary = itraversed . indices onBoundary
+
 boundaryTests :: TestTree
 boundaryTests =
     testGroup
@@ -230,4 +280,5 @@ boundaryTests =
         , onBoundaryTests
         , isCornerTests
         , interiorTests
+        , interiorTraversalTests
         ]

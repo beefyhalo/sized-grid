@@ -626,6 +626,22 @@ isCorner c =
 -- whose full Moore neighbourhood exists. On a torus that is every cell, and
 -- this is 'allCoord'.
 --
+-- This enumerates. To read or write the interior of a
+-- `SizedGrid.Grid.Grid.Grid` in place, compose 'onBoundary' with the indexed
+-- traversal that grid already has --- there is no separate function for it
+-- because there does not need to be:
+--
+-- > interior = itraversed . indices (not . onBoundary)
+-- > boundary = itraversed . indices onBoundary
+-- >
+-- > lengthOf interior g        -- 9, on a Clamped 5 x Clamped 5
+-- > g & interior .~ x          -- rewrite the interior, boundary untouched
+--
+-- @Grid cs@ is @TraversableWithIndex (Coord cs)@, so the index is the
+-- coordinate and 'Control.Lens.indices' does the filtering. That composition is
+-- read-write, which an enumeration cannot be; this function is for when the
+-- coordinates themselves are what is wanted.
+--
 -- Being interior is not the same as having @3 ^ d - 1@ neighbours, and only
 -- coincides with it on a bounded coord. A torus axis shorter than the
 -- neighbourhood is the difference: on a @Coord '[Periodic 2, Periodic 2]@ every

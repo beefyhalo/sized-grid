@@ -45,6 +45,8 @@ Each axis applies its own boundary policy, so a `Clamped` axis simply has fewer 
 
 The same policy answers where the edges are. `onBoundary` and `isCorner` say whether a `Coord` is on one, `axisBoundary` says which end of a single axis it sits at — `AtMin`, `AtMax` or neither — and `interiorCoords` lists the cells that are on no edge at all, which is exactly the cells whose full Moore neighbourhood exists. A `Periodic` axis has no ends, so a torus reports no boundary and no corners rather than the four a comparison against `natVal` would find.
 
+Because `Grid cs` is `TraversableWithIndex (Coord cs)`, these predicates also give you the interior of a grid as an optic, with no extra API: `itraversed . indices (not . onBoundary)` reads and writes exactly the interior cells, and swapping the predicate gives the border.
+
 We introduce two new typeclasses: `IsCoord` and `IsGrid`. `IsGrid` has `gridIndex`, which allows us to get a single element of the grid and lenses to convert between `FocusedGrid` and `Grid`. `IsCoord` has `CoordSized`, which is the size of the coord and an iso to convert between `Ordinal` and the `Coord`.
 
 Example - Game of Life
