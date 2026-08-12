@@ -51,6 +51,8 @@ To walk rather than step, `coordRay c d` is the ray from `c` in direction `d` â€
 
 We introduce two new typeclasses: `IsCoord` and `IsGrid`. `IsGrid` has `gridIndex`, which allows us to get a single element of the grid and lenses to convert between `FocusedGrid` and `Grid`. `IsCoord` has `CoordSized`, which is the size of the coord and an iso to convert between `Ordinal` and the `Coord`.
 
+A third, `IsCoordList cs`, is the one you will actually see in signatures â€” it says that `cs` is a list of axes a `Coord` can be built from. At a concrete list it is discharged by instance resolution, so working at a known grid shape you never write it; it appears only when you are polymorphic in the axes, as `applyRule` below is. It supersedes the `All IsCoordLifted cs` that used to sit in those signatures and implies it, so it is a rename rather than an extra obligation. It also carries the row-major fold behind `coordPosition` as a method, which is what lets that fold unroll to plain arithmetic instead of walking a dictionary per axis at run time.
+
 Example - Game of Life
 =====================
 
@@ -99,7 +101,7 @@ We can then write a function to apply this to every point in a grid.
 
 ```haskell
 applyRule :: 
-       ( All IsCoordLifted cs
+       ( IsCoordList cs
        , All Monoid cs
        , All Semigroup cs
        , All AffineSpace cs

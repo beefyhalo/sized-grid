@@ -6,6 +6,32 @@ Correctness release. Every change below is breaking, and each one turns a
 silently-wrong result — or a name that invited one — into either a rejected
 value or a type error.
 
+* `All IsCoordLifted cs` is replaced by the class `IsCoordList cs` throughout
+  the API. It has `All IsCoordLifted cs` as a superclass, so it is a rename
+  rather than an added obligation, and at a concrete axis list it is discharged
+  by instance resolution exactly as the old constraint was.
+
+  **Migration:** in a signature polymorphic in the axes, replace
+  `All IsCoordLifted cs` with `IsCoordList cs`. Code working at a concrete grid
+  shape needs no change at all; the constraint never appeared there.
+
+  The reason is performance, and it is structural rather than incidental.
+  `coordPosition` folds over the axis list, and a fold written as a function is
+  polymorphically recursive — it calls itself at a shorter list. GHC specialises
+  the outermost call and stops, leaving one shared worker that takes the
+  dictionary at run time, so every axis but the first paid for dictionary
+  peeling, an `Integer` from `natVal`, a trip through the `asOrdinal` `Iso` and
+  two boxed `Int`s. Only an instance method gets the per-axis dictionary
+  resolved at compile time; neither `INLINABLE`, nor `cpara_SList`, nor
+  `-fpolymorphic-specialisation` does, all three measured.
+
+  As a method the fold unrolls and the sizes become literals — a
+  two-dimensional `coordPosition` compiles to `x * 50 + y`. Measured on the
+  benchmark suite: `index` over 90,000 coordinates went from 27 MB to 38 bytes
+  and 8.05 ms to 753 µs, `ifoldl'` from 30 MB to 2.7 MB, `imap` from 35 MB to
+  7.6 MB, `tabulate` from 47 MB to 20 MB, and `extract` from 320 bytes to zero.
+  Nothing regressed.
+
 * `HardWrap` is renamed to `Clamped`, and `SizedGrid.Coord.HardWrap` to
   `SizedGrid.Coord.Clamped`. The type clamps out-of-range values to the nearest
   end; it has never wrapped. `Periodic` is the one that wraps.
@@ -34,7 +60,7 @@ value or a type error.
   and hand-rolled the whole thing.
 
   The replacements exclude the centre, never duplicate, and ask only for
-  `All IsCoordLifted cs`. They also work on `Ordinal` axes, which the old ones
+  `IsCoordList cs`. They also work on `Ordinal` axes, which the old ones
   could not: `Ordinal` has no `AffineSpace` instance, so `All AffineSpace cs`
   was unsatisfiable.
 
@@ -275,7 +301,7 @@ value or a type error.
 
 * New: `coordSpaceSize`, the number of coordinates in a `Coord cs` — that is,
   `MaxCoordSize` as a value — and `coordFromPosition`, the inverse of
-  `coordPosition`. `coordSpaceSize` asks only for `All IsCoordLifted cs` rather
+  `coordPosition`. `coordSpaceSize` asks only for `IsCoordList cs` rather
   than `KnownNat (MaxCoordSize cs)`, so it is available in the indexed
   traversals, which is what lets `tabulate` size its vector up front instead of
   growing it by doubling.

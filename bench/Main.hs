@@ -102,7 +102,7 @@ walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
 -- Only @-fno-full-laziness@ would defeat that, and turning it on would make
 -- every other benchmark here stop resembling how the library is actually
 -- compiled. So the cost is measured where it is real instead, in the library's
--- own instances, which receive @All IsCoordLifted@ at runtime.
+-- own instances, which receive @IsCoordList@ at runtime.
 --
 -- == The second group is named for what it actually measures
 --
@@ -116,7 +116,13 @@ walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
 -- The honest figures, from the @index@ benchmark below (which shares its
 -- coordinate list, so it is 90,000 'coordPosition' calls and nothing else)
 -- against @imap@ over the same 90,000 cells: 'coordPosition' was ~800 bytes a
--- call, and the coordinate list about 67 bytes a cell. The list is also not
+-- call, and the coordinate list about 67 bytes a cell.
+--
+-- 'coordPosition' is no longer the expensive half. Moving its fold into
+-- 'SizedGrid.Coord.Class.IsCoordList' as a method let it unroll at a concrete
+-- axis list, and @index x90000@ went from 27 MB to 38 bytes total --- the whole
+-- benchmark, not per call. What the second group now measures is much closer to
+-- the coordinate list it was originally named for. The list is also not
 -- rebuilt in the sense the issue meant -- @V.zipWith@ fuses with the
 -- @V.fromList@ that feeds it, so the coordinates are produced and consumed one
 -- at a time and never all exist at once. Do not "fix" that; see the note on the

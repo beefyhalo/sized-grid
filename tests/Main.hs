@@ -44,7 +44,7 @@ assertOrderd =
      in assertBool "Ordered" . helper
 
 testAllCoordOrdered ::
-       forall cs proxy. (All Eq cs, All Ord cs, All IsCoordLifted cs)
+       forall cs proxy. (All Eq cs, All Ord cs, IsCoordList cs)
     => proxy (Coord cs)
     -> TestTree
 testAllCoordOrdered _ =
@@ -58,7 +58,7 @@ testAllCoordOrdered _ =
 -- read the wrong cell.
 testCoordLayout ::
        forall cs proxy.
-       (All Eq cs, All Show cs, All Arbitrary cs, All IsCoordLifted cs)
+       (All Eq cs, All Show cs, All Arbitrary cs, IsCoordList cs)
     => proxy (Coord cs)
     -> TestTree
 testCoordLayout _ =
@@ -84,7 +84,7 @@ gridTests ::
        forall cs a x y f g.
        ( Show (Coord cs)
        , Eq (Coord cs)
-       , All IsCoordLifted cs
+       , IsCoordList cs
        , AllSizedKnown cs
        , Show a
        , Eq a
@@ -145,7 +145,7 @@ splitTests ::
        ( Show a
        , Eq a
        , Num a
-       , All IsCoordLifted ((c x) ': cs)
+       , IsCoordList ((c x) ': cs)
        , KnownNat (x GHC.* MaxCoordSize cs)
        , KnownNat (MaxCoordSize cs)
        , KnownNat (5 GHC.* MaxCoordSize cs)

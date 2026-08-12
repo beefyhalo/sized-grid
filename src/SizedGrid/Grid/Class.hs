@@ -3,7 +3,6 @@ module SizedGrid.Grid.Class
   ) where
 
 import           SizedGrid.Coord
-import           SizedGrid.Coord.Class
 import           SizedGrid.Grid.Focused
 import           SizedGrid.Grid.Grid
 -- (& ix .~) replaces one element, so the length is unchanged. That is the whole
@@ -12,7 +11,6 @@ import           SizedGrid.Grid.Unsafe  (unsafeGridFromVector)
 
 import           Control.Lens           hiding (index)
 import           Data.Functor.Rep
-import           Generics.SOP
 
 -- | Conversion between `Grid` and `FocusedGrid` and access grids at a `Coord`
 class IsGrid cs grid | grid -> cs where
@@ -23,7 +21,7 @@ class IsGrid cs grid | grid -> cs where
   -- | Convert to, or run a function over, a `FocusedGrid`
   asFocusedGrid :: Lens' (grid a) (FocusedGrid cs a)
 
-instance (AllSizedKnown cs, All IsCoordLifted cs) =>
+instance (AllSizedKnown cs, IsCoordList cs) =>
          IsGrid cs (Grid cs) where
     gridIndex coord =
         lens
@@ -35,7 +33,7 @@ instance (AllSizedKnown cs, All IsCoordLifted cs) =>
     asFocusedGrid =
         lens (\g -> FocusedGrid g zeroCoord) (\_ fg -> focusedGrid fg)
 
-instance (AllSizedKnown cs, All IsCoordLifted cs) =>
+instance (AllSizedKnown cs, IsCoordList cs) =>
          IsGrid cs (FocusedGrid cs) where
     gridIndex c =
         (\f (FocusedGrid g p) -> (\g' -> FocusedGrid g' p) <$> f g) .

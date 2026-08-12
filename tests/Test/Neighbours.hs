@@ -220,7 +220,7 @@ vonNeumannTests =
 -- | 'Ordinal' has no 'Data.AffineSpace.AffineSpace' instance, so the old
 -- @moorePoints@ could not be called on a coord containing one at all: its
 -- @All AffineSpace cs@ was unsatisfiable. These ask only for
--- @All IsCoordLifted cs@, so they can. The ChangeLog claims this; this is the
+-- @IsCoordList cs@, so they can. The ChangeLog claims this; this is the
 -- evidence.
 ordinalTests :: TestTree
 ordinalTests =
@@ -326,7 +326,7 @@ metricTests =
   where
     -- @f r c@ is every coord whose distance from @c@ is in @[1, r]@.
     ballAgrees ::
-           (All Eq cs, All Ord cs, All IsCoordLifted cs)
+           (All Eq cs, All Ord cs, IsCoordList cs)
         => (Coord cs -> Coord cs -> Int)
         -> (Int -> Coord cs -> [Coord cs])
         -> Int

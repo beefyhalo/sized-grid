@@ -54,6 +54,11 @@ module SizedGrid.Coord
   , MapDiff
   , AllDiffSame
   , AllSizedKnown(..)
+    -- | 'IsCoordList' is re-exported without its method: the method is a fold
+    -- accumulator, and its two instances already cover every type-level list,
+    -- so there is none left to write. Import "SizedGrid.Coord.Class" if you
+    -- want to see it anyway.
+  , IsCoordList
   ) where
 
 import           SizedGrid.Coord.Class
@@ -286,7 +291,7 @@ instance ( All AffineSpace cs
 
 -- | Generate all possible coords in order
 allCoord ::
-       forall cs. (All IsCoordLifted cs)
+       forall cs. (IsCoordList cs)
     => [Coord cs]
 allCoord =
     Coord <$>
@@ -302,43 +307,32 @@ type family MaxCoordSize (cs :: [k]) :: GHC.Nat where
 --
 -- The layout is row major: the first axis is the most significant, so a step
 -- along the last axis moves one place in the vector.
-coordPosition :: forall cs. (All IsCoordLifted cs) => Coord cs -> Int
-coordPosition (Coord a) = snd $ helper a
-  where
-    -- One pass, returning the size of the axes alongside the position, because
-    -- the stride of an axis is exactly the size of the axes below it. The
-    -- previous version recomputed that product with a separate traversal per
-    -- axis and did the arithmetic in 'Integer', which cost a boxed 'Integer'
-    -- per @natVal@ and a fresh 'NP' and list per axis: about 800 bytes for a
-    -- single two-dimensional 'coordPosition', which then showed up multiplied
-    -- by 90,000 in every indexed traversal.
-    helper :: All IsCoordLifted xs => NP I xs -> (Int, Int)
-    helper Nil = (1, 0)
-    helper (I (c :: x) :* cs) =
-        case helper cs of
-            (stride, rest) ->
-                let o = c ^. asOrdinal
-                 in ( ordinalSize @(CoordNat x) * stride
-                    , ordinalToInt o * stride + rest)
+coordPosition :: forall cs. IsCoordList cs => Coord cs -> Int
+coordPosition (Coord a) = snd (sizeAndPosition a)
 
--- What is left in the unspecialised Core is not arithmetic: it is two thunks to
--- peel 'IsCoordLifted' out of the @All@ dictionary per axis, a boxed 'Integer'
--- from @natVal@, and a call through the 'asOrdinal' 'Control.Lens.Iso'. All of
--- it is static once @cs@ is a concrete list, so the fix is to let the consumer
--- specialise: 'INLINABLE' puts the unfolding in the interface file, the @All@
--- dictionary becomes known, 'helper' unrolls over a list whose length is known,
--- and the sizes constant-fold to literals. Consumers index at concrete grid
--- types, so this is the shape that actually runs.
-{-# INLINABLE coordPosition #-}
+-- The fold this used to carry as a @where@ helper is now 'sizeAndPosition', an
+-- 'IsCoordList' method, and the reason is entirely about what GHC can compile
+-- rather than about where the code reads best; see the note on that class. The
+-- short of it: a fold written as a function is polymorphically recursive over
+-- the axis list, GHC unrolls one level of it and leaves the rest to a shared
+-- worker holding the dictionary at run time, and so every axis after the first
+-- pays for dictionary peeling, an 'Integer' from @natVal@ and a trip through
+-- the 'asOrdinal' 'Control.Lens.Iso'. As a method the dictionaries are known at
+-- compile time and the whole thing constant-folds.
+--
+-- 'INLINE' rather than the 'INLINABLE' that used to be here: what has to reach
+-- the consumer is the instance chain, which does that on its own, and this
+-- wrapper is now small enough to want to disappear at the call site.
+{-# INLINE coordPosition #-}
 
 -- | The number of positions a @'Coord' cs@ ranges over: the product of the
 -- sizes of its axes, and so the length of the vector inside a @'Grid' cs@.
 --
--- This is 'MaxCoordSize' as a value. It asks only for @All IsCoordLifted cs@
+-- This is 'MaxCoordSize' as a value. It asks only for @IsCoordList cs@
 -- rather than @KnownNat (MaxCoordSize cs)@, so it is available wherever a
 -- coordinate can be taken apart at all --- in particular in the indexed
 -- traversals, which do not carry the @KnownNat@.
-coordSpaceSize :: forall cs. All IsCoordLifted cs => Int
+coordSpaceSize :: forall cs. IsCoordList cs => Int
 coordSpaceSize =
     -- 'SList' carries no fields, so the head and tail of the list are named
     -- with a type abstraction. 'SCons' quantifies the tail before the head.
@@ -352,7 +346,7 @@ coordSpaceSize =
 -- @coordFromPosition . coordPosition@ is @Just@ on every 'Coord', and
 -- @coordPosition@ undoes it on every position in @[0, 'coordSpaceSize')@.
 coordFromPosition ::
-       forall cs. All IsCoordLifted cs
+       forall cs. IsCoordList cs
     => Int
     -> Maybe (Coord cs)
 coordFromPosition p
@@ -372,7 +366,7 @@ coordFromPosition p
 -- known in advance: each axis takes the low digit of what the axes below it
 -- did not consume, exactly as writing a number in a mixed radix does.
 coordDigits ::
-       forall xs. All IsCoordLifted xs
+       forall xs. IsCoordList xs
     => Int
     -> (NP I xs, Int)
 coordDigits p =
@@ -412,7 +406,7 @@ type family AllDiffSame a xs :: Constraint where
 -- >             ((-1) :| (-1) :| EmptyCoord)
 -- >   == Nothing
 offsetCoord ::
-       ( All IsCoordLifted cs
+       ( IsCoordList cs
        , AllDiffSame Integer cs
        )
     => Coord cs
@@ -425,7 +419,7 @@ offsetCoord (Coord cs) (Coord d) = Coord <$> helper cs d
     -- reduce @MapDiff xs@ and match the second. The same shape as the helpers
     -- in the 'AffineSpace' instance above, and for the same reason.
     helper ::
-           (All IsCoordLifted xs, AllDiffSame Integer xs)
+           (IsCoordList xs, AllDiffSame Integer xs)
         => NP I xs
         -> NP I (MapDiff xs)
         -> Maybe (NP I xs)
@@ -498,7 +492,7 @@ deriving instance All Show cs => Show (OffGrid cs)
 -- for a single value. Mixed coords are the interesting case: the bounded axis
 -- decides when the walk ends while the torus axis keeps wrapping.
 offsetCoordUpTo ::
-       ( All IsCoordLifted cs
+       ( IsCoordList cs
        , AllDiffSame Integer cs
        )
     => Int
@@ -537,7 +531,7 @@ offsetCoordUpTo n c d = go n c 0
 -- @offsetCoordUpTo n c d@ succeeds exactly when @coordRay c d@ has at least @n@
 -- cells, and then names the @n@th.
 coordRay ::
-       ( All IsCoordLifted cs
+       ( IsCoordList cs
        , AllDiffSame Integer cs
        )
     => Coord cs
@@ -585,13 +579,13 @@ axisSteps r c =
 -- The axes are walked with the first outermost, so results come out in the same
 -- row-major order 'coordPosition' lays a grid out in.
 stepsWithin ::
-       forall cs. All IsCoordLifted cs
+       forall cs. IsCoordList cs
     => Int
     -> Coord cs
     -> [(Int, Coord cs)]
 stepsWithin r (Coord cs) = fmap Coord <$> go cs
   where
-    go :: All IsCoordLifted xs => NP I xs -> [(Int, NP I xs)]
+    go :: IsCoordList xs => NP I xs -> [(Int, NP I xs)]
     go Nil = [(0, Nil)]
     go (I x :* xs) = do
         (d, v) <- axisSteps r x
@@ -614,7 +608,7 @@ stepsWithin r (Coord cs) = fmap Coord <$> go cs
 -- reaching for; that one was built on @('.+^')@, so on a bounded coord it
 -- clamped rather than stopped, and a corner came back with nine results of
 -- which four were distinct.
-mooreNeighbours :: All IsCoordLifted cs => Int -> Coord cs -> [Coord cs]
+mooreNeighbours :: IsCoordList cs => Int -> Coord cs -> [Coord cs]
 mooreNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0]
 
 -- | The von Neumann neighbourhood: the coordinates whose distances, summed over
@@ -631,13 +625,13 @@ mooreNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0]
 -- smaller than "every combination of offsets summing to @r@" would give. That
 -- is the honest distance on a torus: on a 3-cycle every other cell really is
 -- one step away.
-vonNeumannNeighbours :: All IsCoordLifted cs => Int -> Coord cs -> [Coord cs]
+vonNeumannNeighbours :: IsCoordList cs => Int -> Coord cs -> [Coord cs]
 vonNeumannNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0, s <= r]
 
 -- | The Moore neighbourhood at radius one: the surrounding cells, diagonals
 -- included, excluding the centre. The overwhelmingly common case of
 -- 'mooreNeighbours'.
-neighbours :: All IsCoordLifted cs => Coord cs -> [Coord cs]
+neighbours :: IsCoordList cs => Coord cs -> [Coord cs]
 neighbours = mooreNeighbours 1
 
 -- | The number of steps between two values on a single axis, by the shorter
@@ -654,7 +648,7 @@ axisDistance = axisDistanceIsCoord @(CoordContainer x) @(CoordNat x)
 -- Both metrics below are folds of this, and it is the honest primitive when a
 -- caller wants something neither of them provides --- a weighted metric, or the
 -- axis that differs most.
-axisDistances :: forall cs. All IsCoordLifted cs => Coord cs -> Coord cs -> [Int]
+axisDistances :: forall cs. IsCoordList cs => Coord cs -> Coord cs -> [Int]
 axisDistances (Coord as) (Coord bs) =
     hcollapse $ hczipWith (Proxy @IsCoordLifted) step as bs
   where
@@ -674,14 +668,14 @@ axisDistances (Coord as) (Coord bs) =
 -- torus axis takes the shorter way round. That mixture is the case a caller
 -- cannot easily write by hand, and it is the reason this is exported rather
 -- than left as something every consumer reimplements against 'natVal'.
-coordDistance :: All IsCoordLifted cs => Coord cs -> Coord cs -> Int
+coordDistance :: IsCoordList cs => Coord cs -> Coord cs -> Int
 coordDistance a b = foldl' max 0 (axisDistances a b)
 
 -- | The Manhattan distance: the per-axis distances summed, counting a diagonal
 -- step as two. This is the metric 'vonNeumannNeighbours' is a ball in ---
 -- @vonNeumannNeighbours r c@ is every coord whose 'coordManhattan' from @c@ is
 -- in @[1, r]@.
-coordManhattan :: All IsCoordLifted cs => Coord cs -> Coord cs -> Int
+coordManhattan :: IsCoordList cs => Coord cs -> Coord cs -> Int
 coordManhattan a b = sum (axisDistances a b)
 
 -- | Which end of its axis a single coordinate sits at, or 'Nothing' if it is in
@@ -704,7 +698,7 @@ axisBoundary = axisBoundaryIsCoord @(CoordContainer x) @(CoordNat x)
 -- primitive for the questions they do not answer --- /which/ corner, or which
 -- edge a walker just met, which is what any reflect-or-stop rule needs.
 axisBoundaries ::
-       forall cs. All IsCoordLifted cs
+       forall cs. IsCoordList cs
     => Coord cs
     -> [Maybe Extremum]
 axisBoundaries (Coord cs) = hcollapse $ hcmap (Proxy @IsCoordLifted) step cs
@@ -724,7 +718,7 @@ axisBoundaries (Coord cs) = hcollapse $ hcmap (Proxy @IsCoordLifted) step cs
 -- On a coord with no axes at all the answer is 'False': there is no axis
 -- reporting an end, and a space with one point has no edge for that point to be
 -- on.
-onBoundary :: All IsCoordLifted cs => Coord cs -> Bool
+onBoundary :: IsCoordList cs => Coord cs -> Bool
 onBoundary = any isJust . axisBoundaries
 
 -- | Whether every axis is at one of its ends: the coordinate is a corner of the
@@ -739,7 +733,7 @@ onBoundary = any isJust . axisBoundaries
 -- The empty coord is 'False' rather than a vacuous 'True'. A corner is a
 -- boundary point, so @isCorner c@ implying @'onBoundary' c@ has to hold, and
 -- 'onBoundary' has nothing to report on a space of one point.
-isCorner :: All IsCoordLifted cs => Coord cs -> Bool
+isCorner :: IsCoordList cs => Coord cs -> Bool
 isCorner c =
     case axisBoundaries c of
         [] -> False
@@ -776,7 +770,7 @@ isCorner c =
 -- it once. Nothing is missing there --- three is the whole of that space
 -- besides the centre --- but a caller sizing a buffer from @3 ^ d - 1@ wants to
 -- know.
-interiorCoords :: All IsCoordLifted cs => [Coord cs]
+interiorCoords :: IsCoordList cs => [Coord cs]
 interiorCoords = filter (not . onBoundary) allCoord
 
 -- | Swap x and y for a coord in 2D space
@@ -784,7 +778,7 @@ tranposeCoord :: Coord '[a,b] -> Coord '[b,a]
 tranposeCoord (Coord (a :* b :* Nil)) = Coord (b :* a :* Nil)
 
 -- | The zero position for a coord
-zeroCoord :: All IsCoordLifted cs => Coord cs
+zeroCoord :: IsCoordList cs => Coord cs
 zeroCoord = Coord $ hcpure (Proxy :: Proxy IsCoordLifted) (I $ zeroPosition)
 
 class AllSizedKnown (cs :: [Type]) where

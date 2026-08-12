@@ -3,7 +3,6 @@ module SizedGrid.Grid.Focused
   ) where
 
 import           SizedGrid.Coord
-import           SizedGrid.Coord.Class
 import           SizedGrid.Grid.Grid
 
 import           Control.Comonad
@@ -23,7 +22,7 @@ data FocusedGrid cs a = FocusedGrid
 -- two constraints were pure noise -- and noise every caller had to repeat,
 -- since `Comonad` is the whole reason to reach for a `FocusedGrid`.
 instance ( AllSizedKnown cs
-         , All IsCoordLifted cs
+         , IsCoordList cs
          , SListI cs
          ) =>
          Comonad (FocusedGrid cs) where
@@ -31,7 +30,7 @@ instance ( AllSizedKnown cs
     duplicate (FocusedGrid g p) = FocusedGrid (tabulate (FocusedGrid g)) p
 
 instance ( AllSizedKnown cs
-         , All IsCoordLifted cs
+         , IsCoordList cs
          , SListI cs
          ) =>
          ComonadStore (Coord cs) (FocusedGrid cs) where

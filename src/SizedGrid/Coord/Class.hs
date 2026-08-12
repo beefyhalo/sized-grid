@@ -3,6 +3,8 @@
 module SizedGrid.Coord.Class
   ( IsCoord(..)
   , IsCoordLifted(..)
+  , IsCoordList(..)
+  , IsCoordListF
   , Extremum(..)
   , maxCoordSize
   , allCoordLike
@@ -11,7 +13,8 @@ module SizedGrid.Coord.Class
 import           SizedGrid.Ordinal
 
 import           Control.Lens
-import           Data.Kind     (Type)
+import           Data.Kind      (Constraint, Type)
+import           Generics.SOP   (All, I (..), NP (..))
 import           GHC.TypeLits
 
 -- | The largest value a coord of size @n@ can hold, which is @n - 1@.
@@ -206,6 +209,79 @@ class ( x ~ ((CoordContainer x) (CoordNat x))
 instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
   type CoordContainer (c n) = c
   type CoordNat (c n) = n
+
+-- | The per-axis obligations of 'IsCoordList', as a type family so that they
+-- can be a superclass of it.
+--
+-- Without this, @'IsCoordList' (x ': xs)@ would not hand back
+-- @'IsCoordList' xs@, and every induction over the axis list --- including
+-- 'IsCoordList''s own instance below --- would stop typechecking one step in.
+-- This is the shape @generics-sop@ gives its own @All@, for the same reason,
+-- and it is what @UndecidableSuperclasses@ is on for.
+type family IsCoordListF (cs :: [Type]) :: Constraint where
+  IsCoordListF '[]        = ()
+  IsCoordListF (x ': xs)  = (IsCoordLifted x, IsCoordList xs)
+
+-- | A list of axes that a 'SizedGrid.Coord.Coord' can be built from, with the
+-- row-major fold over that list available as a method.
+--
+-- This is @'All' 'IsCoordLifted' cs@ --- a superclass, so every body that held
+-- that constraint before still holds it, and it is discharged by instance
+-- resolution at a concrete list exactly as that constraint was --- plus the one
+-- thing it cannot supply: an /instance method/ for the per-axis step.
+--
+-- == Why the fold has to be a method
+--
+-- This is a compilation fact rather than a matter of taste, and it was measured
+-- rather than guessed.
+--
+-- 'SizedGrid.Coord.coordPosition' folds over the axis list. Written as a
+-- /function/ --- a @where@ helper closed over the dictionary, or
+-- @generics-sop@'s @cpara_SList@ with the step passed as an argument --- that
+-- fold is polymorphically recursive: it calls itself at a shorter list. GHC
+-- specialises the outermost call and then stops, leaving one shared worker that
+-- takes the @All IsCoordLifted@ dictionary at run time. So the first axis
+-- constant-folds and every axis after it pays, in the Core, for two thunks to
+-- peel the dictionary, an 'Integer' from @natVal@, a call through the
+-- 'asOrdinal' 'Control.Lens.Iso', and two boxed 'Int's.
+--
+-- Written as an instance method the dictionary is resolved at compile time, one
+-- instance per axis, so the fold unrolls and the sizes become literals: at
+-- @'[Clamped 50, Clamped 50]@ the Core for 'SizedGrid.Coord.coordPosition' is
+-- @+# (*# x 50#) y@ and nothing else. Measured on @extract 50x50@, that is 320
+-- bytes a call against none at all; on @index x90000@, 27 MB against 38 bytes.
+--
+-- Three things that look like they should fix it and do not, so that they are
+-- not tried again: lifting the helper to a top-level @INLINABLE@ function,
+-- routing the fold through @cpara_SList@ (its @cons@ is a function argument, so
+-- the per-axis dictionary stays a run-time value), and
+-- @-fpolymorphic-specialisation -fspecialise-aggressively@, which leaves the
+-- worker byte-for-byte identical.
+--
+-- == On the method
+--
+-- 'sizeAndPosition' returns the size of the axes alongside the position because
+-- the stride of an axis is exactly the size of the axes below it, so one pass
+-- yields both. It is a fold accumulator rather than anything a caller wants,
+-- and the two instances below cover every type-level list, so there is no
+-- instance left for anyone to write. "SizedGrid.Coord" therefore re-exports the
+-- class without it.
+class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
+    -- | The product of the axis sizes, and the row-major position of the given
+    -- coordinate within them.
+    sizeAndPosition :: NP I cs -> (Int, Int)
+
+instance IsCoordList '[] where
+    sizeAndPosition Nil = (1, 0)
+    {-# INLINE sizeAndPosition #-}
+
+instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
+    sizeAndPosition (I c :* cs) =
+        case sizeAndPosition cs of
+            (stride, rest) ->
+                ( ordinalSize @(CoordNat x) * stride
+                , ordinalToInt (c ^. asOrdinal) * stride + rest)
+    {-# INLINE sizeAndPosition #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id

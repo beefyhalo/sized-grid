@@ -49,7 +49,7 @@ gameOfLife = Rule $ \here neigh ->
 
 applyRule ::
        ( All Monoid cs
-       , All IsCoordLifted cs
+       , IsCoordList cs
        , All Semigroup cs
        , AllDiffSame Integer cs
        , All Eq cs
@@ -99,7 +99,7 @@ gridPositionFromScreenCoord DisplayInfo{..} x y =
 drawWorld ::
        ( cs ~ '[ a, b]
        , All Monoid cs
-       , All IsCoordLifted cs
+       , IsCoordList cs
        , All Semigroup cs
        , All AffineSpace cs
        , All Integral (MapDiff cs)
@@ -144,7 +144,7 @@ updateWorld _ _ world = world
 tickWorld ::
        ( All Monoid cs
        , All Semigroup cs
-       , All IsCoordLifted cs
+       , IsCoordList cs
        , All Eq cs
        , AllDiffSame Integer cs
        , All AffineSpace cs
