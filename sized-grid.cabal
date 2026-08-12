@@ -64,6 +64,26 @@ common lang
     -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
     -Wredundant-constraints
 
+  -- sized-grid-h56. These two solvers discharge the Nat goals this library used
+  -- to state by hand with Data.Constraint.Nat: 'KnownNat (n * MaxCoordSize as)'
+  -- in the AllSizedKnown instance and 'KnownNat (k + 1)' in 'reifyOrdinal'.
+  --
+  -- They are a build-time dependency of this library only. Plugins are not
+  -- transitive -- a downstream package solves its own constraints -- so nothing
+  -- here obliges a consumer to enable them, and the example packages in this
+  -- project deliberately do not.
+  --
+  -- What they do NOT solve: 'SizedGrid.Internal.Type.windowFits'. That wanted is
+  -- a '<=' goal from '<=' givens over a truncating subtraction, which needs
+  -- ghc-typelits-presburger; it stays an asserted axiom.
+  build-depends:
+    , ghc-typelits-knownnat     >=0.7 && <0.9
+    , ghc-typelits-natnormalise >=0.7 && <0.10
+
+  ghc-options:
+    -fplugin=GHC.TypeLits.Normalise
+    -fplugin=GHC.TypeLits.KnownNat.Solver
+
 library
   import:          lang
   hs-source-dirs:  src

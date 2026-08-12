@@ -71,7 +71,6 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Constraint
-import           Data.Constraint.Nat
 import           Data.Kind (Type)
 import           Data.List             (intercalate, unfoldr)
 import           Data.Maybe            (isJust)
@@ -789,10 +788,7 @@ instance AllSizedKnown '[] where
 
 instance (KnownNat n, AllSizedKnown as) =>
          AllSizedKnown ((c n) ': as) where
-    sizeProof =
-        withDict
-            (sizeProof @as)
-            (Dict \\ (timesNat @n @(MaxCoordSize as)))
+    sizeProof = withDict (sizeProof @as) Dict
 
 class WeakenCoord as bs where
   weakenCoord :: Coord as -> Maybe (Coord bs)

@@ -48,8 +48,6 @@ import           Control.Exception       (assert)
 import           Control.Lens            (Prism', prism')
 import           Control.Monad           (unless)
 import           Data.Aeson
-import           Data.Constraint
-import           Data.Constraint.Nat
 import           Data.Proxy
 import           GHC.TypeLits
 import           System.Random
@@ -137,11 +135,10 @@ reifyOrdinal (UnsafeOrdinal i) func =
     case someNatVal (toInteger i) of
         Nothing -> invariantViolated i (natVal (Proxy @n))
         Just (SomeNat (_ :: Proxy k)) ->
-            (case cmpNat (Proxy @(k + 1)) (Proxy @n) of
-                 LTI -> func k
-                 EQI -> func k
-                 GTI -> invariantViolated i (natVal (Proxy @n))) \\
-            plusNat @k @1
+            case cmpNat (Proxy @(k + 1)) (Proxy @n) of
+                LTI -> func k
+                EQI -> func k
+                GTI -> invariantViolated i (natVal (Proxy @n))
 
 -- | Reported when a value that claims to be an @'Ordinal' m@ is not in
 -- @[0, m)@. Only 'unsafeOrdinal' can produce one.

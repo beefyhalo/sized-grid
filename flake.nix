@@ -45,8 +45,44 @@
           ];
         };
 
-        ghc912 = pkgs.haskell.packages.ghc912;
-        ghc914 = pkgs.haskell.packages.ghc914;
+        # The type-checker plugins the library compiles against.
+        #
+        # nixpkgs' hackage snapshot still has ghc-typelits-natnormalise 0.7.12 /
+        # ghc-typelits-knownnat 0.7.13, which sit on ghc-tcplugins-extra 0.5.
+        # That package is bounded 'ghc >=7.10 && <9.13' and has no 9.14 release
+        # at all, so on GHC 9.14 the old versions cannot even configure
+        # ([Cabal-8010]) -- which is the reason sized-grid-h56 sat deferred.
+        #
+        # natnormalise 0.9 and knownnat 0.8 dropped ghc-tcplugins-extra for
+        # ghc-tcplugin-api and widened their bounds past 9.14, so pin all three
+        # from Hackage until nixpkgs catches up. Pinned for both compilers rather
+        # than only 9.14, so the plugins solve identically on each.
+        #
+        # dontCheck: the natnormalise test suite shells out to a second GHC to
+        # compile fixtures, which does not work inside the sandbox.
+        pluginOverrides = hsPkgs:
+          hsPkgs.extend (hself: hsuper: {
+            ghc-tcplugin-api = hself.callHackageDirect {
+              pkg = "ghc-tcplugin-api";
+              ver = "0.19.0.0";
+              sha256 = "142q8cx6kmn3hzs3542m0yys0kg1bzy75w8rnnpnws36d51vaffs";
+            } { };
+            ghc-typelits-natnormalise =
+              pkgs.haskell.lib.dontCheck (hself.callHackageDirect {
+                pkg = "ghc-typelits-natnormalise";
+                ver = "0.9.6";
+                sha256 = "0yg72pm3sgm47gh7zr3vig29bdfdx3kjpicxarhizb49i15rymkb";
+              } { });
+            ghc-typelits-knownnat =
+              pkgs.haskell.lib.dontCheck (hself.callHackageDirect {
+                pkg = "ghc-typelits-knownnat";
+                ver = "0.8.4";
+                sha256 = "1s49mmdsz2s8836y3zmmsam8khybbbnfyrf3pam6izkwy990q9iz";
+              } { });
+          });
+
+        ghc912 = pluginOverrides pkgs.haskell.packages.ghc912;
+        ghc914 = pluginOverrides pkgs.haskell.packages.ghc914;
       in
       {
         packages = {
