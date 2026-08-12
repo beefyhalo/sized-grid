@@ -1,0 +1,11 @@
+# .beads/issues.jsonl is a generated export of the Dolt database, which every
+# worktree shares. Git has no business three-way-merging it: the database
+# already holds the merged truth, so resolve by regenerating instead.
+#
+# The driver itself lives in local git config (it cannot be committed):
+#   git config merge.beads.name "regenerate beads JSONL from Dolt"
+#   git config merge.beads.driver 'bd export -o %A && sort -o %A %A'
+#
+# On bd >= 1.1 the driver must become 'bd export --include-memories -o %A',
+# since memories stop being exported by default there.
+.beads/issues.jsonl merge=beads
