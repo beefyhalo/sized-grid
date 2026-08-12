@@ -1,17 +1,17 @@
 Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
-"All.coord arithmetic.(.+^) x10000, Periodic 300x300",1636276562,113854292,5893515,949031,16777216
-"All.coord arithmetic.(.-.) x10000, HardWrap 100x100 (coord list shared)",381809472,14089848,3200021,363,16777216
-"All.coord arithmetic.toEnum/fromEnum x300, HardWrap 300",5674621,451062,31216,2,16777216
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).tabulate 300x300  [coordPosition per cell]",33394862500,1801599968,73740888,21755766,33554432
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).pure 300x300      [no coord at all]",398226171,27587488,720786,57,33554432
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).imap 300x300      [coordPosition per cell]",22769987500,1912285334,62641438,10197700,36700160
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).fmap 300x300      [no coord at all]",1452367187,142724026,4320786,1173332,36700160
-"All.grid access.index x90000, 300x300 (coord list shared)",14974712500,1485671514,54720335,5015,36700160
-All.indexed traversals.ifoldl' 300x300,15140725000,1178044462,57600340,5026,36700160
-All.indexed traversals.itraverse 100x100,604828125,57115814,3525775,260520,36700160
-All.comonad.extract 50x50,166630,16090,608,0,36700160
-All.comonad.extend neighbourSum 50x50,6232925000,538025906,21808586,747314,41943040
-All.collapse round trip.collapseGrid 100x100,311566894,22616168,2855493,351,41943040
-All.collapse round trip.gridFromList . collapseGrid 100x100,1107466015,61839508,4577584,1030453,41943040
-All.json.toJSON 100x100,650666796,40237868,3895458,322109,41943040
-All.json.fromJSON . toJSON 100x100,3157212500,241271734,10517994,3009898,44040192
+"All.coord arithmetic.(.+^) x10000, Periodic 300x300",2859854687,224298580,5893294,959391,16777216
+"All.coord arithmetic.(.-.) x10000, Clamped 100x100 (coord list shared)",399427343,26916668,1440026,124,16777216
+"All.coord arithmetic.toEnum/fromEnum x300, Clamped 300",8610641,512886,31216,2,16777216
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).tabulate 300x300  [coordPosition per cell]",37187315625,1102772824,49260402,21276176,33554432
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).pure 300x300      [no coord at all]",514952050,42857386,720781,63,33554432
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).imap 300x300      [coordPosition per cell]",23836762500,2184610462,36721069,8947007,40894464
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).fmap 300x300      [no coord at all]",2146580078,101173340,4320768,1173183,40894464
+"All.grid access.index x90000, 300x300 (coord list shared)",10258656250,588505140,28800097,2345,40894464
+All.indexed traversals.ifoldl' 300x300,10847393750,881318242,31680338,2611,40894464
+All.indexed traversals.itraverse 100x100,797808581,6820006,3525752,260565,40894464
+All.comonad.extract 50x50,115512,8734,320,0,40894464
+All.comonad.extend neighbourSum 50x50,11841667187,122155694,33385424,852201,41943040
+All.collapse round trip.collapseGrid 100x100,393602758,9948972,2855489,395,41943040
+All.collapse round trip.gridFromList . collapseGrid 100x100,1522912109,110493202,4577583,1030277,41943040
+All.json.toJSON 100x100,839090234,35544746,3895459,322101,41943040
+All.json.fromJSON . toJSON 100x100,4243595312,250041312,10517986,3008455,44040192

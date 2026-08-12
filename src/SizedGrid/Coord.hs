@@ -317,6 +317,16 @@ coordPosition (Coord a) = snd $ helper a
                  in ( ordinalSize @(CoordNat x) * stride
                     , ordinalToInt o * stride + rest)
 
+-- What is left in the unspecialised Core is not arithmetic: it is two thunks to
+-- peel 'IsCoordLifted' out of the @All@ dictionary per axis, a boxed 'Integer'
+-- from @natVal@, and a call through the 'asOrdinal' 'Control.Lens.Iso'. All of
+-- it is static once @cs@ is a concrete list, so the fix is to let the consumer
+-- specialise: 'INLINABLE' puts the unfolding in the interface file, the @All@
+-- dictionary becomes known, 'helper' unrolls over a list whose length is known,
+-- and the sizes constant-fold to literals. Consumers index at concrete grid
+-- types, so this is the shape that actually runs.
+{-# INLINABLE coordPosition #-}
+
 -- | The number of positions a @'Coord' cs@ ranges over: the product of the
 -- sizes of its axes, and so the length of the vector inside a @'Grid' cs@.
 --
