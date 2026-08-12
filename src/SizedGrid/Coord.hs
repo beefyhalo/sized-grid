@@ -30,6 +30,10 @@ module SizedGrid.Coord
   , vonNeumannNeighbours
   , axisSteps
   , stepsWithin
+    -- * Rays
+  , OffGrid(..)
+  , offsetCoordUpTo
+  , coordRay
     -- * Distance
   , axisDistance
   , axisDistances
@@ -64,7 +68,7 @@ import           Data.AffineSpace
 import           Data.Constraint
 import           Data.Constraint.Nat
 import           Data.Kind (Type)
-import           Data.List             (intercalate)
+import           Data.List             (intercalate, unfoldr)
 import           Data.Maybe            (isJust)
 import qualified Data.Vector           as V
 import           Generics.SOP          hiding (Generic, S, Z)
@@ -418,6 +422,118 @@ offsetCoord (Coord cs) (Coord d) = Coord <$> helper cs d
     helper Nil Nil = Just Nil
     helper (I x :* xs) (I dx :* dxs) =
         (\y ys -> I y :* ys) <$> offsetIsCoord x dx <*> helper xs dxs
+
+-- | Where a walk left the grid: the last coordinate that was still on it, and
+-- how many whole steps it managed before the next one would have left.
+--
+-- This is precisely what @'offsetCoord' c d == Nothing@ throws away. It follows
+-- @manifolds@' @(.+^|)@, which answers a displacement with
+-- @Either (Boundary m, Scalar (Needle m)) (Interior m)@ --- either you arrived
+-- in the interior, or here is the boundary point you met and how far along the
+-- displacement you got.
+data OffGrid cs = OffGrid
+    { lastInside :: Coord cs
+      -- ^ The final coordinate still on the grid, which is where the walk
+      -- started if it never got anywhere.
+    , stepsTaken :: Int
+      -- ^ How many whole steps succeeded, and so @0@ exactly when the first
+      -- step was already off the grid.
+    } deriving (Generic)
+
+deriving instance All Eq cs => Eq (OffGrid cs)
+
+deriving instance All Show cs => Show (OffGrid cs)
+
+-- | Take up to @n@ steps of @d@ from @c@, and say where the grid ran out if it
+-- did: @Right@ is the coordinate @n@ whole steps away, @Left@ is how far the
+-- walk got.
+--
+-- The informative 'offsetCoord'. That one answers a walk that leaves with
+-- 'Nothing', which says neither where it left, nor how many steps succeeded
+-- first, so a caller who needs either has to rediscover it by stepping one cell
+-- at a time and keeping the last success --- which is this function.
+--
+-- > offsetCoordUpTo 2 (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Clamped 5])
+-- >                 (1 :| 1 :| EmptyCoord)
+-- >   == Right (2 :| 2 :| EmptyCoord)
+-- > offsetCoordUpTo 5 (2 :| 2 :| EmptyCoord :: Coord '[Clamped 5, Clamped 5])
+-- >                 (1 :| 1 :| EmptyCoord)
+-- >   == Left (OffGrid (4 :| 4 :| EmptyCoord) 2)
+--
+-- 'offsetCoord' is the one-step case with the edge forgotten, and that is a law
+-- worth stating even though the definition runs the other way round:
+--
+-- > offsetCoord c d == either (const Nothing) Just (offsetCoordUpTo 1 c d)
+--
+-- The single displacement is the primitive because it is the one operation the
+-- axes answer for --- 'SizedGrid.Coord.Class.offsetIsCoord' applies a whole
+-- 'Diff' per axis --- so counting steps is iteration on top of it rather than
+-- something 'offsetCoord' could be carved out of.
+--
+-- A step is a whole @d@, not a subdivision of one. On a lattice there is
+-- nothing between @c@ and @c '.+^' d@ to stop at unless @d@ is itself a
+-- multiple of some shorter displacement, so "how far along the displacement"
+-- counts copies of @d@; a caller who wants the finer walk passes the finer @d@.
+-- That is also why @'lastInside'@ is on the boundary when @d@ is one cell wide
+-- and need not be otherwise: a step of three cells can leave the grid from the
+-- interior, and then the last coordinate that was inside is an interior one.
+-- Where the step is unit-sized, @'axisBoundaries' . 'lastInside'@ names the edge
+-- the walk met.
+--
+-- @n <= 0@ is @Right c@: a walk of no steps cannot leave.
+--
+-- A 'SizedGrid.Coord.Periodic.Periodic' axis never refuses a step, so on an
+-- all-@Periodic@ coord the answer is @Right@ for every @n@ and every @d@ --- a
+-- torus has no boundary to report, which is the same fact 'axisBoundary' states
+-- for a single value. Mixed coords are the interesting case: the bounded axis
+-- decides when the walk ends while the torus axis keeps wrapping.
+offsetCoordUpTo ::
+       ( All IsCoordLifted cs
+       , AllDiffSame Integer cs
+       )
+    => Int
+    -> Coord cs
+    -> Diff (Coord cs)
+    -> Either (OffGrid cs) (Coord cs)
+offsetCoordUpTo n c d = go n c 0
+  where
+    go k x s
+        | k <= 0 = Right x
+        | otherwise =
+            case offsetCoord x d of
+                Nothing -> Left (OffGrid x s)
+                Just y  -> go (k - 1) y (s + 1)
+
+-- | The ray from @c@ in direction @d@: @c '.+^' d@, then @c '.+^' 2d@, and so on
+-- for as long as the grid lasts.
+--
+-- The start is not included, for the same reason the neighbourhoods exclude
+-- their centre: the caller has it already, and every use --- reading the three
+-- cells beyond a letter, tracing a beam to the wall, casting a line of sight
+-- --- wants what is ahead. So @take k (coordRay c d)@ is the first @k@ cells
+-- along the ray, and it is shorter than @k@ exactly when the grid ran out
+-- first.
+--
+-- > coordRay (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Clamped 5])
+-- >          (1 :| 1 :| EmptyCoord)
+-- >   == [1 :| 1, 2 :| 2, 3 :| 3, 4 :| 4]
+--
+-- Infinite when nothing can stop it, which is every ray on an
+-- all-'SizedGrid.Coord.Periodic.Periodic' coord and every ray with a zero
+-- displacement. That is not a special case to guard: it is what a torus is, and
+-- the list is lazy, so take what you need.
+--
+-- The counted walk is 'offsetCoordUpTo', and the two are one walk seen twice:
+-- @offsetCoordUpTo n c d@ succeeds exactly when @coordRay c d@ has at least @n@
+-- cells, and then names the @n@th.
+coordRay ::
+       ( All IsCoordLifted cs
+       , AllDiffSame Integer cs
+       )
+    => Coord cs
+    -> Diff (Coord cs)
+    -> [Coord cs]
+coordRay c d = unfoldr (\x -> (\y -> (y, y)) <$> offsetCoord x d) c
 
 -- | The values one axis can reach within @r@ steps of @c@, paired with the
 -- number of steps it actually takes to get there.
