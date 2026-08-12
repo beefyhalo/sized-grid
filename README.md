@@ -22,7 +22,7 @@ The core datatype of this library is `Grid (cs :: '[k]) (a :: *)`. `cs` is a typ
 
 The last type value of `Grid` is the type of each element. 
 
-The other main type is `Coord cs`, where `cs` is, again, a type level list of coordinate types. For example, `Coord '[Periodic 3, Clamped 4]` is a coordinate in a 3 by 4 2D space. The different types (`Periodic` and `Clamped`) tell how to handle combining theses different numbers. `Coord cs` is an instance of `Semigroup`, `Monoid` and `AdditiveGroup` as long as each of the coordinates is also an instance of that typeclass. `Coord` is also an instance of of `AffineSpace`, where `Diff` is a n-tuple, meaning we can pattern match and do all sorts of nice things.
+The other main type is `Coord cs`, where `cs` is, again, a type level list of coordinate types. For example, `Coord '[Periodic 3, Clamped 4]` is a coordinate in a 3 by 4 2D space. The different types (`Periodic` and `Clamped`) tell how to handle combining theses different numbers. `Coord cs` is an instance of `Semigroup`, `Monoid` and `AdditiveGroup` as long as each of the coordinates is also an instance of that typeclass. `Coord` is also an instance of of `AffineSpace`, where `Diff (Coord cs)` is `Coord (MapDiff cs)` — a coordinate again, holding one `Diff` per axis. So a displacement is written the same way a position is, with `:|`, and inherits every `Coord` instance; `coordFromTuple` and `coordToTuple` convert to and from a tuple of the same arity where that reads better.
 
 For working directly with `Coord`s, one can construct them with `singleCoord` and `appendCoord` and consume and update them with `coordHead` and `coordTail`. They are also instances of `FieldN` from lens, allowing one to directly update or get a certain dimension.
 
@@ -137,11 +137,11 @@ glider ::
       => Coord '[x,y] 
       -> Grid '[x,y] TileState
 glider offset = pure Dead 
-    & gridIndex (offset .+^ (0,-1)) .~ Alive
-    & gridIndex (offset .+^ (1,0)) .~ Alive
-    & gridIndex (offset .+^ (-1,1)) .~ Alive
-    & gridIndex (offset .+^ (0,1)) .~ Alive
-    & gridIndex (offset .+^ (1,1)) .~ Alive
+    & gridIndex (offset .+^ coordFromTuple (0,-1)) .~ Alive
+    & gridIndex (offset .+^ coordFromTuple (1,0)) .~ Alive
+    & gridIndex (offset .+^ coordFromTuple (-1,1)) .~ Alive
+    & gridIndex (offset .+^ coordFromTuple (0,1)) .~ Alive
+    & gridIndex (offset .+^ coordFromTuple (1,1)) .~ Alive
 ```
 
 We can now make our glider run! A generation is just one `applyRule`, so the whole
@@ -149,7 +149,7 @@ simulation is an `iterate`.
 
 ```haskell
 start :: Grid '[Periodic 10, Periodic 10] TileState
-start = glider (mempty .+^ (3,3))
+start = glider (mempty .+^ coordFromTuple (3,3))
 
 generations :: Grid '[Periodic 10, Periodic 10] TileState 
       -> [Grid '[Periodic 10, Periodic 10] TileState]

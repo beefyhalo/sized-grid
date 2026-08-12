@@ -13,6 +13,8 @@ module SizedGrid.Coord
     -- * Building and taking apart
   , singleCoord
   , appendCoord
+  , coordFromTuple
+  , coordToTuple
   , coordHead
   , coordTail
   , tranposeCoord
@@ -39,7 +41,6 @@ module SizedGrid.Coord
     -- * Type-level machinery
   , Length
   , MaxCoordSize
-  , CoordDiff
   , MapDiff
   , AllDiffSame
   , AllSizedKnown(..)
@@ -192,6 +193,31 @@ singleCoord a = Coord (I a :* Nil)
 appendCoord :: a -> Coord as -> Coord (a ': as)
 appendCoord a (Coord as) = Coord (I a :* as)
 
+-- | Build a `Coord` from a tuple of the same arity: @coordFromTuple (1, 2)@ is
+-- @1 ':|' 2 ':|' 'EmptyCoord'@.
+--
+-- This exists for displacements, where a tuple used to typecheck directly ---
+-- @c '.+^' (-1, -1)@ is now @c '.+^' coordFromTuple (-1, -1)@ --- but it is not
+-- restricted to them, and builds an ordinary coordinate just as well.
+--
+-- @IsProductType@ is confined to these two signatures on purpose. It used to
+-- sit in the context of everything that offsets, because 'Diff' was a tuple and
+-- so had to be taken apart generically; making the displacement coord-shaped is
+-- what removed it. Asking for it back here is opt-in, at a call site where the
+-- tuple is a literal and the constraint is discharged on the spot.
+--
+-- There is deliberately no @coord2@ or two-dimensional pattern synonym. One
+-- arity-generic function costs no per-arity code, which is the whole point of
+-- the change these replace.
+coordFromTuple :: IsProductType t xs => t -> Coord xs
+coordFromTuple = Coord . productTypeFrom
+
+-- | Take a `Coord` apart into a tuple of the same arity. The inverse of
+-- 'coordFromTuple', and the way to destructure a displacement positionally:
+-- @let (dx, dy) = coordToTuple (a '.-.' b)@.
+coordToTuple :: IsProductType t xs => Coord xs -> t
+coordToTuple = productTypeTo . unCoord
+
 instance Field1 (Coord (a ': cs)) (Coord (a' ': cs)) a a' where
   _1 = coordHead
 
@@ -207,48 +233,45 @@ instance Field4 (Coord (a ': b ': c ': d ': cs)) (Coord (a ': b ': c ': d' ': cs
 instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d ': e' ': cs)) e e' where
   _5 = coordTail . _4
 
--- | The type of difference between two coords. A n-dimensional coord should have a `Diff` of an n-tuple of `Integers`. We use `Identity` and our 1-tuple. Unfortuantly, each instance is manual at the moment.
-type family CoordDiff (cs :: [k]) :: Type
-
-type instance CoordDiff '[] = ()
-type instance CoordDiff '[a] = Identity (Diff a)
-type instance CoordDiff '[a, b] = (Diff a, Diff b)
-type instance CoordDiff '[a, b, c] = (Diff a, Diff b, Diff c)
-type instance CoordDiff '[a, b, c, d] =
-     (Diff a, Diff b, Diff c, Diff d)
-type instance CoordDiff '[a, b, c, d, e] =
-     (Diff a, Diff b, Diff c, Diff d, Diff e)
-type instance CoordDiff '[a, b, c, d, e, f] =
-     (Diff a, Diff b, Diff c, Diff d, Diff e, Diff f)
-
 -- | Apply `Diff` to each element of a type level list. This is required as type families can't be partially applied.
 type family MapDiff xs where
   MapDiff '[] = '[]
   MapDiff (x ': xs) = Diff x ': MapDiff xs
 
+-- | The displacement between two coords is itself coord-shaped: a
+-- @'Coord' cs@ is displaced by a @'Coord' ('MapDiff' cs)@, one 'Diff' per axis.
+--
+-- This follows @manifolds@, where @Needle@ is an associated type and a product
+-- gets its own structurally --- @Needle (a,b) = (Needle a, Needle b)@. The
+-- displacement here is a 'Coord' rather than a new product type, so it inherits
+-- ':|', 'EmptyCoord', 'Show', 'Eq', 'AdditiveGroup' and 'Random' from the
+-- instances above at no cost.
+--
+-- It replaces a @CoordDiff@ family whose instances were written out one per
+-- arity, up to six. That was a real ceiling: a seven-axis 'Coord' had no
+-- 'Diff', so no 'AffineSpace' instance and no 'offsetCoord'. 'MapDiff' recurses,
+-- so there is no ceiling and no per-arity code. It also drops
+-- @IsProductType (CoordDiff cs) (MapDiff cs)@ from the context, which is why
+-- @generics-sop@ no longer appears in the signature of everything that offsets.
+--
+-- Tuple literals no longer typecheck as displacements. Use ':|', or
+-- 'coordFromTuple' where a tuple reads better.
 instance ( All AffineSpace cs
-         , AdditiveGroup (CoordDiff cs)
-         , IsProductType (CoordDiff cs) (MapDiff cs)
+         , All AdditiveGroup (MapDiff cs)
          ) =>
          AffineSpace (Coord cs) where
-    type Diff (Coord cs) = CoordDiff cs
-    -- 'productTypeTo' and 'productTypeFrom' rather than the generic 'to' and
-    -- 'from': going through @SOP@ meant taking apart a sum that
-    -- 'IsProductType' already guarantees has one arm, and GHC will not reduce
-    -- @Code (CoordDiff cs)@ far enough to see the other arm is impossible. That
-    -- forced an unreachable @error@ equation on ('.+^'). These two do the same
-    -- job with no sum in the way.
+    type Diff (Coord cs) = Coord (MapDiff cs)
     Coord a .-. Coord b =
         let helper ::
                    All AffineSpace xs => NP I xs -> NP I xs -> NP I (MapDiff xs)
             helper Nil Nil                 = Nil
             helper (I x :* xs) (I y :* ys) = I (x .-. y) :* helper xs ys
-        in productTypeTo $ helper a b
-    Coord a .+^ b =
+        in Coord $ helper a b
+    Coord a .+^ Coord b =
         let helper :: All AffineSpace xs => NP I xs -> NP I (MapDiff xs) -> NP I xs
             helper Nil Nil                 = Nil
             helper (I x :* xs) (I y :* ys) = I (x .+^ y) :* helper xs ys
-        in Coord $ helper a $ productTypeFrom b
+        in Coord $ helper a b
 
 -- | Generate all possible coords in order
 allCoord ::
@@ -361,19 +384,20 @@ type family AllDiffSame a xs :: Constraint where
 -- every axis does, so on a coord mixing a bounded axis with a torus axis the
 -- torus half can wrap while the bounded half refuses:
 --
--- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Periodic 5]) (0, -1)
+-- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Periodic 5])
+-- >             (0 :| (-1) :| EmptyCoord)
 -- >   == Just (0 :| 4 :| EmptyCoord)
--- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Periodic 5]) (-1, -1)
+-- > offsetCoord (0 :| 0 :| EmptyCoord :: Coord '[Clamped 5, Periodic 5])
+-- >             ((-1) :| (-1) :| EmptyCoord)
 -- >   == Nothing
 offsetCoord ::
        ( All IsCoordLifted cs
        , AllDiffSame Integer cs
-       , IsProductType (CoordDiff cs) (MapDiff cs)
        )
     => Coord cs
     -> Diff (Coord cs)
     -> Maybe (Coord cs)
-offsetCoord (Coord cs) d = Coord <$> helper cs (productTypeFrom d)
+offsetCoord (Coord cs) (Coord d) = Coord <$> helper cs d
   where
     -- The coord drives the recursion, not the displacement: matching 'Nil' or
     -- ':*' on the first argument is what refines @xs@ far enough for GHC to

@@ -14,6 +14,8 @@ module Test.Neighbours
 import           SizedGrid
 import           Test.Arbitrary        ()
 
+import           Data.AdditiveGroup    (zeroV)
+import           Data.AffineSpace      (Diff, (.+^), (.-.))
 import           Data.List             (nub, sort)
 import           Data.Maybe            (fromJust)
 import           GHC.TypeLits          (KnownNat, type (<=))
@@ -76,27 +78,33 @@ pec r c = pe r :| pe c :| EmptyCoord
 mixc :: Int -> Int -> Coord '[Clamped 5, Periodic 5]
 mixc r c = hw r :| pe c :| EmptyCoord
 
+-- | A two-dimensional displacement. This is the shape every @Coord '[_, _]@
+-- above takes, because 'Diff' of a coord is a coord of the axes' 'Diff's and
+-- both 'Clamped' and 'Periodic' have @Diff ~ Integer@.
+d2 :: Integer -> Integer -> Coord '[Integer, Integer]
+d2 a b = a :| b :| EmptyCoord
+
 offsetCoordTests :: TestTree
 offsetCoordTests =
     testGroup
         "offsetCoord applies each axis's own boundary policy"
         [ testCase "a zero offset is the identity" $ do
-              assertEqual "Clamped" (Just (hwc 2 2)) (offsetCoord (hwc 2 2) (0, 0))
-              assertEqual "Periodic" (Just (pec 2 2)) (offsetCoord (pec 2 2) (0, 0))
+              assertEqual "Clamped" (Just (hwc 2 2)) (offsetCoord (hwc 2 2) (d2 0 0))
+              assertEqual "Periodic" (Just (pec 2 2)) (offsetCoord (pec 2 2) (d2 0 0))
         , testCase "an in-range offset moves on every axis" $
-              assertEqual "" (Just (hwc 3 3)) (offsetCoord (hwc 2 2) (1, 1))
+              assertEqual "" (Just (hwc 3 3)) (offsetCoord (hwc 2 2) (d2 1 1))
         , testCase "failing on the first axis fails the whole offset" $
-              assertEqual "" Nothing (offsetCoord (hwc 0 0) (-1, 0))
+              assertEqual "" Nothing (offsetCoord (hwc 0 0) (d2 (-1) 0))
         , testCase "failing on the second axis fails the whole offset" $
-              assertEqual "" Nothing (offsetCoord (hwc 0 0) (0, -1))
+              assertEqual "" Nothing (offsetCoord (hwc 0 0) (d2 0 (-1)))
         , testCase "off the high corner fails" $
-              assertEqual "" Nothing (offsetCoord (hwc 4 4) (1, 1))
+              assertEqual "" Nothing (offsetCoord (hwc 4 4) (d2 1 1))
         , testCase "a torus wraps on every axis" $
-              assertEqual "" (Just (pec 4 4)) (offsetCoord (pec 0 0) (-1, -1))
+              assertEqual "" (Just (pec 4 4)) (offsetCoord (pec 0 0) (d2 (-1) (-1)))
         , testCase "a torus axis wraps while a bounded axis stands still" $
-              assertEqual "" (Just (mixc 0 4)) (offsetCoord (mixc 0 0) (0, -1))
+              assertEqual "" (Just (mixc 0 4)) (offsetCoord (mixc 0 0) (d2 0 (-1)))
         , testCase "a bounded axis fails while a torus axis would have wrapped" $
-              assertEqual "" Nothing (offsetCoord (mixc 0 0) (-1, -1))
+              assertEqual "" Nothing (offsetCoord (mixc 0 0) (d2 (-1) (-1)))
         ]
 
 mooreTests :: TestTree
@@ -405,12 +413,78 @@ stepsWithinTests =
               [n | (s, n) <- stepsWithin 2 c, s > 0] === mooreNeighbours 2 c
         ]
 
+-- | Seven axes: one past the ceiling the old @CoordDiff@ family imposed.
+--
+-- @CoordDiff@ was an open family with one hand-written @type instance@ per
+-- arity, and it stopped at six. A seven-axis coord therefore had no @Diff@ at
+-- all, so no 'AffineSpace' instance and no 'offsetCoord'; the only fix
+-- available to a caller was an orphan instance plus a seven-tuple. 'MapDiff'
+-- recurses, so this now works for the same reason two axes do, and no arity is
+-- special (@sized-grid-iet@).
+type Seven
+     = '[ Clamped 3, Clamped 3, Clamped 3, Clamped 3, Clamped 3, Clamped 3, Clamped 3]
+
+sevenOf :: Int -> Coord Seven
+sevenOf n =
+    let c = hwOf n
+    in c :| c :| c :| c :| c :| c :| c :| EmptyCoord
+
+-- | The displacement for 'Seven': a coord again, of the axes' 'Diff's.
+sevenD :: Integer -> Diff (Coord Seven)
+sevenD d = d :| d :| d :| d :| d :| d :| d :| EmptyCoord
+
+arityTests :: TestTree
+arityTests =
+    testGroup
+        "a coord past the old six-axis ceiling has a working offset API"
+        [ testCase "(.+^) moves every axis" $
+              assertEqual "" (sevenOf 2) (sevenOf 1 .+^ sevenD 1)
+        , testCase "(.-.) is the displacement that carries you back" $
+              assertEqual
+                  ""
+                  (sevenOf 2)
+                  (sevenOf 1 .+^ (sevenOf 2 .-. sevenOf 1))
+        , testCase "(.-.) reads off as a coord of Diffs" $
+              assertEqual "" (sevenD 1) (sevenOf 2 .-. sevenOf 1)
+        , testCase "offsetCoord succeeds inside the grid" $
+              assertEqual "" (Just (sevenOf 2)) (offsetCoord (sevenOf 1) (sevenD 1))
+        , testCase "offsetCoord reports leaving the grid" $
+              assertEqual "" Nothing (offsetCoord (sevenOf 0) (sevenD (-1)))
+        , testCase "the zero displacement is the identity" $
+              assertEqual "" (sevenOf 1) (sevenOf 1 .+^ zeroV)
+        ]
+
+-- | The tuple bridge kept for call sites that used to write a tuple literal
+-- directly. It is arity-generic, so the same function covers a pair and a
+-- seven-axis coord.
+tupleBridgeTests :: TestTree
+tupleBridgeTests =
+    testGroup
+        "coordFromTuple / coordToTuple"
+        [ testCase "coordFromTuple builds the same coord as (:|)" $
+              assertEqual "" (d2 1 (-2)) (coordFromTuple (1, -2))
+        , testCase "coordToTuple takes one apart" $
+              assertEqual "" (1, -2 :: Integer) (coordToTuple (d2 1 (-2)))
+        , testCase "a tuple offsets a coord through (.+^)" $
+              assertEqual
+                  ""
+                  (hwc 3 3)
+                  (hwc 2 2 .+^ coordFromTuple (1, 1))
+        , testCase "seven axes go through the same function" $
+              assertEqual
+                  ""
+                  (sevenD 1)
+                  (coordFromTuple (1, 1, 1, 1, 1, 1, 1))
+        ]
+
 neighbourTests :: TestTree
 neighbourTests =
     testGroup
         "Neighbours"
         [ offsetIsCoordTests
         , offsetCoordTests
+        , arityTests
+        , tupleBridgeTests
         , mooreTests
         , vonNeumannTests
         , ordinalTests
