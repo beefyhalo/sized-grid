@@ -35,6 +35,12 @@ module SizedGrid.Coord
   , axisDistances
   , coordDistance
   , coordManhattan
+    -- * Boundaries
+  , axisBoundary
+  , axisBoundaries
+  , onBoundary
+  , isCorner
+  , interiorCoords
     -- * Changing the size of a coord
   , WeakenCoord(..)
   , StrengthenCoord(..)
@@ -59,6 +65,7 @@ import           Data.Constraint
 import           Data.Constraint.Nat
 import           Data.Kind (Type)
 import           Data.List             (intercalate)
+import           Data.Maybe            (isJust)
 import qualified Data.Vector           as V
 import           Generics.SOP          hiding (Generic, S, Z)
 import qualified Generics.SOP          as SOP
@@ -550,6 +557,85 @@ coordDistance a b = foldl' max 0 (axisDistances a b)
 -- in @[1, r]@.
 coordManhattan :: All IsCoordLifted cs => Coord cs -> Coord cs -> Int
 coordManhattan a b = sum (axisDistances a b)
+
+-- | Which end of its axis a single coordinate sits at, or 'Nothing' if it is in
+-- the interior.
+--
+-- The lifted form of 'SizedGrid.Coord.Class.axisBoundaryIsCoord', so each axis
+-- answers for its own boundary policy: a bounded axis has two ends, a
+-- 'SizedGrid.Coord.Periodic.Periodic' one has none.
+axisBoundary :: forall x. IsCoordLifted x => x -> Maybe Extremum
+axisBoundary = axisBoundaryIsCoord @(CoordContainer x) @(CoordNat x)
+
+-- | Where each axis of a coord sits relative to its own ends, first axis first.
+--
+-- A list rather than an @NP (K (Maybe Extremum)) cs@, for the same reason
+-- 'axisDistances' is one: the answer for an axis carries nothing of that axis's
+-- type, so the indexed shape would cost every caller an @hcollapse@ and buy
+-- back no information.
+--
+-- 'onBoundary' and 'isCorner' are both folds of this. It is the honest
+-- primitive for the questions they do not answer --- /which/ corner, or which
+-- edge a walker just met, which is what any reflect-or-stop rule needs.
+axisBoundaries ::
+       forall cs. All IsCoordLifted cs
+    => Coord cs
+    -> [Maybe Extremum]
+axisBoundaries (Coord cs) = hcollapse $ hcmap (Proxy @IsCoordLifted) step cs
+  where
+    step :: IsCoordLifted x => I x -> K (Maybe Extremum) x
+    step (I a) = K (axisBoundary a)
+
+-- | Whether any axis is at one of its ends: the coordinate is somewhere on the
+-- edge of the space.
+--
+-- The negation is the interior, and on a bounded coord that is exactly the set
+-- of cells whose full Moore neighbourhood exists --- @not (onBoundary c)@ iff
+-- @length ('neighbours' c) == 3 ^ d - 1@ in @d@ dimensions. That equivalence is
+-- what a cellular automaton is reaching for when it special-cases edge cells,
+-- and 'interiorCoords' hands it over directly.
+--
+-- On a coord with no axes at all the answer is 'False': there is no axis
+-- reporting an end, and a space with one point has no edge for that point to be
+-- on.
+onBoundary :: All IsCoordLifted cs => Coord cs -> Bool
+onBoundary = any isJust . axisBoundaries
+
+-- | Whether every axis is at one of its ends: the coordinate is a corner of the
+-- space.
+--
+-- An axis with no ends takes every corner with it, so this is 'False'
+-- everywhere on an all-'SizedGrid.Coord.Periodic.Periodic' coord, and 'False'
+-- on any coord with even one torus axis. That is the answer a check written
+-- against 'GHC.TypeLits.natVal' gets wrong: comparing each axis to @0@ and
+-- @n - 1@ finds four corners on a torus, which has none.
+--
+-- The empty coord is 'False' rather than a vacuous 'True'. A corner is a
+-- boundary point, so @isCorner c@ implying @'onBoundary' c@ has to hold, and
+-- 'onBoundary' has nothing to report on a space of one point.
+isCorner :: All IsCoordLifted cs => Coord cs -> Bool
+isCorner c =
+    case axisBoundaries c of
+        [] -> False
+        bs -> all isJust bs
+
+-- | Every coordinate that is not 'onBoundary', in 'allCoord' order.
+--
+-- The cells a neighbourhood-based rule can be applied to without deciding what
+-- happens at an edge, because on a bounded coord these are precisely the cells
+-- whose full Moore neighbourhood exists. On a torus that is every cell, and
+-- this is 'allCoord'.
+--
+-- Being interior is not the same as having @3 ^ d - 1@ neighbours, and only
+-- coincides with it on a bounded coord. A torus axis shorter than the
+-- neighbourhood is the difference: on a @Coord '[Periodic 2, Periodic 2]@ every
+-- cell is interior, and every cell has three neighbours rather than eight,
+-- because offsets @-1@ and @+1@ wrap onto the same cell and 'neighbours' counts
+-- it once. Nothing is missing there --- three is the whole of that space
+-- besides the centre --- but a caller sizing a buffer from @3 ^ d - 1@ wants to
+-- know.
+interiorCoords :: All IsCoordLifted cs => [Coord cs]
+interiorCoords = filter (not . onBoundary) allCoord
 
 -- | Swap x and y for a coord in 2D space
 tranposeCoord :: Coord '[a,b] -> Coord '[b,a]

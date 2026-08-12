@@ -15,6 +15,7 @@ module Main
 import           SizedGrid
 
 import           Test.Arbitrary ()
+import           Test.Boundary
 import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
@@ -299,6 +300,7 @@ main =
        , shrinkTests
        , tilingTests
        , neighbourTests
+       , boundaryTests
        , invariantTests
        , ordinalTests
        ]
