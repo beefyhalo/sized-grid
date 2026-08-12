@@ -59,6 +59,14 @@ instance IsCoord Periodic where
       let size = ordinalSize @n
           d = abs (ordinalToInt a - ordinalToInt b)
       in min d (size - d)
+  -- A torus has no edges, so no value is at one. The default compares against
+  -- 0 and @n - 1@, which on this type are simply two cells that happen to be
+  -- adjacent across the seam --- nothing distinguishes them from any other
+  -- pair, and calling them ends is the mistake this override exists to stop.
+  -- It is the same fact as 'offsetIsCoord' being total above, said where a
+  -- caller asks it directly: 'SizedGrid.Coord.isCorner' returns 'False' on an
+  -- all-'Periodic' coord because of this line.
+  axisBoundaryIsCoord _ = Nothing
 
 instance (1 <= n, KnownNat n) => Semigroup (Periodic n) where
     Periodic a <> Periodic b =

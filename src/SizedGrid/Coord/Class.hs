@@ -3,6 +3,7 @@
 module SizedGrid.Coord.Class
   ( IsCoord(..)
   , IsCoordLifted(..)
+  , Extremum(..)
   , maxCoordSize
   , allCoordLike
   ) where
@@ -27,6 +28,21 @@ import           GHC.TypeLits
 -- which needs no argument at all because its result type says everything.
 maxCoordSize :: forall n -> KnownNat n => Integer
 maxCoordSize n = fromIntegral (ordinalSize @n) - 1
+
+-- | Which end of an axis a value sits at. The result of
+-- 'axisBoundaryIsCoord' is a @Maybe Extremum@, where 'Nothing' is the interior:
+-- an axis has two ends and a coordinate is at one of them, the other, or
+-- neither.
+--
+-- Deliberately not a @Bool@. A caller that only wants "am I on an edge" has
+-- 'SizedGrid.Coord.onBoundary', while a caller that has to /do/ something about
+-- the edge --- reflect a walker, wrap a texture, place a border glyph --- needs
+-- to know which end it met, and recovering that from a @Bool@ means going back
+-- to the arithmetic this method exists to replace.
+data Extremum
+    = AtMin
+    | AtMax
+    deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Everything that can be uses as a Coordinate. The only required function is `asOrdinal` and the type instance of `CoordSized`: the rest can be derived automatically.
 class IsCoord (c :: Nat -> Type) where
@@ -117,11 +133,62 @@ class IsCoord (c :: Nat -> Type) where
   axisDistanceIsCoord a b =
       abs (ordinalToInt (a ^. asOrdinal) - ordinalToInt (b ^. asOrdinal))
 
+  -- | Which end of the axis this value sits at, or 'Nothing' if it is in the
+  -- interior.
+  --
+  -- The third method whose answer is a property of the boundary policy rather
+  -- than of the value, alongside 'offsetIsCoord' and 'axisDistanceIsCoord', and
+  -- it is in the class for the same reason they are. The default is the bounds
+  -- check, which is what an axis with real edges wants;
+  -- 'SizedGrid.Coord.Periodic.Periodic' overrides it to 'Nothing' everywhere,
+  -- because a torus has no edges and so no value is at one. That symmetry is
+  -- the whole argument: a free function over 'SizedGrid.Coord.Coord' would have
+  -- to pick one answer for every axis type, and the right answer differs.
+  --
+  -- Consistency with 'offsetIsCoord' is the law, and it is what makes this
+  -- worth having rather than leaving each caller to compare against
+  -- 'GHC.TypeLits.natVal': the result is @Just 'AtMin'@ exactly when stepping
+  -- down leaves the space and @Just 'AtMax'@ exactly when stepping up does. A
+  -- one-cell axis is the one place both hold at once, and there the answer is
+  -- 'AtMin'. Like 'axisDistanceIsCoord', that agreement is a property test
+  -- rather than something the types can enforce.
+  --
+  -- No @1 <= n@, unlike its two neighbours. Neither the default nor any
+  -- instance needs a value to exist beyond the one it was handed, and a @c 0@
+  -- has none to hand.
+  axisBoundaryIsCoord :: KnownNat n => c n -> Maybe Extremum
+  axisBoundaryIsCoord = axisBoundaryByPosition
+
   weakenIsCoord :: KnownNat m => c n -> Maybe (c m)
   weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
 
   strengthenIsCoord :: (KnownNat m, (n <= m)) => c n -> c m
   strengthenIsCoord = review asOrdinal . strengthenOrdinal . view asOrdinal
+
+-- | The bounds check that 'axisBoundaryIsCoord' takes as its default.
+--
+-- Written out here rather than inline in the class because the body needs @n@
+-- to ask for 'ordinalSize', and a default method body has nowhere to bind it:
+-- the @forall@ that would bring it into scope belongs to a signature the class
+-- has no way to give a default. Compare 'offsetIsCoord', whose default gets the
+-- size implicitly through 'numToOrdinal' and so can stay inline.
+--
+-- Unexported: it is the default's implementation, not a second way to ask the
+-- question. An instance that wants the bounds check already has it.
+axisBoundaryByPosition ::
+       forall c n. (IsCoord c, KnownNat n)
+    => c n
+    -> Maybe Extremum
+axisBoundaryByPosition c
+    -- Order matters only on a one-cell axis, where the single value is both
+    -- ends at once and this reports 'AtMin'. What downstream depends on is that
+    -- it is not 'Nothing': the one cell of a 1x1 grid is all boundary and no
+    -- interior.
+    | i == 0 = Just AtMin
+    | i == ordinalSize @n - 1 = Just AtMax
+    | otherwise = Nothing
+  where
+    i = ordinalToInt (c ^. asOrdinal)
 
 -- | Sometimes it useful to work with Coords of type *, not Nat -> *. This is away of doing so.
 -- |

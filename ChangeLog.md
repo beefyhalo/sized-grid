@@ -126,6 +126,36 @@ value or a type error.
   it reaches, and both neighbourhood functions must be exactly the balls of the
   corresponding metric.
 
+* New: boundary detection. `axisBoundary` says which end of its axis a
+  coordinate sits at, `axisBoundaries` reports every axis of a `Coord`,
+  `onBoundary` and `isCorner` are the two folds of that, and `interiorCoords`
+  enumerates the coordinates that are on no edge. The result type is
+  `Maybe Extremum` with `Extremum = AtMin | AtMax`, not a `Bool`: a caller that
+  has to *act* on the edge needs to know which end it met.
+
+  This is purely additive. Nothing that existed changed behaviour.
+
+  The library had no way at all to ask "is this coordinate on an edge", so every
+  consumer hand-rolled it against `natVal` — and the hand-rolled version is
+  wrong the moment an axis is `Periodic`, because it finds four corners on a
+  torus, which has none.
+
+  The scalar behind them is `axisBoundaryIsCoord`, a new method of `IsCoord`,
+  following `offsetIsCoord` and `axisDistanceIsCoord` exactly: the default is
+  the bounds check, which is what an axis with real edges wants, and `Periodic`
+  overrides it to `Nothing` everywhere. So `isCorner` is `False` on an
+  all-`Periodic` coord by construction rather than by a special case, and on a
+  `Coord '[Clamped 5, Periodic 5]` there are no corners either — one axis never
+  ends.
+
+  Agreement with `offsetIsCoord` is the law and a property test, as it is for
+  `axisDistanceIsCoord`: a coordinate is `AtMin` exactly when stepping down
+  leaves the space and `AtMax` exactly when stepping up does. A one-cell axis is
+  the one place both hold, and it answers `AtMin`. The empty `Coord '[]` is
+  neither `onBoundary` nor a corner: a space with one point has no edge, and a
+  vacuous `True` from `isCorner` would break `isCorner c ==> onBoundary c` on
+  the one coordinate where it is easiest to get wrong.
+
 * `Ordinal` is now a newtype over `Int` rather than a GADT carrying the value
   as a type-level `Nat`. The old representation put a `Proxy` and two
   `KnownNat` dictionaries in every value and called `someNatVal` on every
