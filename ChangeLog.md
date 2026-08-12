@@ -16,14 +16,24 @@ value or a type error.
   shape needs no change at all; the constraint never appeared there.
 
   The reason is performance, and it is structural rather than incidental.
-  `coordPosition` folds over the axis list, and a fold written as a function is
-  polymorphically recursive — it calls itself at a shorter list. GHC specialises
-  the outermost call and stops, leaving one shared worker that takes the
-  dictionary at run time, so every axis but the first paid for dictionary
-  peeling, an `Integer` from `natVal`, a trip through the `asOrdinal` `Iso` and
-  two boxed `Int`s. Only an instance method gets the per-axis dictionary
-  resolved at compile time; neither `INLINABLE`, nor `cpara_SList`, nor
-  `-fpolymorphic-specialisation` does, all three measured.
+  `coordPosition` folds over the axis list, and that fold used to be a
+  self-recursive `where` helper. GHC never inlines a self-recursive binding, and
+  the recursion is polymorphic — each call is at a shorter list — so specialising
+  at a concrete list rewrote the outermost call and left the tail going through
+  the same generic worker, holding the dictionary at run time. Every axis but the
+  first paid for dictionary peeling, an `Integer` from `natVal`, a trip through
+  the `asOrdinal` `Iso` and two boxed `Int`s. Neither `INLINE`, `INLINABLE` nor
+  `-fpolymorphic-specialisation` rescues that shape; all were measured.
+
+  `cpara_SList` is not subject to the same limit — it is not self-recursive in
+  the Core and it does unroll — but it unrolls only where the axis list is
+  concrete, which means `INLINE` the whole way down. `coordPosition` is called
+  from polymorphic instance methods (`index`, `gridIndex`), so that splices the
+  eliminator somewhere nothing can resolve and builds the closure chain per call:
+  584 bytes a call and 50 MB on `index x90000`, worse than the 320 bytes and
+  27 MB it started at. An instance method resolves whenever the dictionary is
+  known, at specialisation rather than only at inlining, which is why that is the
+  shape that survives the library's own call path.
 
   As a method the fold unrolls and the sizes become literals — a
   two-dimensional `coordPosition` compiles to `x * 50 + y`. Measured on the

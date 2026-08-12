@@ -236,27 +236,48 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- rather than guessed.
 --
 -- 'SizedGrid.Coord.coordPosition' folds over the axis list. Written as a
--- /function/ --- a @where@ helper closed over the dictionary, or
--- @generics-sop@'s @cpara_SList@ with the step passed as an argument --- that
--- fold is polymorphically recursive: it calls itself at a shorter list. GHC
--- specialises the outermost call and then stops, leaving one shared worker that
--- takes the @All IsCoordLifted@ dictionary at run time. So the first axis
--- constant-folds and every axis after it pays, in the Core, for two thunks to
--- peel the dictionary, an 'Integer' from @natVal@, a call through the
--- 'asOrdinal' 'Control.Lens.Iso', and two boxed 'Int's.
+-- /self-recursive function/ --- the @where@ helper this used to have --- that
+-- fold can never unroll, because GHC does not inline a self-recursive binding
+-- and the recursion is polymorphic: each call is at a shorter list. Specialising
+-- at a concrete list rewrites the outermost call and leaves the tail going
+-- through the same generic worker, which takes the @All IsCoordLifted@
+-- dictionary at run time. So the first axis constant-folds and every axis after
+-- it pays, in the Core, for two thunks to peel the dictionary, an 'Integer' from
+-- @natVal@, a call through the 'asOrdinal' 'Control.Lens.Iso', and two boxed
+-- 'Int's. @INLINE@ on the wrapper does not rescue it and neither does
+-- @-fpolymorphic-specialisation -fspecialise-aggressively@; both were tried and
+-- leave the worker byte-for-byte identical.
 --
 -- Written as an instance method the dictionary is resolved at compile time, one
 -- instance per axis, so the fold unrolls and the sizes become literals: at
 -- @'[Clamped 50, Clamped 50]@ the Core for 'SizedGrid.Coord.coordPosition' is
 -- @+# (*# x 50#) y@ and nothing else. Measured on @extract 50x50@, that is 320
--- bytes a call against none at all; on @index x90000@, 27 MB against 38 bytes.
+-- bytes a call against none at all; on @index x90000@, 27 MB against 34 bytes.
 --
--- Three things that look like they should fix it and do not, so that they are
--- not tried again: lifting the helper to a top-level @INLINABLE@ function,
--- routing the fold through @cpara_SList@ (its @cons@ is a function argument, so
--- the per-axis dictionary stays a run-time value), and
--- @-fpolymorphic-specialisation -fspecialise-aggressively@, which leaves the
--- worker byte-for-byte identical.
+-- == Why not @cpara_SList@
+--
+-- Worth stating precisely, because the obvious objection is that
+-- @generics-sop@ already ships an eliminator and this class reinvents it.
+--
+-- @cpara_SList@ is genuinely different from the @where@ helper: it is not
+-- self-recursive in the Core, since each instance's method body calls the method
+-- at a different, statically known dictionary. It /does/ unroll. A
+-- 'SizedGrid.Coord.coordSpaceSize'-shaped fold through it constant-folds all the
+-- way to a literal.
+--
+-- It unrolls only where the axis list is concrete, though, and that is the
+-- catch: reaching such a place means @INLINE@ the whole way down. This function
+-- is called from polymorphic instance methods --- @index@ on
+-- @Representable (Grid cs)@, @gridIndex@ on @IsGrid@ --- so marking it @INLINE@
+-- splices the eliminator into a body where @cs@ is still a variable and nothing
+-- can resolve, and it builds the closure chain per call instead. Measured, that
+-- is 584 bytes a call and 50 MB on @index x90000@: worse than the 320 bytes and
+-- 27 MB it started at.
+--
+-- A method of a class indexed by the axis list has no such dependency on the
+-- inliner. The chain resolves whenever the /dictionary/ is known, which happens
+-- at specialisation and not only at inlining, and that is what makes it hold up
+-- through the library's own polymorphic call path.
 --
 -- == On the method
 --
