@@ -16,6 +16,7 @@ import           SizedGrid.Grid.Unsafe (unsafeGridFromVector)
 
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)
+import           Data.Foldable        (toList)
 import           Data.Functor.Identity (Identity (..))
 import           Data.Maybe           (fromJust, isNothing)
 import           Data.Functor.Rep (tabulate)
@@ -54,6 +55,20 @@ threeByThree = fromJust $ gridFromList [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
 
 oneByThree :: Grid '[ Ordinal 3] Int
 oneByThree = fromJust $ gridFromList [1, 2, 3]
+
+twoByThree :: Grid '[ Ordinal 2, Ordinal 3] Int
+twoByThree = fromJust $ gridFromList [[10, 11, 12], [13, 14, 15]]
+
+-- | 'assertWellSized' over a list of grids, for the operations that return one
+-- grid per sub-grid rather than a single result.
+assertAllWellSized ::
+     forall cs a. KnownNat (MaxCoordSize cs)
+  => String
+  -> [Grid cs a]
+  -> Assertion
+assertAllWellSized what =
+  mapM_ (\(n, g) -> assertWellSized (what ++ " [" ++ show n ++ "]") g) .
+  zip [0 :: Int ..]
 
 invariantTests :: TestTree
 invariantTests =
@@ -106,6 +121,58 @@ invariantTests =
         , testCase "splitHigherDim remainder is forced to x - y" $
           let (_ :: Grid '[ Ordinal 1, Ordinal 3] Int, b) = splitHigherDim threeByThree
            in assertWellSized "splitHigherDim snd" (b :: Grid '[ Ordinal 2, Ordinal 3] Int)
+        ]
+      -- The operations above either keep the shape or are the ones whose
+      -- signatures were tightened. The rest of the shape-changing API was never
+      -- checked at all, and it is the half where a size mistake is most easily
+      -- made: every one of these computes a length from @MaxCoordSize@ of a
+      -- type-level list it takes apart, so an off-by-one in the arithmetic
+      -- produces a grid whose vector disagrees with its own type, silently,
+      -- exactly as the constructor used to allow.
+    , testGroup
+        "The shape-changing operations hold the invariant"
+        [ testCase "splitGrid's outer grid" $
+          assertWellSized
+            "splitGrid outer"
+            (splitGrid threeByThree :: Grid '[ Ordinal 3] (Grid '[ Ordinal 3] Int))
+        , testCase "splitGrid's sub-grids" $
+          assertAllWellSized
+            "splitGrid sub"
+            (toList (splitGrid threeByThree :: Grid '[ Ordinal 3] (Grid '[ Ordinal 3] Int)))
+        , testCase "combineGrid" $
+          assertWellSized
+            "combineGrid"
+            (combineGrid (splitGrid threeByThree) :: Grid '[ Ordinal 3, Ordinal 3] Int)
+          -- The one case where the result's size is neither of its arguments':
+          -- 3 + 2 rows of 3, so 15 cells, and nothing but this checks it.
+        , testCase "combineHigherDim sums the outer axis" $
+          assertWellSized
+            "combineHigherDim"
+            (combineHigherDim threeByThree twoByThree :: Grid '[ Ordinal 5, Ordinal 3] Int)
+        , testCase "splitHigherDim's first component" $
+          let (a :: Grid '[ Ordinal 1, Ordinal 3] Int, _) = splitHigherDim threeByThree
+           in assertWellSized "splitHigherDim fst" a
+        , testCase "mapLowerDim" $
+          assertWellSized
+            "mapLowerDim"
+            (runIdentity (mapLowerDim (Identity . scanl1Grid (+)) threeByThree))
+        , testCase "gridTiles' tiles" $
+          assertAllWellSized
+            "gridTiles"
+            (gridTiles threeByThree :: [Grid '[ Ordinal 1, Ordinal 3] Int])
+        , testCase "zipLowerDim's tiles" $
+          assertAllWellSized
+            "zipLowerDim"
+            (zipLowerDim gridTiles threeByThree :: [Grid '[ Ordinal 3, Ordinal 1] Int])
+        , testCase "transposeGrid" $
+          assertWellSized "transposeGrid" (transposeGrid twoByThree)
+        , testCase "shrinkGrid" $
+          let off :: Coord '[ Ordinal 2, Ordinal 2]
+              off = fromJust $ (\x y -> x :| y :| EmptyCoord)
+                      <$> numToOrdinal (1 :: Int) <*> numToOrdinal (1 :: Int)
+           in assertWellSized
+                "shrinkGrid"
+                (shrinkGrid off threeByThree :: Grid '[ Ordinal 2, Ordinal 2] Int)
         ]
     , testGroup
         "gridFromVector checks the length the constructor used to assume"

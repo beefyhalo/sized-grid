@@ -429,6 +429,16 @@ value or a type error.
 * `splitVectorBySize` rejects a chunk size of zero, which previously looped
   forever taking empty prefixes.
 
+* New: `Eq` and `Show` for `FocusedGrid`, which `Grid` has had all along.
+  Equality is on both the grid and the focus, so two grids holding the same
+  cells at different focuses are distinct — which is the notion the `Comonad`
+  laws want, since `duplicate` is required to preserve the focus.
+
+  These were added because without them the `Comonad` instance was the one part
+  of the library whose laws could not be stated as a test. They now are, and
+  `fmap extract . duplicate == id` catches a `duplicate` that rebuilds each cell
+  from the wrong focus — which nothing else in the suite did.
+
 * Builds with GHC 9.8 through 9.14 via a nix flake; `stack.yaml` and Travis
   configuration removed.
 

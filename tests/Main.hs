@@ -298,6 +298,31 @@ main =
            (splitTests
               (Proxy @('[ Clamped 8, Clamped 3, Clamped 5]))
               (Proxy @Int))
+         -- `Representable` is the instance the whole `Grid` API is built on:
+         -- `index`, `tabulate`, `Distributive` and the `Comonad` for
+         -- `FocusedGrid` all bottom out in it. The 3D case is here because
+         -- `coordPosition`'s strides are only interestingly wrong past two
+         -- dimensions -- with two axes a transposed stride is still a
+         -- permutation of the right one on square grids.
+       , testGroup
+           "Representable"
+           [ representableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
+           , representableLaws
+               (Proxy @(Grid '[ Clamped 3, Periodic 4, Clamped 5] Int))
+           ]
+       , testGroup
+           "Distributive"
+           [ distributiveLaws (Proxy @(Grid '[ Periodic 3, Periodic 4] Int))
+           , distributiveLaws
+               (Proxy @(Grid '[ Clamped 2, Periodic 3, Clamped 2] Int))
+           ]
+         -- Small on purpose: coassociativity builds a grid of grids of grids,
+         -- so the cell count is cubed. See 'comonadLaws'.
+       , testGroup
+           "FocusedGrid"
+           [ comonadLaws (Proxy @(FocusedGrid '[ Periodic 3, Periodic 3] Int))
+           , comonadLaws (Proxy @(FocusedGrid '[ Clamped 2, Periodic 3] Int))
+           ]
        , shrinkTests
        , tilingTests
        , neighbourTests

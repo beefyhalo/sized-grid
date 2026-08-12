@@ -17,22 +17,32 @@ module Test.Utils
   , applicativeLaws
   , traversalLaws
   , isCoordLaws
+  , comonadLaws
+  , representableLaws
+  , distributiveLaws
   ) where
 
 import           SizedGrid.Coord.Class
 import           SizedGrid.Ordinal
 
-import           Control.Lens
+import           Control.Comonad
+import           Control.Lens          hiding (index)
 import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
+import           Data.Distributive
 import           Data.Functor.Classes
 import           Data.Functor.Compose
+-- 'Data.Functor.Identity' is not imported: 'Data.Functor.Rep' re-exports it.
+import           Data.Functor.Rep
 import           Data.Proxy
 import           GHC.TypeLits
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Test.Tasty.QuickCheck
+-- QuickCheck's 'tabulate' and 'collect' label test cases for the statistics it
+-- prints; the ones wanted here are the `Representable` and
+-- `Data.Distributive.Distributive` methods of the same names.
+import           Test.Tasty.QuickCheck hiding (collect, tabulate)
 
 eq1Laws ::
        forall f. (Eq1 f, Applicative f)
@@ -201,6 +211,138 @@ traversalLaws t =
   in testGroup
        "Traveral Laws"
        [testProperty "Pure Id" pureId, testProperty "Compose" compose]
+
+-- | The three comonad laws, for `SizedGrid.Grid.Focused.FocusedGrid`.
+--
+-- Its `Control.Comonad.Comonad` instance is the whole reason the type exists --
+-- it is what a cellular automaton step is written against -- and nothing tested
+-- it. @duplicate@ is a one-line @tabulate (FocusedGrid g)@, and the way for
+-- that line to be wrong is to lose the focus or to rebuild it from the wrong
+-- grid, which is precisely what the first and third laws below catch.
+--
+-- Coassociativity is the expensive one: it builds a grid of grids of grids, so
+-- @w@ wants to be small. On a 3x3 that is 729 cells per sample; on the
+-- @Periodic 10, Periodic 11@ used elsewhere in this suite it would be 1.3
+-- million.
+comonadLaws ::
+     forall w a proxy.
+     ( Comonad w
+     , Arbitrary (w a)
+     , Show (w a)
+     , Eq (w a)
+     , Show (w (w (w a)))
+     , Eq (w (w (w a)))
+     )
+  => proxy (w a)
+  -> TestTree
+comonadLaws _ =
+  let leftId :: w a -> Property
+      leftId w = extract (duplicate w) === w
+      rightId :: w a -> Property
+      rightId w = fmap extract (duplicate w) === w
+      coassociativity :: w a -> Property
+      coassociativity w =
+        duplicate (duplicate w) === fmap duplicate (duplicate w)
+   in testGroup
+        "Comonad Laws"
+        [ testProperty "extract . duplicate == id" leftId
+        , testProperty "fmap extract . duplicate == id" rightId
+        , testProperty
+            "duplicate . duplicate == fmap duplicate . duplicate"
+            coassociativity
+        ]
+
+-- | @tabulate@ and @index@ are inverse, in both directions.
+--
+-- The suite already had @index (tabulate id) c == c@, which pins down only that
+-- a coordinate survives a round trip through the layout. It says nothing about
+-- the cells: a `Data.Functor.Rep.tabulate` that filled the vector in the wrong
+-- order would still pass it, because the values it is compared on /are/ the
+-- coordinates. @tabulate . index == id@ is the direction with the payload in it.
+--
+-- The second property looks weaker than the general law
+-- @index (tabulate h) r == h r@ for every @h :: Rep f -> a@, and for a finite
+-- representable it is not: every such @h@ is @index g@ for exactly one @g@, and
+-- @g@ here is arbitrary. Quantifying over grids rather than over functions also
+-- avoids needing `Function` for `SizedGrid.Coord.Coord`.
+representableLaws ::
+     forall f a proxy.
+     ( Representable f
+     , Arbitrary (f a)
+     , Show (f a)
+     , Eq (f a)
+     , Arbitrary (Rep f)
+     , Show (Rep f)
+     , Arbitrary a
+     , Show a
+     , Eq a
+     , Function a
+     , CoArbitrary a
+     )
+  => proxy (f a)
+  -> TestTree
+representableLaws _ =
+  let tabulateIndex :: f a -> Property
+      tabulateIndex g = tabulate (index g) === g
+      indexTabulate :: f a -> Rep f -> Property
+      indexTabulate g r = index (tabulate (index g) :: f a) r === index g r
+      -- fmap has to agree with the representation: mapping the cells and
+      -- rebuilding from the mapped lookup must give the same grid. A `fmap`
+      -- that reordered or dropped cells passes both laws above.
+      fmapIsTabulate :: Fun a a -> f a -> Property
+      fmapIsTabulate h g =
+        fmap (applyFun h) g === tabulate (applyFun h . index g)
+   in testGroup
+        "Representable Laws"
+        [ testProperty "tabulate . index == id" tabulateIndex
+        , testProperty "index . tabulate == id" indexTabulate
+        , testProperty "fmap h == tabulate . (h .) . index" fmapIsTabulate
+        ]
+
+-- | The `Data.Distributive.Distributive` laws.
+--
+-- @Grid@'s instance is @distribute = distributeRep@, so these are in one sense
+-- inherited from `Representable` -- but that is the claim being tested, and it
+-- is a claim about an instance that can be changed independently. The first law
+-- is the one with real content for a grid: distributing a grid of grids is a
+-- transpose, and doing it twice must land back where it started.
+distributiveLaws ::
+     forall f a proxy.
+     ( Distributive f
+     , Arbitrary (f a)
+     , Show (f a)
+     , Eq (f a)
+     , Arbitrary (f (f a))
+     , Show (f (f a))
+     , Eq (f (f a))
+     , Show (f [a])
+     , Eq (f [a])
+     , Arbitrary a
+     , Show a
+     , Function a
+     , CoArbitrary a
+     )
+  => proxy (f a)
+  -> TestTree
+distributiveLaws _ =
+  let doubleDistribute :: f (f a) -> Property
+      doubleDistribute g = distribute (distribute g) === g
+      distributeIsCollectId :: [f a] -> Property
+      distributeIsCollectId gs = distribute gs === collect id gs
+      collectIsDistributeFmap :: Fun a (f a) -> [a] -> Property
+      collectIsDistributeFmap h xs =
+        collect (applyFun h) xs === distribute (fmap (applyFun h) xs)
+      -- Distributing over 'Identity' can only be 'fmap Identity': there is one
+      -- outer position, so nothing is being combined.
+      identityLaw :: f a -> Property
+      identityLaw g = fmap runIdentity (distribute (Identity g)) === g
+   in testGroup
+        "Distributive Laws"
+        [ testProperty "distribute . distribute == id" doubleDistribute
+        , testProperty "distribute == collect id" distributeIsCollectId
+        , testProperty "collect f == distribute . fmap f" collectIsDistributeFmap
+        , testProperty "distribute . Identity == fmap Identity" identityLaw
+        ]
 
 isCoordLaws ::
      forall c n. (IsCoord c, 1 <= n, KnownNat n)

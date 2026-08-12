@@ -148,6 +148,8 @@ test-suite tests
     , aeson
     , base
     , bytestring        >=0.11 && <0.13
+    , comonad
+    , distributive
     , generics-sop
     , HUnit             >=1.6  && <1.7
     , lens
