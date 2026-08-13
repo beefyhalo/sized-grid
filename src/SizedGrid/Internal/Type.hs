@@ -7,38 +7,17 @@
 -- Maintainer  :  Edward Wastell <ed@wastell.co.uk>
 -- Stability   :  provisional
 --
--- Type-level facts the library needs but GHC's Nat solver will not derive.
+-- Type-level odds and ends that do not belong to any one part of the API.
 --
--- The export list is deliberately closed. 'windowFits' is an asserted axiom,
--- and an axiom that escapes into more modules than strictly need it is an axiom
--- waiting to be misused.
+-- This module used to also hold @windowFits@, an @unsafeCoerce@-backed axiom
+-- supplying the two facts @shrinkGrid@ needs. It was the library's only
+-- @unsafeCoerce@; ghc-typelits-presburger now derives those facts, so it is
+-- gone (sized-grid-wrc). The library asserts nothing.
 module SizedGrid.Internal.Type
-  ( windowFits
-  , requiring
+  ( requiring
   ) where
 
 import           Data.Constraint
-import           GHC.TypeLits
-import           Unsafe.Coerce
-
--- | The two facts @shrinkGrid@ needs in order to call @dropGrid@ then
--- @takeGrid@, which GHC's Nat solver cannot derive on its own.
---
--- At the use site the window offset @n@ comes from @reifyCoord@ on a coord of
--- size @x@, so @n + 1 <= x@, and the @ShrinkableGrid@ instance requires
--- @x + z <= y + 1@. Together:
---
--- > n + 1 + z <= x + z <= y + 1        so   n + z <= y
---
--- which gives both @n <= y@ (drop stays in range) and @z <= y - n@ (the window
--- fits in what is left). That is ordinary linear arithmetic, but the second
--- wanted mentions a truncating subtraction over an existential @n@, which is
--- out of reach of ghc-typelits-natnormalise. So it is asserted here.
---
--- Soundness rests entirely on the @x + z <= y + 1@ constraint on the instance,
--- which /is/ checked at every call site.
-windowFits :: forall n y z. Dict (n <= y, z <= (y - n))
-windowFits = unsafeCoerce (Dict :: Dict (0 <= 0, 0 <= 0))
 
 -- | Consume a constraint the implementation has no other use for.
 --

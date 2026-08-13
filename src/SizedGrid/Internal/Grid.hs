@@ -51,7 +51,7 @@ module SizedGrid.Internal.Grid
 
 import           SizedGrid.Coord
 import           SizedGrid.Coord.Class
-import           SizedGrid.Internal.Type (requiring, windowFits)
+import           SizedGrid.Internal.Type (requiring)
 
 import           Control.Applicative   (ZipList (..))
 import           Control.Lens          hiding (index)
@@ -492,6 +492,20 @@ instance ShrinkableGrid '[] '[] '[] where
 -- @KnownNat x@ is new: 'reifyCoord' recovers the offset's type-level value by
 -- comparing against the coord's size at runtime, now that an
 -- 'SizedGrid.Ordinal.Ordinal' no longer carries that dictionary in every value.
+--
+-- The body's two obligations, discharged by the type checker rather than
+-- asserted (sized-grid-wrc): 'reifyCoord' brings an existential offset @n@ into
+-- scope with @n + 1 <= x@, and @dropGrid n@ then @takeGrid z@ want @n <= y@ and
+-- @z <= y - n@. With the instance's @x + z <= y + 1@:
+--
+-- > n + 1 + z <= x + z <= y + 1        so   n + z <= y
+--
+-- The first wanted follows by linear arithmetic. The second mentions @y - n@,
+-- GHC's /truncating/ subtraction over an existential, which ghc-typelits-
+-- natnormalise will not do; ghc-typelits-presburger case-splits on @n <= y@ and
+-- the @n <= y@ branch is exactly what the first wanted gives. That is the whole
+-- reason presburger is in @common lang@ -- see the note there before removing
+-- it, because dropping it re-opens an @unsafeCoerce@.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as
@@ -506,8 +520,7 @@ instance ( KnownNat x
         helper :: Grid '[ c y] a -> Grid '[ c z] a
         helper g =
             reifyCoord c $ \n ->
-                case windowFits @n @y @z of
-                    Dict -> takeGrid z (dropGrid n g)
+                takeGrid z (dropGrid n g)
 
 
 -- | Cut a grid into disjoint tiles along its outermost axis: an @Ordinal 9@

@@ -72,25 +72,36 @@ common lang-base
 common lang
   import: lang-base
 
-  -- sized-grid-h56. These two solvers discharge the Nat goals this library used
-  -- to state by hand with Data.Constraint.Nat: 'KnownNat (n * MaxCoordSize as)'
-  -- in the AllSizedKnown instance and 'KnownNat (k + 1)' in 'reifyOrdinal'.
+  -- sized-grid-h56. natnormalise and knownnat discharge the Nat goals this
+  -- library used to state by hand with Data.Constraint.Nat:
+  -- 'KnownNat (n * MaxCoordSize as)' in the AllSizedKnown instance and
+  -- 'KnownNat (k + 1)' in 'reifyOrdinal'.
   --
-  -- They are a build-time dependency of this library only. Plugins are not
-  -- transitive -- a downstream package solves its own constraints -- so nothing
-  -- here obliges a consumer to enable them, and the example packages in this
-  -- project deliberately do not.
+  -- sized-grid-k6n. All three are a build-time dependency of this library only.
+  -- Plugins are not transitive -- a downstream package solves its own
+  -- constraints -- so nothing here obliges a consumer to enable them, and the
+  -- example packages in this project deliberately do not.
   --
-  -- What they do NOT solve: 'SizedGrid.Internal.Type.windowFits'. That wanted is
-  -- a '<=' goal from '<=' givens over a truncating subtraction, which needs
-  -- ghc-typelits-presburger; it stays an asserted axiom.
+  -- sized-grid-wrc. presburger is what removed the library's last
+  -- 'unsafeCoerce'. The 'ShrinkableGrid' instance in SizedGrid.Internal.Grid
+  -- wants 'z <= y - n' over GHC's truncating subtraction with 'n' existential,
+  -- which natnormalise will not solve and which used to be asserted as
+  -- 'SizedGrid.Internal.Type.windowFits'. It is solved at the definition, so it
+  -- is not re-emitted into a consumer's context and non-transitivity costs
+  -- nothing here; the 'downstream' test suite is what holds that to account.
+  --
+  -- The catch, and the reason 'tested-with' cannot grow past 9.12 while this
+  -- is here: ghc-typelits-presburger 0.7.4.2 is bounded 'ghc <9.13' and
+  -- upstream has no 9.14 branch. See sized-grid-wrc.
   build-depends:
     , ghc-typelits-knownnat     >=0.7 && <0.9
     , ghc-typelits-natnormalise >=0.7 && <0.10
+    , ghc-typelits-presburger   >=0.7 && <0.8
 
   ghc-options:
     -fplugin=GHC.TypeLits.Normalise
     -fplugin=GHC.TypeLits.KnownNat.Solver
+    -fplugin=GHC.TypeLits.Presburger
 
 library
   import:          lang
