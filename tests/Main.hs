@@ -232,7 +232,14 @@ coordCreationTests genC gen =
 
 main :: IO ()
 main =
-  let periodic =
+  let -- 'Ordinal' is the type the other two coords are newtypes over, and the
+      -- only 'IsCoord' instance that overrides 'asOrdinal', 'zeroPosition',
+      -- 'maxCoord' and 'reifyCoord' all at once -- 'Periodic' and 'Clamped'
+      -- take the defaults for the last three. It is therefore the instance
+      -- where the two routes to a value have the most room to drift apart, and
+      -- it had no 'isCoordLaws' call at all.
+      ordinal = [isCoordLaws (Proxy @(Ordinal 10))]
+      periodic =
         let p = Proxy @(Periodic 10)
         in [ semigroupLaws p
            , monoidLaws p
@@ -257,6 +264,14 @@ main =
            , aesonLaws p
            , testAllCoordOrdered p
            , testCoordLayout p
+             -- The library's other exported 'Iso'', and the one that shows
+             -- 'isoLaws' is worth having as a helper rather than inlined into
+             -- 'isCoordLaws'. Unlike 'asOrdinal' this round trip goes through
+             -- the hand-written 'Eq' for 'Coord', which compares the product
+             -- element by element with 'hcliftA2' rather than deriving it.
+           , isoLaws
+               "_WrappedCoord"
+               (_WrappedCoord @'[ Clamped 10, Periodic 20])
            ]
       coord2 =
         let p = Proxy @(Coord '[ Periodic 10, Periodic 20])
@@ -271,7 +286,8 @@ main =
   in defaultMain $
      testGroup
        "tests"
-       [ testGroup "Periodic 10" periodic
+       [ testGroup "Ordinal 10" ordinal
+       , testGroup "Periodic 10" periodic
        , testGroup "Clamped 10" clamped
        , testGroup "Coord [Clamped 10, Periodic 20]" coord
        , testGroup "Coord [Periodic 10, Periodic 20]" coord2

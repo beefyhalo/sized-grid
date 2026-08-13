@@ -53,8 +53,13 @@ instance (1 <= n, KnownNat n) => Arbitrary (Periodic n) where
 instance (1 <= n, KnownNat n) => Arbitrary (Clamped n) where
   arbitrary = Clamped <$> genOrdinal
 
+-- | The product a 'Coord' wraps. Split out from the 'Coord' instance below so
+-- that the '_WrappedCoord' iso can be quantified over from both ends.
+instance (All Arbitrary cs, SListI cs) => Arbitrary (NP I cs) where
+  arbitrary = hsequence (hcpure (Proxy @Arbitrary) arbitrary)
+
 instance (All Arbitrary cs, SListI cs) => Arbitrary (Coord cs) where
-  arbitrary = Coord <$> hsequence (hcpure (Proxy @Arbitrary) arbitrary)
+  arbitrary = Coord <$> arbitrary
 
 instance AllSizedKnown cs => Arbitrary1 (Grid cs) where
   liftArbitrary g = sequenceA (pure g)
