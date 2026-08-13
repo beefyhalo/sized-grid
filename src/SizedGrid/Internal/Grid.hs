@@ -39,6 +39,7 @@ module SizedGrid.Internal.Grid
   , splitHigherDim
   , dropGrid
   , takeGrid
+  , sliceGrid
   , mapLowerDim
   , zipLowerDim
   , scanl1Grid
@@ -51,7 +52,7 @@ module SizedGrid.Internal.Grid
 
 import           SizedGrid.Coord
 import           SizedGrid.Coord.Class
-import           SizedGrid.Internal.Type (requiring)
+import           SizedGrid.Internal.Type (requiring, windowFits)
 
 import           Control.Applicative   (ZipList (..))
 import           Control.Lens          hiding (index)
@@ -407,6 +408,35 @@ takeGrid ::
 takeGrid n (Grid v) =
     requiring @(n <= m) $ Grid $ V.take (fromIntegral $ natVal (Proxy @n)) v
 
+-- | Keep @len@ elements of a one-dimensional grid starting at offset @off@:
+--
+-- > sliceGrid 1 2 g   -- elements 1 and 2 of a 3-grid
+--
+-- This is @takeGrid len . dropGrid off@ with the intermediate size fused away,
+-- and the fusion is the entire point (sized-grid-wrc). Composed, the two state
+-- the window bound as @len <= m - off@ over GHC's /truncating/ subtraction;
+-- when @off@ is an existential -- exactly the case in 'shrinkGrid', where it
+-- comes from 'reifyCoord' -- that is out of reach of ghc-typelits-natnormalise,
+-- and it used to be supplied by an @unsafeCoerce@ axiom. Written @off + len <= m@
+-- the same fact is ordinary linear arithmetic, the solver discharges it, and
+-- the axiom is gone without taking on another type-checker plugin.
+--
+-- @off + len <= m@ is also precisely 'V.slice'\'s own precondition, so the
+-- bounds check it performs can never fire here.
+sliceGrid ::
+       forall m c x. forall off len -> ( KnownNat off
+                                       , KnownNat len
+                                       , off + len <= m)
+    => Grid '[ c m] x
+    -> Grid '[ c len] x
+sliceGrid off len (Grid v) =
+    requiring @(off + len <= m) $
+    Grid $
+    V.slice
+        (fromIntegral $ natVal (Proxy @off))
+        (fromIntegral $ natVal (Proxy @len))
+        v
+
 -- | The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and
 -- get a grid whose vector did not match.
@@ -492,20 +522,6 @@ instance ShrinkableGrid '[] '[] '[] where
 -- @KnownNat x@ is new: 'reifyCoord' recovers the offset's type-level value by
 -- comparing against the coord's size at runtime, now that an
 -- 'SizedGrid.Ordinal.Ordinal' no longer carries that dictionary in every value.
---
--- The body's two obligations, discharged by the type checker rather than
--- asserted (sized-grid-wrc): 'reifyCoord' brings an existential offset @n@ into
--- scope with @n + 1 <= x@, and @dropGrid n@ then @takeGrid z@ want @n <= y@ and
--- @z <= y - n@. With the instance's @x + z <= y + 1@:
---
--- > n + 1 + z <= x + z <= y + 1        so   n + z <= y
---
--- The first wanted follows by linear arithmetic. The second mentions @y - n@,
--- GHC's /truncating/ subtraction over an existential, which ghc-typelits-
--- natnormalise will not do; ghc-typelits-presburger case-splits on @n <= y@ and
--- the @n <= y@ branch is exactly what the first wanted gives. That is the whole
--- reason presburger is in @common lang@ -- see the note there before removing
--- it, because dropping it re-opens an @unsafeCoerce@.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as
@@ -520,7 +536,7 @@ instance ( KnownNat x
         helper :: Grid '[ c y] a -> Grid '[ c z] a
         helper g =
             reifyCoord c $ \n ->
-                takeGrid z (dropGrid n g)
+                withDict (windowFits @n @x @y @z) $ sliceGrid n z g
 
 
 -- | Cut a grid into disjoint tiles along its outermost axis: an @Ordinal 9@
