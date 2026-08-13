@@ -244,7 +244,11 @@ class IsCoord (c :: Nat -> Type) where
 -- @extend neighbourSum 50x50@ fell 8.88 ms and 28 MB to 7.01 ms and 25 MB in
 -- the same change, without the neighbourhood fold being touched, because
 -- 'SizedGrid.Coord.axisSteps' calls 'offsetIsCoord' per candidate. The rest of
--- that cost is the fold above it, which is sized-grid-5uq.
+-- that cost was assumed at the time to be the fold above it. It was not: making
+-- that fold a method ('npStepsWithin', sized-grid-5uq) was worth 9%, and the
+-- remaining 67% was this same defect in 'SizedGrid.Coord.axisSteps' itself,
+-- which is out of line and so cannot fold /any/ of what it calls. See the note
+-- there.
 offsetByPosition ::
        forall c n. (IsCoord c, KnownNat n)
     => c n
@@ -324,15 +328,50 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
 -- the class supplies per axis, so the fold above it needed no new class --- see
 -- the note on the method.
 --
--- The deduplication is quadratic: @reachable@ is scanned once per element of
--- itself, with a closure allocated per element. It is small in @r@ and it is
--- nonetheless where the neighbourhood cost now is --- skipping the scan where
--- it cannot fire takes @extend neighbourSum 50x50@ from 6.46 ms to 2.24 ms and
--- 23 MB to 12 MB, against the 9% that moving the fold above it into
--- 'npStepsWithin' was worth. Not changed here because the guard that makes it
--- safe is a statement about 'offsetIsCoord' that the class does not currently
--- make; sized-grid-knm has the measurement and the decision.
+-- == Why this one is @INLINE@ (sized-grid-knm)
+--
+-- Same defect as 'offsetByPosition', one level up, and it was the whole
+-- remaining neighbourhood cost: @extend neighbourSum 50x50@ went from 6.51 ms
+-- and 22 MB to 2.12 ms and 9.9 MB, with every other benchmark unmoved.
+--
+-- The deduplication below is quadratic --- @reachable@ is scanned once per
+-- element of itself --- and that quadratic scan was blamed for the cost before
+-- it was measured against the alternative. It was not the cause. At the radius
+-- the neighbourhood functions actually use, @r@ is 1 and @reachable@ has three
+-- elements, so the scan is nine comparisons; what it cost was that /out of
+-- line/ every one of them went through a dictionary. In @$waxisSteps@ the
+-- candidate loop was
+--
+-- > offsetIsCoord $dIsCoord $dKnownNat irred (eta `cast` ...) ds
+--
+-- --- the class method itself, boxing a fresh @ds = I# x1@ displacement per
+-- candidate --- and the inner comparison of the scan re-entered
+--
+-- > asOrdinal $dIsCoord $fProfunctorFUN $fFunctorConst (lvl10 `cast` ...) (v' `cast` ...)
+--
+-- once per element, so @key@ on the inner value was rebuilt through the lens
+-- @k@ times per outer element rather than read off the representation.
+--
+-- Inlined at a concrete axis the same nine comparisons are unboxed and free.
+-- In the Core of @extend neighbourSum 50x50@ over @'[Clamped 50, Clamped 50]@,
+-- @reachable@ is a @go@ loop over @Int#@ whose body is @'>#' x ('-#' 49# y)@
+-- and @'<#' x ('negateInt#' y)@ --- the bounds check against a literal, no
+-- 'GHC.Natural.Natural' anywhere --- and the scan is a @joinrec@, so it
+-- allocates no closure per element. @key@ is @case v \`cast\` ... of I# x@:
+-- 'asOrdinal' has become a coercion, and the @(abs d', d') < (abs d, d)@ tuple
+-- comparison has been expanded into branches on @Int#@ with no tuples built.
+--
+-- So the guard that skipped the scan where it cannot fire --- measured at
+-- 2.24 ms and 12 MB in sized-grid-knm, and /slower/ than this --- is not
+-- needed, and neither is what it would have cost. That guard is sound only if
+-- 'offsetIsCoord' is injective in @d@ wherever it is 'Just', which the class
+-- does not say and should not: a reflecting boundary satisfies every law
+-- 'IsCoord' states and reaches the same value from @+d@ and @-d@ at an edge.
+-- Ruling that out to save time the compiler gives away for free would have
+-- narrowed the class against the one thesis the fork is built on --- that the
+-- coordinate type is the boundary policy.
 axisSteps :: forall x. IsCoordLifted x => Int -> x -> [(Int, x)]
+{-# INLINE axisSteps #-}
 axisSteps r c =
     [(abs d, v) | (d, v) <- reachable, not (any (beats (d, v)) reachable)]
   where
