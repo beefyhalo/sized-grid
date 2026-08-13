@@ -203,11 +203,53 @@ class IsCoord (c :: Nat -> Type) where
 --
 -- Unexported, like 'axisBoundaryByPosition': it is the default's
 -- implementation, not a second way to ask the question.
+--
+-- == Why this one is @INLINE@ (sized-grid-bw8)
+--
+-- Without the pragma the size is read from a run-time 'Natural' on every call,
+-- per axis. 'IsCoord' is indexed by @c@ alone, so @n@ cannot arrive through the
+-- instance the way it does for @('Data.AffineSpace..+^')@ on
+-- 'SizedGrid.Coord.Clamped.Clamped' --- there @KnownNat n@ is in the /instance
+-- context/, is fixed by instance resolution at a concrete axis, and the size
+-- constant-folds. Here it is on the /method/, so it is a dictionary argument,
+-- and out of line the body has nothing to fold against:
+--
+-- > $woffsetByPosition
+-- >   = \\ @c @n $dIsCoord $dKnownNat c1 ww ->
+-- >       case integerToInt# (integerFromNatural ($dKnownNat `cast` ...)) of ds
+--
+-- @INLINE@ is enough because the call sites already have the dictionary. Since
+-- sized-grid-135 made the axis fold an instance method ('npOffset'), the fold
+-- unrolls and each per-axis call sees a statically resolved @KnownNat@ --- at
+-- @'[Clamped 300, Clamped 300]@ that is @main81 = NS 300##@, sitting right next
+-- to the arithmetic and never folded only because the worker was out of line.
+--
+-- This is /not/ the case the note on 'IsCoordList' rules out. There @INLINE@
+-- cannot rescue a fold that is self-recursive and polymorphic in the axis list,
+-- because no amount of inlining gives the recursion a concrete list to unroll
+-- at. This function is small and not recursive at all, and the work of making
+-- its call sites concrete was already done. The two facts are compatible: a
+-- class indexed by the axis list fixes the /fold/, and inlining fixes the
+-- /step/ the fold now calls directly.
+--
+-- MEASURED on @offsetCoord x360000, checked, over Clamped 300x300@:
+-- 56.4 ms and 199 MB to 6.85 ms and 35 MB. In the Core the call goes from
+-- @$w$coffsetIsCoord main81 ds3 ww2@ to @'>#' x ('-#' 299# y1)@ inline, with
+-- 'asOrdinal' reduced to coercions instead of applications of
+-- @$fProfunctorFUN@ and @$fFunctorConst@, and the 'Maybe' to join points. What
+-- is left is not the bounds check, which now allocates nothing: it is the
+-- closure the benchmark's own comprehension builds per position.
+--
+-- @extend neighbourSum 50x50@ fell 8.88 ms and 28 MB to 7.01 ms and 25 MB in
+-- the same change, without the neighbourhood fold being touched, because
+-- 'SizedGrid.Coord.axisSteps' calls 'offsetIsCoord' per candidate. The rest of
+-- that cost is the fold above it, which is sized-grid-5uq.
 offsetByPosition ::
        forall c n. (IsCoord c, KnownNat n)
     => c n
     -> Int
     -> Maybe (c n)
+{-# INLINE offsetByPosition #-}
 offsetByPosition c d
     | d > hi - i = Nothing
     | d < negate i = Nothing
