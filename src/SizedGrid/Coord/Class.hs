@@ -10,6 +10,7 @@ module SizedGrid.Coord.Class
   , Extremum(..)
   , maxCoordSize
   , allCoordLike
+  , axisSteps
   ) where
 
 import           SizedGrid.Ordinal
@@ -301,6 +302,52 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
   type CoordContainer (c n) = c
   type CoordNat (c n) = n
 
+-- | The values one axis can reach within @r@ steps of @c@, paired with the
+-- number of steps it actually takes to get there.
+--
+-- Every value appears once. Where two offsets reach the same value --- which a
+-- torus axis does as soon as @2 * r >= n@ --- the one that took fewer steps
+-- wins, so the recorded distance is the true distance on that axis rather than
+-- whichever offset the enumeration happened to try first. That is what makes
+-- 'SizedGrid.Coord.vonNeumannNeighbours' correct on a small torus instead of
+-- accidentally right, and it is also what stops a bounded axis from reporting
+-- the same edge cell several times.
+--
+-- Ordering is by the surviving offset, ascending, so the centre sits in the
+-- middle and the caller sees a coordinate order that does not depend on the
+-- boundary policy.
+--
+-- It lives here rather than in "SizedGrid.Coord", which still re-exports it
+-- under the same name, for the reason 'MapDiff' does: it is the per-axis step of
+-- 'npStepsWithin', and that method has to be in this module to be a method of
+-- 'IsCoordList'. Its only obligation is 'IsCoordLifted', which is exactly what
+-- the class supplies per axis, so the fold above it needed no new class --- see
+-- the note on the method.
+--
+-- The deduplication is quadratic: @reachable@ is scanned once per element of
+-- itself, with a closure allocated per element. It is small in @r@ and it is
+-- nonetheless where the neighbourhood cost now is --- skipping the scan where
+-- it cannot fire takes @extend neighbourSum 50x50@ from 6.46 ms to 2.24 ms and
+-- 23 MB to 12 MB, against the 9% that moving the fold above it into
+-- 'npStepsWithin' was worth. Not changed here because the guard that makes it
+-- safe is a statement about 'offsetIsCoord' that the class does not currently
+-- make; sized-grid-knm has the measurement and the decision.
+axisSteps :: forall x. IsCoordLifted x => Int -> x -> [(Int, x)]
+axisSteps r c =
+    [(abs d, v) | (d, v) <- reachable, not (any (beats (d, v)) reachable)]
+  where
+    reachable :: [(Int, x)]
+    reachable =
+        [(d, v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
+    -- Compared as an 'Int' through 'asOrdinal', so no 'Eq' is needed on the
+    -- axis type itself.
+    key :: x -> Int
+    key v = ordinalToInt (v ^. asOrdinal)
+    -- Fewer steps wins; an exact tie in distance goes to the lower offset, so
+    -- the choice is total and the result does not depend on list order.
+    beats :: (Int, x) -> (Int, x) -> Bool
+    beats (d, v) (d', v') = key v' == key v && (abs d', d') < (abs d, d)
+
 -- | Apply 'Diff' to each element of a type level list. This is required as type
 -- families can't be partially applied.
 --
@@ -454,11 +501,43 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
         -> NP I (MapDiff cs)
         -> Maybe (NP I cs)
 
+    -- | Every combination of per-axis values reachable within @r@ steps on
+    -- each axis, paired with the total number of steps across all axes. The
+    -- fold behind 'SizedGrid.Coord.stepsWithin', and so behind every
+    -- neighbourhood in the library.
+    --
+    -- == Why it is here and not on 'SizedGrid.Coord.AffineCoordList'
+    --
+    -- Same reason as 'npOffset', and it is worth stating because the third
+    -- fold could plausibly have gone either way. The per-axis step is
+    -- 'SizedGrid.Coord.axisSteps', whose only obligation is 'IsCoordLifted',
+    -- which this class already supplies per axis. Nothing here needs
+    -- @'Data.AffineSpace.AffineSpace' x@ --- a neighbourhood is enumerated
+    -- through 'offsetIsCoord', not offset through @('Data.AffineSpace..+^')@,
+    -- which is the whole reason a bounded axis loses neighbours at its edge
+    -- rather than clamping onto it. So this needed no new class and, unlike
+    -- 'SizedGrid.Coord.AffineCoordList', it is not a breaking change: every
+    -- caller already held 'IsCoordList'.
+    --
+    -- == Why the radius is an argument
+    --
+    -- The other two folds are indexed by their arguments alone. This one
+    -- carries @r@ down the list unchanged, because @r@ is the /same/ radius on
+    -- every axis --- a Moore neighbourhood is a product of per-axis intervals,
+    -- not a per-axis budget --- so it is an argument to the method rather than
+    -- anything the instance can fix.
+    npStepsWithin :: Int -> NP I cs -> [(Int, NP I cs)]
+
 instance IsCoordList '[] where
     sizeAndPosition Nil = (1, 0)
     npOffset Nil Nil = Just Nil
+    -- One way to take no steps at all, at a distance of zero. This is what
+    -- makes the centre the only entry whose total is zero, which is how both
+    -- neighbourhood functions exclude it without comparing coordinates.
+    npStepsWithin _ Nil = [(0, Nil)]
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
+    {-# INLINE npStepsWithin #-}
 
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     sizeAndPosition (I c :* cs) =
@@ -471,8 +550,16 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     -- enough for 'MapDiff' to reduce and the second to match.
     npOffset (I x :* xs) (I dx :* dxs) =
         (\y ys -> I y :* ys) <$> offsetIsCoord x dx <*> npOffset xs dxs
+    -- The first axis outermost, so results come out in the row-major order
+    -- 'sizeAndPosition' lays a grid out in.
+    npStepsWithin r (I x :* xs) =
+        [ (d + s, I v :* vs)
+        | (d, v) <- axisSteps r x
+        , (s, vs) <- npStepsWithin r xs
+        ]
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
+    {-# INLINE npStepsWithin #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id

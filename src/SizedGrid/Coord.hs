@@ -587,36 +587,6 @@ coordRay ::
     -> [Coord cs]
 coordRay c d = unfoldr (\x -> (\y -> (y, y)) <$> offsetCoord x d) c
 
--- | The values one axis can reach within @r@ steps of @c@, paired with the
--- number of steps it actually takes to get there.
---
--- Every value appears once. Where two offsets reach the same value --- which a
--- torus axis does as soon as @2 * r >= n@ --- the one that took fewer steps
--- wins, so the recorded distance is the true distance on that axis rather than
--- whichever offset the enumeration happened to try first. That is what makes
--- 'vonNeumannNeighbours' correct on a small torus instead of accidentally
--- right, and it is also what stops a bounded axis from reporting the same edge
--- cell several times.
---
--- Ordering is by the surviving offset, ascending, so the centre sits in the
--- middle and the caller sees a coordinate order that does not depend on the
--- boundary policy.
-axisSteps :: forall x. IsCoordLifted x => Int -> x -> [(Int, x)]
-axisSteps r c =
-    [(abs d, v) | (d, v) <- reachable, not (any (beats (d, v)) reachable)]
-  where
-    reachable :: [(Int, x)]
-    reachable =
-        [(d, v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
-    -- Compared as an 'Int' through 'asOrdinal', so no 'Eq' is needed on the
-    -- axis type itself.
-    key :: x -> Int
-    key v = ordinalToInt (v ^. asOrdinal)
-    -- Fewer steps wins; an exact tie in distance goes to the lower offset, so
-    -- the choice is total and the result does not depend on list order.
-    beats :: (Int, x) -> (Int, x) -> Bool
-    beats (d, v) (d', v') = key v' == key v && (abs d', d') < (abs d, d)
-
 -- | Every coordinate within @r@ steps on each axis, paired with the total
 -- number of steps taken across all axes.
 --
@@ -631,14 +601,15 @@ stepsWithin ::
     => Int
     -> Coord cs
     -> [(Int, Coord cs)]
-stepsWithin r (Coord cs) = fmap Coord <$> go cs
-  where
-    go :: IsCoordList xs => NP I xs -> [(Int, NP I xs)]
-    go Nil = [(0, Nil)]
-    go (I x :* xs) = do
-        (d, v) <- axisSteps r x
-        (s, rest) <- go xs
-        return (d + s, I v :* rest)
+-- The fold this used to carry as a @where@ helper is now
+-- 'SizedGrid.Coord.Class.npStepsWithin', an 'IsCoordList' method, for the
+-- reason given on that class: a fold written as a self-recursive function
+-- cannot unroll, so every axis after the first peeled the axis-list dictionary
+-- at run time. The third instance of that defect, after 'AffineCoordList' and
+-- 'offsetCoord', and the one the neighbourhood workloads actually run ---
+-- neither of the other two fixes moved @extend neighbourSum@ at all, because
+-- neither fold is on this path.
+stepsWithin r (Coord cs) = fmap Coord <$> npStepsWithin r cs
 
 -- | The Moore neighbourhood: every coordinate within @r@ steps on each axis
 -- independently, excluding the centre.
