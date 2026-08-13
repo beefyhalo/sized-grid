@@ -6,6 +6,43 @@ Correctness release. Every change below is breaking, and each one turns a
 silently-wrong result — or a name that invited one — into either a rejected
 value or a type error.
 
+* `AllGridSizeKnown` is a class rather than a type family, and `gridFromList`,
+  `collapseGrid` and the `Grid` `ToJSON`/`FromJSON` instances no longer ask for
+  `SListI cs`.
+
+  **Migration:** delete constraints. A signature that read
+
+  ```haskell
+  parse :: (KnownNat n, KnownNat (n * n)) => String -> Maybe (Grid '[Clamped n, Clamped n] Cell)
+  ```
+
+  now reads `parse :: KnownNat n => ...`, and any `SListI cs` that was there
+  only to satisfy these four is redundant. Nothing gains an obligation. Code
+  that mentioned `AllGridSizeKnown` by name still compiles; it is the same name
+  with the same meaning.
+
+  A type family cannot solve anything — it expands, and whatever it expands to
+  is the caller's problem. `AllGridSizeKnown` expanded to a conjunction
+  containing `KnownNat (MaxCoordSize cs)`, which at `'[Clamped n, Clamped n]` is
+  `KnownNat (n * (n * 1))`; GHC cannot get that from `KnownNat n`, so every
+  caller wrote it out. In the one downstream package five signatures did. As a
+  class the same fact is derived during instance resolution, inductively, from
+  the per-axis `KnownNat`s — which is what `AllSizedKnown` has always done, and
+  this is that treatment applied to the structural recursions.
+
+  The tail's dictionary has to be carried in the value, as a new
+  `GridSizeProof` GADT returned by the class's single method: a class dictionary
+  cannot be run backwards through its own instance context, so there is no other
+  way to recover `AllGridSizeKnown xs` from `AllGridSizeKnown (x ': xs)`.
+  Matching on that GADT also refines the axis list to nil or cons, which is what
+  `SListI cs` and `Generics.SOP.Shape` were doing before — hence their removal.
+
+  Enabling `ghc-typelits-knownnat` here does not substitute for this, which is
+  what the retired `sized-grid-h56` plan assumed: `-fplugin` is not transitive,
+  so a consumer solves its own goals with no solver but GHC's. The new
+  `downstream` test suite is compiled without the plugins for exactly this
+  reason and would not typecheck against the old family.
+
 * `All IsCoordLifted cs` is replaced by the class `IsCoordList cs` throughout
   the API. It has `All IsCoordLifted cs` as a superclass, so it is a rename
   rather than an added obligation, and at a concrete axis list it is discharged
@@ -279,8 +316,8 @@ value or a type error.
 * `FromJSON (Grid cs a)` now validates the length at every dimension and fails
   on a mismatch. Previously a short, long or ragged array decoded to a `Grid`
   whose vector disagreed with its type, which made `index` throw and `(<*>)`
-  silently truncate. Its constraints are now `(AllGridSizeKnown cs, SListI cs)`,
-  matching `ToJSON`.
+  silently truncate. Its constraints are `AllGridSizeKnown cs`, matching
+  `ToJSON`.
 
 * `Grid` is now abstract: the `Grid` constructor and the `unGrid` field are no
   longer exported. Anyone could previously build a `Grid` whose vector length

@@ -30,7 +30,8 @@ module SizedGrid.Grid.Grid
   , Head
   , Tail
   , CollapseGrid
-  , AllGridSizeKnown
+  , AllGridSizeKnown(..)
+  , GridSizeProof(..)
     -- * Rearranging
   , transposeGrid
   , splitGrid

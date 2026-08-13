@@ -29,7 +29,8 @@ module SizedGrid.Internal.Grid
   , Head
   , Tail
   , CollapseGrid
-  , AllGridSizeKnown
+  , AllGridSizeKnown(..)
+  , GridSizeProof(..)
     -- * Rearranging
   , transposeGrid
   , splitGrid
@@ -59,8 +60,8 @@ import           Data.Constraint
 import           Data.Distributive
 import           Data.Functor.Classes
 import           Data.Functor.Rep
+import           Data.Proxy            (Proxy (..))
 import qualified Data.Vector           as V
-import           Generics.SOP
 import qualified GHC.Generics          as GHC
 import           GHC.TypeLits
 import qualified GHC.TypeLits          as GHC
@@ -209,14 +210,59 @@ type family CollapseGrid cs a where
   CollapseGrid '[] a = a
   CollapseGrid (c ': cs) a = [CollapseGrid cs a]
 
--- | A Constraint that all grid sizes are instances of `KnownNat`
-type family AllGridSizeKnown cs :: Constraint where
-  AllGridSizeKnown '[] = ()
-  AllGridSizeKnown cs  = ( GHC.KnownNat (CoordNat (Head cs))
-                        , GHC.KnownNat (MaxCoordSize (Tail cs))
-                        , GHC.KnownNat (MaxCoordSize (cs))
-                        , AllGridSizeKnown (Tail cs))
+-- | Evidence that every axis of @cs@ has a statically known size, and so does
+-- every suffix of @cs@ -- which is what a function recursing down the axis list
+-- needs.
+--
+-- This was a type family until sized-grid-k6n, and the difference is entirely
+-- about who does the work. A family does no solving: it expanded to a
+-- conjunction containing @KnownNat (MaxCoordSize cs)@ and that raw goal landed
+-- in the caller's context, where at @cs ~ '[Clamped n, Clamped n]@ it reads
+-- @KnownNat (n * (n * 1))@. GHC cannot get that from @KnownNat n@, so the
+-- caller wrote it out by hand:
+--
+-- > parse :: (KnownNat n, KnownNat (n * n)) => String -> Maybe (Grid '[Clamped n, Clamped n] Cell)
+--
+-- As a class the same obligation is discharged during instance resolution,
+-- inductively, from the per-axis 'GHC.KnownNat's -- so @KnownNat n@ alone now
+-- suffices at the call site. 'SizedGrid.Coord.AllSizedKnown' has always been a
+-- class for exactly this reason; this is the same treatment applied to the
+-- structural recursions.
+--
+-- A type-checker plugin cannot substitute for this. @-fplugin@ is not
+-- transitive: @ghc-typelits-knownnat@ being enabled for this library says
+-- nothing about the consumer, which solves its own constraints. That is why
+-- sized-grid-h56 could not fix this and an API change had to.
+class GHC.KnownNat (MaxCoordSize cs) => AllGridSizeKnown (cs :: [Type]) where
+  -- | The size of the head axis and the tail's own instance.
+  --
+  -- The tail's dictionary has to be carried in the value: a class dictionary
+  -- cannot be run backwards through its own instance context, so there is
+  -- otherwise no way to recover @AllGridSizeKnown xs@ from
+  -- @AllGridSizeKnown (x ': xs)@.
+  gridSizeProof :: GridSizeProof cs
 
+-- | What 'AllGridSizeKnown' carries, and the reason the recursions below no
+-- longer ask for @SListI cs@: matching on this refines @cs@ to nil or cons just
+-- as @Generics.SOP.Shape cs@ did, and brings the evidence for that shape into
+-- scope at the same time, which a @Shape@ could not do.
+data GridSizeProof (cs :: [Type]) where
+  GridSizeNil :: GridSizeProof '[]
+  GridSizeCons ::
+       forall c n cs. (GHC.KnownNat n, AllGridSizeKnown cs)
+    => GridSizeProof (c n ': cs)
+
+instance AllGridSizeKnown '[] where
+  gridSizeProof = GridSizeNil
+
+-- | @KnownNat (MaxCoordSize (c n ': as))@ is @KnownNat (n * MaxCoordSize as)@,
+-- which @ghc-typelits-knownnat@ derives from the @KnownNat n@ here and the
+-- @KnownNat (MaxCoordSize as)@ that is this class's own superclass on the tail.
+-- That plugin step is the induction, and it happens here rather than at the
+-- call site.
+instance (GHC.KnownNat n, AllGridSizeKnown as) =>
+         AllGridSizeKnown ((c n) ': as) where
+  gridSizeProof = GridSizeCons
 
 -- | Convert a vector into a list of `Vector`s, where all the elements of the
 -- list have the given size.
@@ -236,13 +282,13 @@ splitVectorBySize n v
 
 -- | Convert a grid to a series of nested lists. This removes type level information, but it is sometimes easier to work with lists
 collapseGrid ::
-     forall cs a. (SListI cs, AllGridSizeKnown cs)
+     forall cs a. AllGridSizeKnown cs
   => Grid cs a
   -> CollapseGrid cs a
 collapseGrid (Grid v) =
-  case (shape :: Shape cs) of
-    ShapeNil -> v V.! 0
-    ShapeCons (_ :: Shape xs) ->
+  case gridSizeProof @cs of
+    GridSizeNil -> v V.! 0
+    GridSizeCons @_ @_ @xs ->
       map (collapseGrid . Grid @xs) $
       splitVectorBySize
         (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize xs)))
@@ -250,27 +296,27 @@ collapseGrid (Grid v) =
 
 -- | Convert a series of nested lists to a grid. If the size of the grid does not match the size of lists this will be `Nothing`
 gridFromList ::
-     forall cs a. (SListI cs, AllGridSizeKnown cs)
+     forall cs a. AllGridSizeKnown cs
   => CollapseGrid cs a
   -> Maybe (Grid cs a)
 gridFromList cg =
-  case (shape :: Shape cs) of
-    ShapeNil -> Just $ Grid $ V.singleton $ cg
-    ShapeCons _ ->
-      if length cg == fromIntegral (GHC.natVal (Proxy @(CoordNat (Head cs))))
+  case gridSizeProof @cs of
+    GridSizeNil -> Just $ Grid $ V.singleton $ cg
+    GridSizeCons @_ @n @xs ->
+      if length cg == fromIntegral (GHC.natVal (Proxy @n))
         then Grid . mconcat <$>
-             traverse (fmap unGrid . gridFromList @(Tail cs)) cg
+             traverse (fmap unGrid . gridFromList @xs) cg
         else Nothing
 
-instance (AllGridSizeKnown cs, ToJSON a, SListI cs) => ToJSON (Grid cs a) where
+instance (AllGridSizeKnown cs, ToJSON a) => ToJSON (Grid cs a) where
   toJSON (Grid v) =
-    case (shape :: Shape cs) of
-      ShapeNil -> toJSON (v V.! 0)
-      ShapeCons _ ->
+    case gridSizeProof @cs of
+      GridSizeNil -> toJSON (v V.! 0)
+      GridSizeCons @_ @_ @xs ->
         toJSON $
-        map (toJSON . Grid @(Tail cs)) $
+        map (toJSON . Grid @xs) $
         splitVectorBySize
-          (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize (Tail cs))))
+          (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize xs)))
           v
 
 -- | Decoding validates the length at every dimension, so a successfully decoded
@@ -280,15 +326,14 @@ instance (AllGridSizeKnown cs, ToJSON a, SListI cs) => ToJSON (Grid cs a) where
 --
 -- The constraints match `ToJSON`\'s: the `KnownNat` evidence is what makes the
 -- check possible.
-instance (AllGridSizeKnown cs, SListI cs, FromJSON a) =>
+instance (AllGridSizeKnown cs, FromJSON a) =>
          FromJSON (Grid cs a) where
   parseJSON v =
-    case (shape :: Shape cs) of
-      ShapeNil -> Grid . V.singleton <$> parseJSON v
-      ShapeCons _ -> do
-        a :: [Grid (Tail cs) a] <- parseJSON v
-        let expected =
-              fromIntegral $ GHC.natVal (Proxy @(CoordNat (Head cs))) :: Int
+    case gridSizeProof @cs of
+      GridSizeNil -> Grid . V.singleton <$> parseJSON v
+      GridSizeCons @_ @n @xs -> do
+        a :: [Grid xs a] <- parseJSON v
+        let expected = fromIntegral $ GHC.natVal (Proxy @n) :: Int
         if length a == expected
           then return $ Grid $ foldMap unGrid a
           else fail $

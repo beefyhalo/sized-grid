@@ -36,7 +36,12 @@ source-repository head
 -- LambdaCase, MonoLocalBinds, DerivingStrategies, RoleAnnotations and
 -- ExplicitNamespaces on top of GHC2021, which is why the per-module LANGUAGE
 -- headers are far shorter than they used to be.
-common lang
+--
+-- Split in two: 'lang-base' is the language and warning settings, 'lang' is
+-- that plus the type-checker plugins. The only component that wants the first
+-- without the second is the 'downstream' test suite, whose entire job is to
+-- compile as a consumer does -- and a consumer does not get our plugins.
+common lang-base
   default-language:   GHC2024
   -- TypeAbstractions is for @SCons \@xs \@x@ in SizedGrid.Coord: 'SList' has no
   -- fields, so a type abstraction is the only way to name the head and tail of
@@ -63,6 +68,9 @@ common lang
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
     -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
     -Wredundant-constraints
+
+common lang
+  import: lang-base
 
   -- sized-grid-h56. These two solvers discharge the Nat goals this library used
   -- to state by hand with Data.Constraint.Nat: 'KnownNat (n * MaxCoordSize as)'
@@ -150,6 +158,23 @@ test-suite tests
     , tasty-quickcheck  >=0.10 && <0.12
     , vector
     , vector-space
+
+-- sized-grid-k6n. What this library's constraints cost a *consumer*, which is
+-- not the same question as whether the library compiles: '-fplugin' is not
+-- transitive, so a downstream package solves its own Nat goals with no solver
+-- but GHC's. That is why this component imports 'lang-base' rather than 'lang'
+-- and must keep doing so -- adding the plugins here would make it agree with
+-- the rest of the tree and stop testing anything.
+test-suite downstream
+  import:         lang-base
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: tests-downstream
+  main-is:        Main.hs
+  build-depends:
+    , aeson
+    , base
+    , bytestring
+    , sized-grid
 
 -- Compiles README.lhs so the tutorial cannot rot unnoticed. markdown-unlit is
 -- what turns the ```haskell fences into the literate source GHC sees.
