@@ -245,3 +245,21 @@ benchmark benchmarks
     , vector-space
 
   ghc-options:    -with-rtsopts=-T
+
+-- THROWAWAY. sized-grid-up6's measure-first step: how much is left for an
+-- unboxed Grid to win now that sized-grid-upo has de-boxed Coord? Delete this
+-- stanza and bench-spike/ once that question is answered.
+benchmark unboxed-spike
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: bench-spike
+  main-is:        Main.hs
+  build-depends:
+    , adjunctions
+    , base
+    , sized-grid
+    , tasty-bench  >=0.3 && <0.5
+    , vector
+    , vector-space
+
+  ghc-options:    -with-rtsopts=-T
