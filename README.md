@@ -18,7 +18,7 @@ The core datatype of this library is `Grid (cs :: '[k]) (a :: *)`. `cs` is a typ
 
 * `Periodic n`: This is the most permissive. When a value is generated outside the given range, it wraps that around using modular arithmetic. Is is an instance of `Semigroup` and `Monoid` like `Clamped`, but also of `AdditiveGroup` allowing negation.
 
-`Clamped` and `Periodic` are both instances of `AffineSpace`, with their `Diff` being `Integer`. This means there are many occasions where one doesn't have to work directly with these values (which can be cumbersome) and can instead work with their differences as regular numbers.
+`Clamped` and `Periodic` are both instances of `AffineSpace`, with their `Diff` being `Int`. This means there are many occasions where one doesn't have to work directly with these values (which can be cumbersome) and can instead work with their differences as regular numbers.
 
 The last type value of `Grid` is the type of each element. 
 

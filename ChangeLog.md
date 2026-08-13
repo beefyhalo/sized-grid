@@ -16,10 +16,17 @@ value or a type error.
   `AllDiffSame Integer cs` becomes `AllDiffSame Int cs`, `Diff x ~ Integer`
   becomes `Diff x ~ Int`, and a helper with a written-out type such as
   `Integer -> Integer -> Coord '[Integer, Integer]` becomes the `Int` version.
-  Call sites that pass numeric literals or build displacements with
-  `coordFromTuple` need no change at all, because the literals were already
-  polymorphic. A `fromIntegral` applied to the result of `(.-.)` is now the
-  identity and will warn under `-Widentities`.
+  Call sites that pass numeric literals need no change at all, because the
+  literals were already polymorphic — but `coordFromTuple` is not by itself a
+  guarantee of that: `coordFromTuple (0, toInteger col)` names the old type in
+  its second component and stops compiling, while `coordFromTuple (0, col)`
+  with `col :: Int` is what it wanted to say. A `fromIntegral` applied to the
+  result of `(.-.)` is now the identity and will warn under `-Widentities`.
+
+  Measured against the one downstream package rather than reasoned about: of
+  the eight `aoc` executables that import `SizedGrid`, six built unchanged and
+  two needed one line each — the `toInteger` above, and a helper declared
+  `Coord '[Integer, Integer]`.
 
   The `Integer` was there for overflow safety, and the safety is kept without
   it. `Clamped`'s `(.+^)` decides by comparing the displacement against
@@ -40,9 +47,45 @@ value or a type error.
   So 126 of those 143 MB were never the `Integer`. They are the fold over the
   axis list in the `AffineSpace (Coord cs)` instance, which is a self-recursive
   polymorphic helper and so cannot unroll: the same problem `coordPosition` had
-  before its fold became an `IsCoordList` method. That is not fixed here.
+  before its fold became an `IsCoordList` method. That is the next entry.
   `bench/Main.hs` now carries both benchmarks, because only the gap between them
   says which half is paying.
+
+* The `AffineSpace (Coord cs)` instance asks for `AffineCoordList cs` where it
+  used to ask for `All AffineSpace cs`. This is the fold the entry above
+  measured and left alone.
+
+  **Migration:** most code changes nothing. `All AffineSpace cs` is a
+  superclass of `AffineCoordList cs`, so every *use* of `(.+^)` and `(.-.)` on
+  a `Coord` still typechecks, and code at a known axis list — including a list
+  whose *length* is known but whose element types are variables, such as
+  `cs ~ '[x, y]` — discharges the new class by instance resolution without
+  naming it. Only a signature that writes `All AffineSpace cs` at a fully
+  polymorphic `cs` *in order to* use the instance has to write
+  `AffineCoordList cs` instead. In this repository no such signature existed:
+  the `All AffineSpace cs` in `gameOfLife` and `README.lhs` turned out to be
+  redundant constraints, which GHC already says so under
+  `-Wredundant-constraints`.
+
+  The fold is now a method of a class indexed by the axis list, so the
+  per-axis dictionary is resolved during instance resolution and the recursion
+  unrolls at a concrete list, exactly as `IsCoordList` does for
+  `coordPosition`. It is a separate class from `IsCoordList` because the
+  per-axis step needs `AffineSpace x`, which `IsCoordLifted` does not supply —
+  an `Ordinal` is indexable and has no `AffineSpace` instance at all.
+
+  Measured on the two benchmarks the previous entry left behind, 360,000
+  offsets each:
+
+  | | before | after |
+  |---|---|---|
+  | four corner reads through a `Coord` | 28.5 ms / 126 MB | 2.02 ms / 53 B |
+  | one bare `Clamped 300` axis (control) | 2.27 ms / 94 KB | 2.30 ms / 94 KB |
+
+  The control does not move, which is what says this is the fold rather than
+  the arithmetic. 53 bytes is the whole benchmark and not per call: offsetting
+  a `Coord` no longer allocates. `(.-.)` over 10,000 coordinates went from
+  1.4 MB to 17 bytes with it.
 
 * `AllGridSizeKnown` is a class rather than a type family, and `gridFromList`,
   `collapseGrid` and the `Grid` `ToJSON`/`FromJSON` instances no longer ask for

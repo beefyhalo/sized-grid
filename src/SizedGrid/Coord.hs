@@ -52,6 +52,10 @@ module SizedGrid.Coord
   , Length
   , MaxCoordSize
   , MapDiff
+    -- | Like 'IsCoordList', 'AffineCoordList' is re-exported without its
+    -- methods: they are the fold itself, and the two instances below already
+    -- cover every type-level list. What a caller needs is the constraint.
+  , AffineCoordList
   , AllDiffSame
   , AllSizedKnown(..)
     -- | 'IsCoordList' is re-exported without its method: the method is a fold
@@ -271,22 +275,83 @@ type family MapDiff xs where
 --
 -- Tuple literals no longer typecheck as displacements. Use ':|', or
 -- 'coordFromTuple' where a tuple reads better.
-instance ( All AffineSpace cs
+-- | The axis-list fold behind @('.+^')@ and @('.-.')@ on a 'Coord', as an
+-- instance method so that it unrolls.
+--
+-- == Why this is a class and not two @where@ helpers
+--
+-- It used to be the helpers, and they were the whole cost of offsetting. This
+-- is the defect the note on 'SizedGrid.Coord.Class.IsCoordList' describes,
+-- met a second time: a fold written as a self-recursive function cannot
+-- unroll, because GHC does not inline a self-recursive binding and each call
+-- is at a shorter list, so specialising rewrites only the outermost call and
+-- every axis after the first goes through a generic worker holding the
+-- @All AffineSpace@ dictionary at run time.
+--
+-- Measured on 360,000 offsets through a two-axis 'Coord', against the same
+-- 360,000 on a bare @'SizedGrid.Coord.Clamped.Clamped' 300@ axis as a control:
+--
+-- > through a Coord     28.5 ms / 126 MB   ->   2.02 ms / 53 B
+-- > bare axis, control   2.27 ms /  94 KB  ->   2.30 ms / 94 KB
+--
+-- The control does not move, which is what says the change is the fold and not
+-- the arithmetic. sized-grid-0tj had already made the per-axis step
+-- allocation-free by giving 'Data.AffineSpace.Diff' an 'Int' representation;
+-- what was left was what a 'Coord' added on top, and it is now nothing. 53
+-- bytes is the whole benchmark rather than per call: the axes unroll, the
+-- @NP@ is built and consumed in registers, and 360,000 offsets allocate less
+-- than one of them used to.
+--
+-- The 'Coord' loop now beats its own control, which is not a paradox: the
+-- control walks a list of 360,000 'Int's to have something to offset, and that
+-- list is the 94 KB.
+--
+-- == Why not a method of 'SizedGrid.Coord.Class.IsCoordList'
+--
+-- The per-axis step needs @'AffineSpace' x@, which
+-- 'SizedGrid.Coord.Class.IsCoordLifted' does not supply, and adding
+-- @All AffineSpace cs@ to the /method/ signature there would hand back the
+-- run-time dictionary that moving the fold into a class exists to remove. An
+-- axis list is also offsettable under conditions that have nothing to do with
+-- being indexable: 'SizedGrid.Ordinal.Ordinal' is an
+-- 'SizedGrid.Coord.Class.IsCoord' with no 'AffineSpace' instance at all.
+--
+-- == What it costs a caller
+--
+-- @All AffineSpace cs@ is a superclass, so every /use/ of the 'AffineSpace'
+-- instance still typechecks unchanged. Only polymorphic code that wrote
+-- @All AffineSpace cs@ in a signature in order to /discharge/ that instance
+-- has to say 'AffineCoordList' instead; code at a concrete axis list --- which
+-- is most code, including all of ../aoc --- resolves it by instance
+-- resolution and never names it.
+class All AffineSpace cs => AffineCoordList cs where
+    -- | Add a displacement to a coordinate, one axis at a time.
+    npAdd :: NP I cs -> NP I (MapDiff cs) -> NP I cs
+    -- | The displacement between two coordinates, one axis at a time.
+    npSub :: NP I cs -> NP I cs -> NP I (MapDiff cs)
+
+instance AffineCoordList '[] where
+    npAdd Nil Nil = Nil
+    npSub Nil Nil = Nil
+    {-# INLINE npAdd #-}
+    {-# INLINE npSub #-}
+
+instance (AffineSpace x, AffineCoordList xs) => AffineCoordList (x ': xs) where
+    -- The coord drives the match, as in 'offsetCoord': matching ':*' on the
+    -- first argument refines @xs@ far enough for @MapDiff@ to reduce and the
+    -- second to match.
+    npAdd (I x :* xs) (I y :* ys) = I (x .+^ y) :* npAdd xs ys
+    npSub (I x :* xs) (I y :* ys) = I (x .-. y) :* npSub xs ys
+    {-# INLINE npAdd #-}
+    {-# INLINE npSub #-}
+
+instance ( AffineCoordList cs
          , All AdditiveGroup (MapDiff cs)
          ) =>
          AffineSpace (Coord cs) where
     type Diff (Coord cs) = Coord (MapDiff cs)
-    Coord a .-. Coord b =
-        let helper ::
-                   All AffineSpace xs => NP I xs -> NP I xs -> NP I (MapDiff xs)
-            helper Nil Nil                 = Nil
-            helper (I x :* xs) (I y :* ys) = I (x .-. y) :* helper xs ys
-        in Coord $ helper a b
-    Coord a .+^ Coord b =
-        let helper :: All AffineSpace xs => NP I xs -> NP I (MapDiff xs) -> NP I xs
-            helper Nil Nil                 = Nil
-            helper (I x :* xs) (I y :* ys) = I (x .+^ y) :* helper xs ys
-        in Coord $ helper a b
+    Coord a .-. Coord b = Coord (npSub a b)
+    Coord a .+^ Coord b = Coord (npAdd a b)
 
 -- | Generate all possible coords in order
 allCoord ::
@@ -415,8 +480,14 @@ offsetCoord (Coord cs) (Coord d) = Coord <$> helper cs d
   where
     -- The coord drives the recursion, not the displacement: matching 'Nil' or
     -- ':*' on the first argument is what refines @xs@ far enough for GHC to
-    -- reduce @MapDiff xs@ and match the second. The same shape as the helpers
-    -- in the 'AffineSpace' instance above, and for the same reason.
+    -- reduce @MapDiff xs@ and match the second.
+    --
+    -- This is still a self-recursive helper, and so it still cannot unroll ---
+    -- the defect 'AffineCoordList' exists to fix, one function along. Moving it
+    -- is a separate change with its own measurement, because the per-axis step
+    -- here is 'SizedGrid.Coord.Class.offsetIsCoord' rather than @('.+^')@, so it
+    -- belongs to 'SizedGrid.Coord.Class.IsCoordList' and not to
+    -- 'AffineCoordList'. Filed as sized-grid-135.
     helper ::
            (IsCoordList xs, AllDiffSame Int xs)
         => NP I xs
