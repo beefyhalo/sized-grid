@@ -58,10 +58,10 @@ module SizedGrid.Coord
   , AffineCoordList
   , AllDiffSame
   , AllSizedKnown(..)
-    -- | 'IsCoordList' is re-exported without its method: the method is a fold
-    -- accumulator, and its two instances already cover every type-level list,
-    -- so there is none left to write. Import "SizedGrid.Coord.Class" if you
-    -- want to see it anyway.
+    -- | 'IsCoordList' is re-exported without its methods: they are folds over
+    -- the axis list, and its two instances already cover every type-level
+    -- list, so there is none left to write. Import "SizedGrid.Coord.Class" if
+    -- you want to see them anyway.
   , IsCoordList
   ) where
 
@@ -252,29 +252,6 @@ instance Field4 (Coord (a ': b ': c ': d ': cs)) (Coord (a ': b ': c ': d' ': cs
 instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d ': e' ': cs)) e e' where
   _5 = coordTail . _4
 
--- | Apply `Diff` to each element of a type level list. This is required as type families can't be partially applied.
-type family MapDiff xs where
-  MapDiff '[] = '[]
-  MapDiff (x ': xs) = Diff x ': MapDiff xs
-
--- | The displacement between two coords is itself coord-shaped: a
--- @'Coord' cs@ is displaced by a @'Coord' ('MapDiff' cs)@, one 'Diff' per axis.
---
--- This follows @manifolds@, where @Needle@ is an associated type and a product
--- gets its own structurally --- @Needle (a,b) = (Needle a, Needle b)@. The
--- displacement here is a 'Coord' rather than a new product type, so it inherits
--- ':|', 'EmptyCoord', 'Show', 'Eq', 'AdditiveGroup' and 'Random' from the
--- instances above at no cost.
---
--- It replaces a @CoordDiff@ family whose instances were written out one per
--- arity, up to six. That was a real ceiling: a seven-axis 'Coord' had no
--- 'Diff', so no 'AffineSpace' instance and no 'offsetCoord'. 'MapDiff' recurses,
--- so there is no ceiling and no per-arity code. It also drops
--- @IsProductType (CoordDiff cs) (MapDiff cs)@ from the context, which is why
--- @generics-sop@ no longer appears in the signature of everything that offsets.
---
--- Tuple literals no longer typecheck as displacements. Use ':|', or
--- 'coordFromTuple' where a tuple reads better.
 -- | The axis-list fold behind @('.+^')@ and @('.-.')@ on a 'Coord', as an
 -- instance method so that it unrolls.
 --
@@ -446,11 +423,6 @@ coordDigits p =
                         (q', r) ->
                             (I (review asOrdinal (unsafeOrdinal r)) :* rest, q')
 
--- | All Diffs of the members of the list must be equal
-type family AllDiffSame a xs :: Constraint where
-  AllDiffSame _ '[] = ()
-  AllDiffSame a (x ': xs) = (Diff x ~ a, AllDiffSame a xs)
-
 -- | Move by a signed displacement, or 'Nothing' if that leaves the grid.
 --
 -- The checked counterpart of @('.+^')@, and a drop-in for it: it takes the same
@@ -476,26 +448,32 @@ offsetCoord ::
     => Coord cs
     -> Diff (Coord cs)
     -> Maybe (Coord cs)
-offsetCoord (Coord cs) (Coord d) = Coord <$> helper cs d
-  where
-    -- The coord drives the recursion, not the displacement: matching 'Nil' or
-    -- ':*' on the first argument is what refines @xs@ far enough for GHC to
-    -- reduce @MapDiff xs@ and match the second.
-    --
-    -- This is still a self-recursive helper, and so it still cannot unroll ---
-    -- the defect 'AffineCoordList' exists to fix, one function along. Moving it
-    -- is a separate change with its own measurement, because the per-axis step
-    -- here is 'SizedGrid.Coord.Class.offsetIsCoord' rather than @('.+^')@, so it
-    -- belongs to 'SizedGrid.Coord.Class.IsCoordList' and not to
-    -- 'AffineCoordList'. Filed as sized-grid-135.
-    helper ::
-           (IsCoordList xs, AllDiffSame Int xs)
-        => NP I xs
-        -> NP I (MapDiff xs)
-        -> Maybe (NP I xs)
-    helper Nil Nil = Just Nil
-    helper (I x :* xs) (I dx :* dxs) =
-        (\y ys -> I y :* ys) <$> offsetIsCoord x dx <*> helper xs dxs
+-- The fold this used to carry as a @where@ helper is now
+-- 'SizedGrid.Coord.Class.npOffset', an 'IsCoordList' method, for the reason
+-- given on that class and on 'AffineCoordList': a fold written as a
+-- self-recursive function cannot unroll, so every axis after the first peeled
+-- the axis-list dictionary at run time. Same defect as the one
+-- 'AffineCoordList' fixed, one function along.
+--
+-- Measured on @offsetCoord x360000, checked@ in bench/Main.hs, which had to be
+-- written for this: nothing in the suite reached 'offsetCoord' at all, because
+-- @('.+^')@ and this are folds over two different classes. 268 MB and 73.0 ms
+-- before, 199 MB and 57.0 ms after, and the Core at a two-axis list unrolls to
+-- two 'SizedGrid.Coord.Class.offsetIsCoord' calls with no axis-list dictionary
+-- and no evidence passed for @'AllDiffSame' Int cs@.
+--
+-- What did /not/ move is @extend neighbourSum 50x50@, the benchmark
+-- sized-grid-135 was filed against on the assumption that neighbourhoods
+-- offset. They do not: 'neighbours' goes through 'stepsWithin', which
+-- enumerates each axis with 'axisSteps' and never calls this function. That
+-- fold is a third instance of the same defect and is filed separately.
+--
+-- The 199 MB that remain are below this function rather than in it. The Core
+-- shows @offsetByPosition@ receiving its @KnownNat@ as a run-time 'Natural'
+-- and doing @integerToInt# (integerFromNatural ...)@ on every call, per axis,
+-- where the @('.+^')@ path has the size folded to a literal. Also filed
+-- separately; it is the per-axis step, not the fold this note is about.
+offsetCoord (Coord cs) (Coord d) = Coord <$> npOffset cs d
 
 -- | Where a walk left the grid: the last coordinate that was still on it, and
 -- how many whole steps it managed before the next one would have left.

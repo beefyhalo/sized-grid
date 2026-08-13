@@ -49,6 +49,7 @@ import           Control.Lens           (ifoldl', imap, itraverse, view)
 import           Data.Aeson             (Result (..), fromJSON, toJSON)
 import           Data.AffineSpace       ((.+^), (.-.))
 import           Data.Functor.Rep       (index, tabulate)
+import           Data.Maybe             (isJust)
 import           Test.Tasty.Bench
 
 -- | ../aoc/src/2018/11.hs works at this size: 90,000 cells.
@@ -107,6 +108,49 @@ cornerReads g =
           index g (c .+^ (0 :| 3 :| EmptyCoord)) -
           index g (c .+^ (3 :| 0 :| EmptyCoord))
         | c <- allCoord @Big
+        ]
+
+-- | The same four displacements as 'cornerReads', through the /checked/ offset
+-- instead of @('.+^')@: 360,000 'offsetCoord' calls over the 90,000 cells of
+-- 'Big'.
+--
+-- It exists because 'cornerReads' does not reach 'offsetCoord' and neither does
+-- anything else here. @('.+^')@ and 'offsetCoord' are different functions over
+-- different folds --- 'SizedGrid.Coord.AffineCoordList' and
+-- 'SizedGrid.Coord.Class.IsCoordList' respectively --- so a change to one is
+-- invisible to a benchmark of the other. sized-grid-135 was filed against the
+-- neighbourhood benchmark on the assumption that neighbourhoods offset; they do
+-- not, they enumerate ('stepsWithin'), and so the suite had no measurement of
+-- the checked offset at all.
+--
+-- Counts successes rather than summing positions, so that the 'Maybe' is forced
+-- without an index into the grid on top. Most offsets succeed and the last @k@
+-- rows and columns refuse, so both branches of the bounds check are measured
+-- rather than only the one.
+--
+-- Consumed with 'total' and not with @length@, so that it is 'cornerReads' with
+-- the offset swapped and nothing else changed. @length@ over the same
+-- comprehension is @foldr@ with a function accumulator: it allocates a closure
+-- per element, and at 360,000 elements that buried the operation being measured
+-- under 130 MB of its own.
+--
+-- The window size is an argument for the reason given in the note on
+-- @allCoord@ below: with the displacements written as literals the whole list
+-- is a CAF, GHC floats it past the lambda, and the benchmark reports 3.36 ns
+-- for 360,000 offsets. Taking @k@ from the caller is what 'axisOffsets' does
+-- and it is what makes the list depend on the argument.
+checkedCornerReads :: Int -> Int
+checkedCornerReads k =
+    total
+        [ if isJust (offsetCoord c d)
+              then 1
+              else 0
+        | c <- allCoord @Big
+        , d <- [ 0 :| 0 :| EmptyCoord
+               , k :| k :| EmptyCoord
+               , 0 :| k :| EmptyCoord
+               , k :| 0 :| EmptyCoord
+               ]
         ]
 
 -- | The same 360,000 offsets as 'cornerReads', on a bare axis instead of a
@@ -193,6 +237,8 @@ main = do
                     zeroCoord
               , bench "(.+^) x360000, four corner reads over Clamped 300x300" $
                 whnf cornerReads bigGrid
+              , bench "offsetCoord x360000, checked, over Clamped 300x300" $
+                whnf checkedCornerReads 3
               , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
                 whnf axisOffsets 1200
               , bench "toEnum/fromEnum x300, Clamped 300" $

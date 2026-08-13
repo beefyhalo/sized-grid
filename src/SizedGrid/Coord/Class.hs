@@ -5,6 +5,8 @@ module SizedGrid.Coord.Class
   , IsCoordLifted(..)
   , IsCoordList(..)
   , IsCoordListF
+  , MapDiff
+  , AllDiffSame
   , Extremum(..)
   , maxCoordSize
   , allCoordLike
@@ -13,8 +15,9 @@ module SizedGrid.Coord.Class
 import           SizedGrid.Ordinal
 
 import           Control.Lens
-import           Data.Kind      (Constraint, Type)
-import           Generics.SOP   (All, I (..), NP (..))
+import           Data.AffineSpace (Diff)
+import           Data.Kind        (Constraint, Type)
+import           Generics.SOP     (All, I (..), NP (..))
 import           GHC.TypeLits
 
 -- | The largest value a coord of size @n@ can hold, which is @n - 1@.
@@ -256,6 +259,49 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
   type CoordContainer (c n) = c
   type CoordNat (c n) = n
 
+-- | Apply 'Diff' to each element of a type level list. This is required as type
+-- families can't be partially applied.
+--
+-- The displacement between two coords is itself coord-shaped: a
+-- @'SizedGrid.Coord.Coord' cs@ is displaced by a
+-- @'SizedGrid.Coord.Coord' ('MapDiff' cs)@, one 'Diff' per axis.
+--
+-- This follows @manifolds@, where @Needle@ is an associated type and a product
+-- gets its own structurally --- @Needle (a,b) = (Needle a, Needle b)@. The
+-- displacement there is a 'SizedGrid.Coord.Coord' rather than a new product
+-- type, so it inherits @(':|')@, 'SizedGrid.Coord.EmptyCoord', 'Show', 'Eq',
+-- 'Data.AdditiveGroup.AdditiveGroup' and 'System.Random.Random' from the
+-- 'SizedGrid.Coord.Coord' instances at no cost.
+--
+-- It replaces a @CoordDiff@ family whose instances were written out one per
+-- arity, up to six. That was a real ceiling: a seven-axis
+-- 'SizedGrid.Coord.Coord' had no 'Diff', so no 'Data.AffineSpace.AffineSpace'
+-- instance and no 'SizedGrid.Coord.offsetCoord'. 'MapDiff' recurses, so there
+-- is no ceiling and no per-arity code. It also drops
+-- @IsProductType (CoordDiff cs) (MapDiff cs)@ from the context, which is why
+-- @generics-sop@ no longer appears in the signature of everything that offsets.
+--
+-- Tuple literals no longer typecheck as displacements. Use @(':|')@, or
+-- 'SizedGrid.Coord.coordFromTuple' where a tuple reads better.
+--
+-- It lives here rather than in "SizedGrid.Coord" because 'npOffset' is stated
+-- in terms of it, and that method has to be in this module to be a method of
+-- 'IsCoordList'.
+type family MapDiff xs where
+  MapDiff '[] = '[]
+  MapDiff (x ': xs) = Diff x ': MapDiff xs
+
+-- | All Diffs of the members of the list must be equal.
+--
+-- At a concrete list this reduces to one @~@ per axis and nothing else, so it
+-- is discharged by the coercions that are already there and costs nothing at
+-- run time. That is what makes it safe to write on 'npOffset', where a class
+-- constraint would have handed back the run-time dictionary the method exists
+-- to remove; see the note there.
+type family AllDiffSame a xs :: Constraint where
+  AllDiffSame _ '[] = ()
+  AllDiffSame a (x ': xs) = (Diff x ~ a, AllDiffSame a xs)
+
 -- | The per-axis obligations of 'IsCoordList', as a type family so that they
 -- can be a superclass of it.
 --
@@ -331,16 +377,46 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- the stride of an axis is exactly the size of the axes below it, so one pass
 -- yields both. It is a fold accumulator rather than anything a caller wants,
 -- and the two instances below cover every type-level list, so there is no
--- instance left for anyone to write. "SizedGrid.Coord" therefore re-exports the
--- class without it.
+-- instance left for anyone to write. The same goes for 'npOffset'.
+-- "SizedGrid.Coord" therefore re-exports the class without its methods.
 class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- | The product of the axis sizes, and the row-major position of the given
     -- coordinate within them.
     sizeAndPosition :: NP I cs -> (Int, Int)
 
+    -- | Offset each axis by its own displacement, or 'Nothing' if any axis
+    -- refuses. The fold behind 'SizedGrid.Coord.offsetCoord'.
+    --
+    -- == Why it is here and not on 'SizedGrid.Coord.AffineCoordList'
+    --
+    -- The per-axis step is 'offsetIsCoord', whose only obligation is
+    -- 'IsCoordLifted' --- which is precisely what this class already supplies
+    -- per axis. 'SizedGrid.Coord.AffineCoordList' is a separate class because
+    -- /its/ step is @('Data.AffineSpace..+^')@ and needs
+    -- @'Data.AffineSpace.AffineSpace' x@, which 'IsCoordLifted' does not give.
+    -- The checked offset needs no such thing, so it belongs to the class that
+    -- was already there.
+    --
+    -- == Why the displacement constraint is a type family
+    --
+    -- @'AllDiffSame' Int cs@ on a method signature is the one shape that does
+    -- not undo the point of the exercise. It reduces at a concrete list to one
+    -- @'Diff' x ~ Int@ per axis and stops --- equality evidence, erased before
+    -- code generation. A /class/ constraint here, say @All Something cs@,
+    -- would be a dictionary the method takes at run time, and peeling it per
+    -- axis is exactly the cost that moving the fold into a class removes. That
+    -- distinction was checked in the Core rather than assumed.
+    npOffset ::
+           AllDiffSame Int cs
+        => NP I cs
+        -> NP I (MapDiff cs)
+        -> Maybe (NP I cs)
+
 instance IsCoordList '[] where
     sizeAndPosition Nil = (1, 0)
+    npOffset Nil Nil = Just Nil
     {-# INLINE sizeAndPosition #-}
+    {-# INLINE npOffset #-}
 
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     sizeAndPosition (I c :* cs) =
@@ -348,7 +424,13 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
             (stride, rest) ->
                 ( ordinalSize @(CoordNat x) * stride
                 , ordinalToInt (c ^. asOrdinal) * stride + rest)
+    -- The coord drives the match, as it did in the @where@ helper this
+    -- replaced: matching ':*' on the first argument is what refines @xs@ far
+    -- enough for 'MapDiff' to reduce and the second to match.
+    npOffset (I x :* xs) (I dx :* dxs) =
+        (\y ys -> I y :* ys) <$> offsetIsCoord x dx <*> npOffset xs dxs
     {-# INLINE sizeAndPosition #-}
+    {-# INLINE npOffset #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id
