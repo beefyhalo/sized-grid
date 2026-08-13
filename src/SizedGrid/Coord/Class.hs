@@ -104,19 +104,22 @@ class IsCoord (c :: Nat -> Type) where
   -- 'SizedGrid.Coord.Periodic.Periodic' wraps, so its 'offsetIsCoord' is
   -- always 'Just'.
   --
+  -- The displacement is an 'Int', which is what
+  -- @'Data.AffineSpace.Diff' ('SizedGrid.Coord.Clamped.Clamped' n)@ is, so this
+  -- really is a drop-in for the operation it checks. It was an 'Integer' until
+  -- sized-grid-0tj, so that a displacement too wide for an 'Int' would be
+  -- rejected rather than narrowed into range; that width is not reachable now
+  -- that the whole 'Data.AffineSpace.Diff' is an 'Int', and it was being paid
+  -- for on every call by the arithmetic it forced. See 'offsetByPosition'.
+  --
   -- @1 <= n@ because a @c 0@ has no inhabitants to offset, and because the
   -- instances that delegate to @('Data.AffineSpace..+^')@ need it.
   -- No @default@ signature: the bounds check needs only @KnownNat n@, which
   -- the method already provides. A @default@ line is for a default that needs
   -- /more/ than the method promises, and writing one here would only restate
   -- @1 <= n@ where it is unused.
-  offsetIsCoord :: (KnownNat n, 1 <= n) => c n -> Integer -> Maybe (c n)
-  offsetIsCoord c d =
-      -- Through 'Integer' rather than 'Int': 'numToOrdinal' compares against
-      -- the size in 'Integer', so a displacement too wide for an 'Int' is
-      -- rejected rather than wrapped into range.
-      review asOrdinal <$>
-      numToOrdinal (toInteger (ordinalToInt (c ^. asOrdinal)) + d)
+  offsetIsCoord :: (KnownNat n, 1 <= n) => c n -> Int -> Maybe (c n)
+  offsetIsCoord = offsetByPosition
 
   -- | The number of steps between two values on this axis, by the shorter
   -- route if the axis offers more than one.
@@ -168,13 +171,56 @@ class IsCoord (c :: Nat -> Type) where
   strengthenIsCoord :: (KnownNat m, (n <= m)) => c n -> c m
   strengthenIsCoord = review asOrdinal . strengthenOrdinal . view asOrdinal
 
+-- | The bounds check that 'offsetIsCoord' takes as its default.
+--
+-- Two comparisons rather than the @'numToOrdinal' (i + d)@ this used to be, and
+-- the reason is allocation rather than correctness: 'numToOrdinal' compares in
+-- 'Integer', so the old body converted both the position and the sum on every
+-- call. This one stays in 'Int' throughout.
+--
+-- Both bounds are built from the coord and the size alone --- @hi - i@ lies in
+-- @[0, hi]@ and @negate i@ in @[-hi, 0]@ --- so neither can overflow, and @d@ is
+-- only ever compared against them, never added to anything until it is known to
+-- be small. The surviving branch has @0 <= i + d <= hi@, which is
+-- 'unsafeOrdinal''s precondition.
+--
+-- Worth being exact about what the 'Integer' was buying, because
+-- @('Data.AffineSpace..+^')@ on 'SizedGrid.Coord.Clamped.Clamped' needed it and
+-- this did not. There, an overflowing @i + b@ lands on a large negative number
+-- and the clamp folds it to the /low/ edge, which is the wrong answer for a
+-- large positive offset. Here every wrong answer is the same wrong answer ---
+-- 'Nothing' --- and an overflowing sum is negative, so it was refused anyway.
+-- Both are written to compare rather than add, so neither depends on that
+-- argument holding.
+--
+-- Same shape as the 'SizedGrid.Coord.Clamped.Clamped' operation otherwise: it
+-- meets the two out-of-range cases with the near edge where this one meets them
+-- with 'Nothing'. That is the whole difference between the checked and the total
+-- operation, and the two agreeing is the law on 'offsetIsCoord'.
+--
+-- Unexported, like 'axisBoundaryByPosition': it is the default's
+-- implementation, not a second way to ask the question.
+offsetByPosition ::
+       forall c n. (IsCoord c, KnownNat n)
+    => c n
+    -> Int
+    -> Maybe (c n)
+offsetByPosition c d
+    | d > hi - i = Nothing
+    | d < negate i = Nothing
+    | otherwise = Just $ review asOrdinal $ unsafeOrdinal $ i + d
+  where
+    i = ordinalToInt (c ^. asOrdinal)
+    hi = ordinalSize @n - 1
+
 -- | The bounds check that 'axisBoundaryIsCoord' takes as its default.
 --
 -- Written out here rather than inline in the class because the body needs @n@
 -- to ask for 'ordinalSize', and a default method body has nowhere to bind it:
 -- the @forall@ that would bring it into scope belongs to a signature the class
--- has no way to give a default. Compare 'offsetIsCoord', whose default gets the
--- size implicitly through 'numToOrdinal' and so can stay inline.
+-- has no way to give a default. 'offsetByPosition' is here for the same reason
+-- --- its default used to reach the size implicitly through 'numToOrdinal' and
+-- so could stay inline, and asking for the size by name is what moved it out.
 --
 -- Unexported: it is the default's implementation, not a second way to ask the
 -- question. An instance that wants the bounds check already has it.

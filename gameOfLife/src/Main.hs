@@ -51,7 +51,7 @@ applyRule ::
        ( All Monoid cs
        , IsCoordList cs
        , All Semigroup cs
-       , AllDiffSame Integer cs
+       , AllDiffSame Int cs
        , All Eq cs
        , Length cs ~ n
        , All AffineSpace cs
@@ -146,7 +146,7 @@ tickWorld ::
        , All Semigroup cs
        , IsCoordList cs
        , All Eq cs
-       , AllDiffSame Integer cs
+       , AllDiffSame Int cs
        , All AffineSpace cs
        , KnownNat (MaxCoordSize cs)
        , AllSizedKnown cs

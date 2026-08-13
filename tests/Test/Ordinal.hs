@@ -117,8 +117,9 @@ sizeProxyTests =
 
 arithmeticTests :: [TestTree]
 arithmeticTests =
-  [ -- The displacement is an unbounded 'Integer' while the coord is an 'Int',
-    -- so these pin down the reduction and the clamp at sizes no 'Int' can hold.
+  [ -- The displacement is an 'Int' as of sized-grid-0tj, where it had been an
+    -- unbounded 'Integer'. These pin down the reduction and the clamp at offsets
+    -- far larger than the coord, which is what they were always for.
     testCase "Periodic .+^ reduces a huge positive offset" $
     assertEqual
       ""
@@ -138,12 +139,41 @@ arithmeticTests =
     assertEqual
       ""
       4
-      (fromEnum (zeroPosition @Clamped @5 .+^ 2 ^ (70 :: Int)))
+      (fromEnum (zeroPosition @Clamped @5 .+^ (10 ^ (18 :: Int) * 5 + 3)))
   , testCase "Clamped .+^ clamps a huge negative offset to minBound" $
     assertEqual
       ""
       0
-      (fromEnum ((maxBound :: Clamped 5) .+^ negate (2 ^ (70 :: Int))))
+      (fromEnum ((maxBound :: Clamped 5) .+^ negate (10 ^ (18 :: Int) * 5 + 3)))
+    -- The offsets above used to be 2^70, which an 'Int' cannot hold. The
+    -- extremes of the type replace them, and they are the sharper test: these
+    -- are the inputs on which forming @position + offset@ before reducing it
+    -- overflows.
+    --
+    -- Both start at the /top/ of the axis, and that is the whole point. From
+    -- position 0 the sum is exactly 'maxBound', nothing wraps, and the naive
+    -- body gets the right answer by luck --- these tests would pass over the
+    -- implementation they exist to reject. From position 4 the sum wraps to a
+    -- large negative number, and then @max 0 . min 4@ folds a huge /positive/
+    -- offset onto the /low/ edge (0 instead of 4), while @`mod` 5@ of the
+    -- wrapped sum lands on the wrong residue (0 instead of 1). Verified against
+    -- both bodies before these were written down.
+  , testCase "Clamped .+^ maxBound from the top edge saturates up, not through zero" $
+    assertEqual "" 4 (fromEnum ((maxBound :: Clamped 5) .+^ maxBound))
+  , testCase "Clamped .+^ minBound saturates down" $
+    assertEqual "" 0 (fromEnum ((maxBound :: Clamped 5) .+^ minBound))
+    -- Expected values computed in 'Integer', so the oracle is arithmetic rather
+    -- than a restatement of the instance.
+  , testCase "Periodic .+^ maxBound from the top is the true residue" $
+    assertEqual
+      ""
+      (fromIntegral ((4 + toInteger (maxBound :: Int)) `mod` 5))
+      (fromEnum ((toEnum 4 :: Periodic 5) .+^ maxBound))
+  , testCase "Periodic .+^ minBound from the top is the true residue" $
+    assertEqual
+      ""
+      (fromIntegral ((4 + toInteger (minBound :: Int)) `mod` 5))
+      (fromEnum ((toEnum 4 :: Periodic 5) .+^ minBound))
   , testCase "Clamped .-. is a signed displacement, unclamped" $
     assertEqual "" (-3) ((toEnum 1 :: Clamped 5) .-. toEnum 4)
   ]

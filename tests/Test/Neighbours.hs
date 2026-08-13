@@ -55,11 +55,21 @@ offsetIsCoordTests =
               assertEqual "" (Just (pe 4)) (offsetIsCoord (pe 0) (-1))
         , testCase "Periodic wraps at the high edge" $
               assertEqual "" (Just (pe 0)) (offsetIsCoord (pe 4) 1)
-        , testCase "a displacement wider than Int cannot wrap into range" $
-              assertEqual
-                  ""
-                  Nothing
-                  (offsetIsCoord (hw 0) (toInteger (maxBound :: Int) + 2))
+        , -- This used to pass a displacement wider than an 'Int' and check that
+          -- narrowing it did not fold it into range. The displacement is an
+          -- 'Int' now, so that input no longer exists, and the extremes of the
+          -- type are what is left to guard.
+          --
+          -- Unlike the 'Clamped' saturation cases in "Test.Ordinal", these do
+          -- not discriminate between the current body and the @numToOrdinal
+          -- (i + d)@ one it replaced: an overflowing sum comes back negative,
+          -- and 'Nothing' is the right answer for a negative sum too. They are a
+          -- regression guard on the answer, not a demonstration of the bug ---
+          -- what the rewrite bought here was the 'Integer' conversion, not
+          -- correctness.
+          testCase "an extreme displacement is refused, not wrapped into range" $ do
+              assertEqual "maxBound" Nothing (offsetIsCoord (hw 4) maxBound)
+              assertEqual "minBound" Nothing (offsetIsCoord (hw 0) minBound)
         , testCase "Periodic reduces a huge displacement" $
               assertEqual
                   ""
@@ -80,8 +90,8 @@ mixc r c = hw r :| pe c :| EmptyCoord
 
 -- | A two-dimensional displacement. This is the shape every @Coord '[_, _]@
 -- above takes, because 'Diff' of a coord is a coord of the axes' 'Diff's and
--- both 'Clamped' and 'Periodic' have @Diff ~ Integer@.
-d2 :: Integer -> Integer -> Coord '[Integer, Integer]
+-- both 'Clamped' and 'Periodic' have @Diff ~ Int@.
+d2 :: Int -> Int -> Coord '[Int, Int]
 d2 a b = a :| b :| EmptyCoord
 
 offsetCoordTests :: TestTree
@@ -430,7 +440,7 @@ sevenOf n =
     in c :| c :| c :| c :| c :| c :| c :| EmptyCoord
 
 -- | The displacement for 'Seven': a coord again, of the axes' 'Diff's.
-sevenD :: Integer -> Diff (Coord Seven)
+sevenD :: Int -> Diff (Coord Seven)
 sevenD d = d :| d :| d :| d :| d :| d :| d :| EmptyCoord
 
 arityTests :: TestTree
@@ -464,7 +474,7 @@ tupleBridgeTests =
         [ testCase "coordFromTuple builds the same coord as (:|)" $
               assertEqual "" (d2 1 (-2)) (coordFromTuple (1, -2))
         , testCase "coordToTuple takes one apart" $
-              assertEqual "" (1, -2 :: Integer) (coordToTuple (d2 1 (-2)))
+              assertEqual "" (1, -2 :: Int) (coordToTuple (d2 1 (-2)))
         , testCase "a tuple offsets a coord through (.+^)" $
               assertEqual
                   ""

@@ -106,7 +106,7 @@ applyRule ::
        , All Semigroup cs
        , All AffineSpace cs
        , All Eq cs
-       , AllDiffSame Integer cs
+       , AllDiffSame Int cs
        , AllSizedKnown cs
        , IsGrid cs (grid cs)
        )
@@ -139,8 +139,8 @@ glider ::
       , IsCoordLifted y
       , AffineSpace x
       , AffineSpace y
-      , Diff x ~ Integer
-      , Diff y ~ Integer
+      , Diff x ~ Int
+      , Diff y ~ Int
       ) 
       => Coord '[x,y] 
       -> Grid '[x,y] TileState

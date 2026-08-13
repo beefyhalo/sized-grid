@@ -90,6 +90,50 @@ walk :: Int -> Coord Walk -> Int
 walk 0 c = coordPosition c
 walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
 
+-- | Four corner reads per position at a fixed window size: the summed-area-table
+-- solve of ../aoc/src/2018/11.hs, which is 360,000 offsets over the 90,000 cells
+-- of 'Big'.
+--
+-- This is the workload sized-grid-0tj was found on, and it is here because the
+-- two benchmarks above did not catch it. @walk@ offsets a 'Periodic' coord it
+-- carries from step to step, and the @(.-.)@ one does no offsetting at all;
+-- neither measures a /constant/ displacement applied to every coordinate of a
+-- 'Clamped' grid, which is what a read loop actually does.
+cornerReads :: Grid Big Int -> Int
+cornerReads g =
+    total
+        [ index g (c .+^ (0 :| 0 :| EmptyCoord)) +
+          index g (c .+^ (3 :| 3 :| EmptyCoord)) -
+          index g (c .+^ (0 :| 3 :| EmptyCoord)) -
+          index g (c .+^ (3 :| 0 :| EmptyCoord))
+        | c <- allCoord @Big
+        ]
+
+-- | The same 360,000 offsets as 'cornerReads', on a bare axis instead of a
+-- 'Coord', and it exists to be read against it.
+--
+-- The pair separates two costs that sized-grid-0tj ran together, and has to,
+-- because the issue's own decomposition could not: it compared a 'Coord' loop
+-- against an 'Int' loop, which removes the per-axis arithmetic and the 'NP'
+-- rebuild in one step and so cannot say which was paying.
+--
+-- Measured apart, across the @Diff Integer -> Diff Int@ change: this benchmark
+-- went from 8.41 ms and 22 MB to 2.20 ms and 94 KB, while 'cornerReads' above
+-- went from 32.4 ms and 143 MB to only 28.6 ms and 126 MB. The per-axis
+-- operation was fixed outright and the loop barely moved, which places the
+-- remaining 126 MB in the fold over the axis list rather than in the arithmetic.
+--
+-- Keep both. Improving the axis arithmetic shows up here, improving the fold
+-- shows up in 'cornerReads', and only the gap between them says which is worth
+-- doing.
+axisOffsets :: Int -> Int
+axisOffsets k =
+    total
+        [ ordinalToInt (view asOrdinal (c .+^ d))
+        | c <- allCoordLike @300 @Clamped
+        , d <- [1 .. k]
+        ]
+
 -- Note on why there is no standalone @allCoord@ benchmark.
 --
 -- 'allCoord' takes no value arguments, so at a fixed type it is a CAF: the
@@ -142,8 +186,15 @@ main = do
                 whnf (\n -> walk n zeroCoord) 10000
               , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 whnf
-                    (\o -> total [fromIntegral (view coordHead (c .-. o)) | c <- allCoord @Mid])
+                    -- No 'fromIntegral': the displacement is an 'Int' as of
+                    -- sized-grid-0tj, so the conversion this used to need is
+                    -- now the identity and warns under -Widentities.
+                    (\o -> total [view coordHead (c .-. o) | c <- allCoord @Mid])
                     zeroCoord
+              , bench "(.+^) x360000, four corner reads over Clamped 300x300" $
+                whnf cornerReads bigGrid
+              , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
+                whnf axisOffsets 1200
               , bench "toEnum/fromEnum x300, Clamped 300" $
                 whnf
                     (\n -> total [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n]])

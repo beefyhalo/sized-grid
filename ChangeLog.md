@@ -6,6 +6,44 @@ Correctness release. Every change below is breaking, and each one turns a
 silently-wrong result — or a name that invited one — into either a rejected
 value or a type error.
 
+* A displacement is an `Int`, not an `Integer`. `Diff (Clamped n)`,
+  `Diff (Periodic n)` and the argument of `offsetIsCoord` all change, and so
+  does everything built on them: `Diff (Coord cs)` is now `Coord '[Int, ...]`,
+  and `offsetCoord`, `offsetCoordUpTo` and `coordRay` ask for
+  `AllDiffSame Int cs`.
+
+  **Migration:** replace `Integer` with `Int` where a displacement is named.
+  `AllDiffSame Integer cs` becomes `AllDiffSame Int cs`, `Diff x ~ Integer`
+  becomes `Diff x ~ Int`, and a helper with a written-out type such as
+  `Integer -> Integer -> Coord '[Integer, Integer]` becomes the `Int` version.
+  Call sites that pass numeric literals or build displacements with
+  `coordFromTuple` need no change at all, because the literals were already
+  polymorphic. A `fromIntegral` applied to the result of `(.-.)` is now the
+  identity and will warn under `-Widentities`.
+
+  The `Integer` was there for overflow safety, and the safety is kept without
+  it. `Clamped`'s `(.+^)` decides by comparing the displacement against
+  `hi - i` and `negate i` — both computed from the coordinate and the size, so
+  neither can overflow — instead of adding first and clamping the sum, which
+  wraps a large positive offset into a negative one and clamps it to the *low*
+  edge. `Periodic` reduces the displacement modulo the size before adding it,
+  for the same reason. `Test.Ordinal` pins both at `maxBound`, from the top of
+  the axis, which is where the two implementations actually disagree.
+
+  This is a performance change and it is worth being exact about what it buys,
+  because the issue that prompted it (`sized-grid-0tj`) predicted more. Per axis
+  it is decisive: 360,000 offsets on a bare `Clamped 300` went from 8.41 ms and
+  22 MB to 2.20 ms and 94 KB, so the arithmetic no longer allocates. Through a
+  two-axis `Coord` the same 360,000 offsets went from 32.4 ms and 143 MB to
+  28.6 ms and 126 MB — 11%, not the order of magnitude expected.
+
+  So 126 of those 143 MB were never the `Integer`. They are the fold over the
+  axis list in the `AffineSpace (Coord cs)` instance, which is a self-recursive
+  polymorphic helper and so cannot unroll: the same problem `coordPosition` had
+  before its fold became an `IsCoordList` method. That is not fixed here.
+  `bench/Main.hs` now carries both benchmarks, because only the gap between them
+  says which half is paying.
+
 * `AllGridSizeKnown` is a class rather than a type family, and `gridFromList`,
   `collapseGrid` and the `Grid` `ToJSON`/`FromJSON` instances no longer ask for
   `SListI cs`.

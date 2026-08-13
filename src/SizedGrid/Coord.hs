@@ -406,7 +406,7 @@ type family AllDiffSame a xs :: Constraint where
 -- >   == Nothing
 offsetCoord ::
        ( IsCoordList cs
-       , AllDiffSame Integer cs
+       , AllDiffSame Int cs
        )
     => Coord cs
     -> Diff (Coord cs)
@@ -418,7 +418,7 @@ offsetCoord (Coord cs) (Coord d) = Coord <$> helper cs d
     -- reduce @MapDiff xs@ and match the second. The same shape as the helpers
     -- in the 'AffineSpace' instance above, and for the same reason.
     helper ::
-           (IsCoordList xs, AllDiffSame Integer xs)
+           (IsCoordList xs, AllDiffSame Int xs)
         => NP I xs
         -> NP I (MapDiff xs)
         -> Maybe (NP I xs)
@@ -492,7 +492,7 @@ deriving instance All Show cs => Show (OffGrid cs)
 -- decides when the walk ends while the torus axis keeps wrapping.
 offsetCoordUpTo ::
        ( IsCoordList cs
-       , AllDiffSame Integer cs
+       , AllDiffSame Int cs
        )
     => Int
     -> Coord cs
@@ -531,7 +531,7 @@ offsetCoordUpTo n c d = go n c 0
 -- cells, and then names the @n@th.
 coordRay ::
        ( IsCoordList cs
-       , AllDiffSame Integer cs
+       , AllDiffSame Int cs
        )
     => Coord cs
     -> Diff (Coord cs)
@@ -558,7 +558,7 @@ axisSteps r c =
   where
     reachable :: [(Int, x)]
     reachable =
-        [(d, v) | d <- [-r .. r], Just v <- [offsetIsCoord c (toInteger d)]]
+        [(d, v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
     -- Compared as an 'Int' through 'asOrdinal', so no 'Eq' is needed on the
     -- axis type itself.
     key :: x -> Int

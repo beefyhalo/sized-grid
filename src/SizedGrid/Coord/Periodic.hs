@@ -84,13 +84,20 @@ instance (1 <= n, KnownNat n) => AdditiveGroup (Periodic n) where
         Periodic $ unsafeOrdinal $ negate (ordinalToInt o) `mod` ordinalSize @n
 
 instance (1 <= n, KnownNat n) => AffineSpace (Periodic n) where
-    type Diff (Periodic n) = Integer
+    type Diff (Periodic n) = Int
     Periodic a .-. Periodic b =
-        toInteger $ (ordinalToInt a - ordinalToInt b) `mod` ordinalSize @n
+        (ordinalToInt a - ordinalToInt b) `mod` ordinalSize @n
+    -- The displacement is reduced into @[0, size)@ before it is added, which is
+    -- what keeps the addition in range: @mod@ by a positive divisor is
+    -- non-negative and smaller than it whatever the sign of the numerator, so
+    -- the sum of two such values is below @2 * size@ and cannot overflow. The
+    -- reduction has to come first --- @(i + b) `mod` size@ would overflow for a
+    -- @b@ near 'maxBound' and wrap to the wrong residue.
+    --
+    -- This took an unbounded 'Integer' until sized-grid-0tj, for the overflow
+    -- safety that the early @mod@ gives instead. 'Clamped' makes the same trade
+    -- by comparison rather than by @mod@; see the note there.
     Periodic a .+^ b =
         let size = ordinalSize @n
-            -- The displacement is an unbounded 'Integer', so it is reduced into
-            -- @[0, size)@ there; everything after that is 'Int' arithmetic on
-            -- two values below @size@, which cannot overflow.
-            offset = fromInteger $ b `mod` toInteger size
+            offset = b `mod` size
         in Periodic $ unsafeOrdinal $ (ordinalToInt a + offset) `mod` size
