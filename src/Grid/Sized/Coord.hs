@@ -1,9 +1,9 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- | Unlike `SizedGrid.Grid.Grid.Grid`, `Coord`\'s constructor is safe to export:
+-- | Unlike `Grid.Sized.Grid.Grid.Grid`, `Coord`\'s constructor is safe to export:
 -- an @NP I cs@ is correct by construction for its own index, so there is no
 -- length invariant a caller could break.
-module SizedGrid.Coord
+module Grid.Sized.Coord
   ( -- * Coordinates
     Coord(..)
   , pattern (:|)
@@ -60,13 +60,13 @@ module SizedGrid.Coord
   , AllSizedKnown(..)
     -- | 'IsCoordList' is re-exported without its methods: they are folds over
     -- the axis list, and its two instances already cover every type-level
-    -- list, so there is none left to write. Import "SizedGrid.Coord.Class" if
+    -- list, so there is none left to write. Import "Grid.Sized.Coord.Class" if
     -- you want to see them anyway.
   , IsCoordList
   ) where
 
-import           SizedGrid.Coord.Class
-import           SizedGrid.Ordinal
+import           Grid.Sized.Coord.Class
+import           Grid.Sized.Ordinal
 
 import           Control.Applicative   (empty)
 import           Control.Lens          hiding (from, to)
@@ -258,7 +258,7 @@ instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d '
 -- == Why this is a class and not two @where@ helpers
 --
 -- It used to be the helpers, and they were the whole cost of offsetting. This
--- is the defect the note on 'SizedGrid.Coord.Class.IsCoordList' describes,
+-- is the defect the note on 'Grid.Sized.Coord.Class.IsCoordList' describes,
 -- met a second time: a fold written as a self-recursive function cannot
 -- unroll, because GHC does not inline a self-recursive binding and each call
 -- is at a shorter list, so specialising rewrites only the outermost call and
@@ -266,7 +266,7 @@ instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d '
 -- @All AffineSpace@ dictionary at run time.
 --
 -- Measured on 360,000 offsets through a two-axis 'Coord', against the same
--- 360,000 on a bare @'SizedGrid.Coord.Clamped.Clamped' 300@ axis as a control:
+-- 360,000 on a bare @'Grid.Sized.Coord.Clamped.Clamped' 300@ axis as a control:
 --
 -- > through a Coord     28.5 ms / 126 MB   ->   2.02 ms / 53 B
 -- > bare axis, control   2.27 ms /  94 KB  ->   2.30 ms / 94 KB
@@ -283,15 +283,15 @@ instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d '
 -- control walks a list of 360,000 'Int's to have something to offset, and that
 -- list is the 94 KB.
 --
--- == Why not a method of 'SizedGrid.Coord.Class.IsCoordList'
+-- == Why not a method of 'Grid.Sized.Coord.Class.IsCoordList'
 --
 -- The per-axis step needs @'AffineSpace' x@, which
--- 'SizedGrid.Coord.Class.IsCoordLifted' does not supply, and adding
+-- 'Grid.Sized.Coord.Class.IsCoordLifted' does not supply, and adding
 -- @All AffineSpace cs@ to the /method/ signature there would hand back the
 -- run-time dictionary that moving the fold into a class exists to remove. An
 -- axis list is also offsettable under conditions that have nothing to do with
--- being indexable: 'SizedGrid.Ordinal.Ordinal' is an
--- 'SizedGrid.Coord.Class.IsCoord' with no 'AffineSpace' instance at all.
+-- being indexable: 'Grid.Sized.Ordinal.Ordinal' is an
+-- 'Grid.Sized.Coord.Class.IsCoord' with no 'AffineSpace' instance at all.
 --
 -- == What it costs a caller
 --
@@ -431,7 +431,7 @@ coordDigits p =
 -- it.
 --
 -- Each axis applies its own boundary policy, through
--- 'SizedGrid.Coord.Class.offsetIsCoord'. The whole offset succeeds only if
+-- 'Grid.Sized.Coord.Class.offsetIsCoord'. The whole offset succeeds only if
 -- every axis does, so on a coord mixing a bounded axis with a torus axis the
 -- torus half can wrap while the bounded half refuses:
 --
@@ -449,7 +449,7 @@ offsetCoord ::
     -> Diff (Coord cs)
     -> Maybe (Coord cs)
 -- The fold this used to carry as a @where@ helper is now
--- 'SizedGrid.Coord.Class.npOffset', an 'IsCoordList' method, for the reason
+-- 'Grid.Sized.Coord.Class.npOffset', an 'IsCoordList' method, for the reason
 -- given on that class and on 'AffineCoordList': a fold written as a
 -- self-recursive function cannot unroll, so every axis after the first peeled
 -- the axis-list dictionary at run time. Same defect as the one
@@ -459,7 +459,7 @@ offsetCoord ::
 -- written for this: nothing in the suite reached 'offsetCoord' at all, because
 -- @('.+^')@ and this are folds over two different classes. 268 MB and 73.0 ms
 -- before, 199 MB and 57.0 ms after, and the Core at a two-axis list unrolls to
--- two 'SizedGrid.Coord.Class.offsetIsCoord' calls with no axis-list dictionary
+-- two 'Grid.Sized.Coord.Class.offsetIsCoord' calls with no axis-list dictionary
 -- and no evidence passed for @'AllDiffSame' Int cs@.
 --
 -- What did /not/ move is @extend neighbourSum 50x50@, the benchmark
@@ -518,7 +518,7 @@ deriving instance All Show cs => Show (OffGrid cs)
 -- > offsetCoord c d == either (const Nothing) Just (offsetCoordUpTo 1 c d)
 --
 -- The single displacement is the primitive because it is the one operation the
--- axes answer for --- 'SizedGrid.Coord.Class.offsetIsCoord' applies a whole
+-- axes answer for --- 'Grid.Sized.Coord.Class.offsetIsCoord' applies a whole
 -- 'Diff' per axis --- so counting steps is iteration on top of it rather than
 -- something 'offsetCoord' could be carved out of.
 --
@@ -534,7 +534,7 @@ deriving instance All Show cs => Show (OffGrid cs)
 --
 -- @n <= 0@ is @Right c@: a walk of no steps cannot leave.
 --
--- A 'SizedGrid.Coord.Periodic.Periodic' axis never refuses a step, so on an
+-- A 'Grid.Sized.Coord.Periodic.Periodic' axis never refuses a step, so on an
 -- all-@Periodic@ coord the answer is @Right@ for every @n@ and every @d@ --- a
 -- torus has no boundary to report, which is the same fact 'axisBoundary' states
 -- for a single value. Mixed coords are the interesting case: the bounded axis
@@ -571,7 +571,7 @@ offsetCoordUpTo n c d = go n c 0
 -- >   == [1 :| 1, 2 :| 2, 3 :| 3, 4 :| 4]
 --
 -- Infinite when nothing can stop it, which is every ray on an
--- all-'SizedGrid.Coord.Periodic.Periodic' coord and every ray with a zero
+-- all-'Grid.Sized.Coord.Periodic.Periodic' coord and every ray with a zero
 -- displacement. That is not a special case to guard: it is what a torus is, and
 -- the list is lazy, so take what you need.
 --
@@ -602,7 +602,7 @@ stepsWithin ::
     -> Coord cs
     -> [(Int, Coord cs)]
 -- The fold this used to carry as a @where@ helper is now
--- 'SizedGrid.Coord.Class.npStepsWithin', an 'IsCoordList' method, for the
+-- 'Grid.Sized.Coord.Class.npStepsWithin', an 'IsCoordList' method, for the
 -- reason given on that class: a fold written as a self-recursive function
 -- cannot unroll, so every axis after the first peeled the axis-list dictionary
 -- at run time. The third instance of that defect, after 'AffineCoordList' and
@@ -658,7 +658,7 @@ neighbours = mooreNeighbours 1
 --
 -- The lifted form of 'axisDistanceIsCoord', so each axis type answers for its
 -- own boundary policy: a bounded axis measures straight, a
--- 'SizedGrid.Coord.Periodic.Periodic' one takes the shorter way round.
+-- 'Grid.Sized.Coord.Periodic.Periodic' one takes the shorter way round.
 axisDistance :: forall x. IsCoordLifted x => x -> x -> Int
 axisDistance = axisDistanceIsCoord @(CoordContainer x) @(CoordNat x)
 
@@ -700,9 +700,9 @@ coordManhattan a b = sum (axisDistances a b)
 -- | Which end of its axis a single coordinate sits at, or 'Nothing' if it is in
 -- the interior.
 --
--- The lifted form of 'SizedGrid.Coord.Class.axisBoundaryIsCoord', so each axis
+-- The lifted form of 'Grid.Sized.Coord.Class.axisBoundaryIsCoord', so each axis
 -- answers for its own boundary policy: a bounded axis has two ends, a
--- 'SizedGrid.Coord.Periodic.Periodic' one has none.
+-- 'Grid.Sized.Coord.Periodic.Periodic' one has none.
 axisBoundary :: forall x. IsCoordLifted x => x -> Maybe Extremum
 axisBoundary = axisBoundaryIsCoord @(CoordContainer x) @(CoordNat x)
 
@@ -744,7 +744,7 @@ onBoundary = any isJust . axisBoundaries
 -- space.
 --
 -- An axis with no ends takes every corner with it, so this is 'False'
--- everywhere on an all-'SizedGrid.Coord.Periodic.Periodic' coord, and 'False'
+-- everywhere on an all-'Grid.Sized.Coord.Periodic.Periodic' coord, and 'False'
 -- on any coord with even one torus axis. That is the answer a check written
 -- against 'GHC.TypeLits.natVal' gets wrong: comparing each axis to @0@ and
 -- @n - 1@ finds four corners on a torus, which has none.
@@ -766,7 +766,7 @@ isCorner c =
 -- this is 'allCoord'.
 --
 -- This enumerates. To read or write the interior of a
--- `SizedGrid.Grid.Grid.Grid` in place, compose 'onBoundary' with the indexed
+-- `Grid.Sized.Grid.Grid.Grid` in place, compose 'onBoundary' with the indexed
 -- traversal that grid already has --- there is no separate function for it
 -- because there does not need to be:
 --

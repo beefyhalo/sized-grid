@@ -7,7 +7,7 @@ module Test.Shrink
 
 import           Data.Foldable         (toList)
 import           Data.Maybe            (fromJust)
-import           SizedGrid
+import           Grid.Sized
 import           Test.Arbitrary        ()
 import           Test.Tasty
 import           Test.Tasty.HUnit

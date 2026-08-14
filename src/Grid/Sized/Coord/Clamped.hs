@@ -1,11 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module SizedGrid.Coord.Clamped
+module Grid.Sized.Coord.Clamped
   ( Clamped(..)
   ) where
 
-import           SizedGrid.Coord.Class
-import           SizedGrid.Ordinal
+import           Grid.Sized.Coord.Class
+import           Grid.Sized.Ordinal
 
 import           Control.Lens          (iso)
 import           Data.Aeson
@@ -16,11 +16,11 @@ import           System.Random         (Random (..))
 -- | A coordinate on a bounded axis: values outside @0 .. n-1@ are clamped to
 -- the nearest end rather than rejected or wrapped. Contrast 'Ordinal', which
 -- has no way to leave the range at all, and
--- 'SizedGrid.Coord.Periodic.Periodic', which wraps around modularly.
+-- 'Grid.Sized.Coord.Periodic.Periodic', which wraps around modularly.
 --
 -- Clamping is confined to ('.+^'), where 'AffineSpace' forces a total result.
 -- It is not the general policy of the type: ('.-.') returns a true signed
--- displacement, and 'SizedGrid.Coord.offsetCoord' reports leaving the axis
+-- displacement, and 'Grid.Sized.Coord.offsetCoord' reports leaving the axis
 -- with 'Nothing' instead of folding back onto the edge.
 newtype Clamped (n :: Nat) = Clamped
     { unClamped :: Ordinal n
@@ -77,11 +77,11 @@ instance (1 <= n, KnownNat n) => AffineSpace (Clamped n) where
   -- axis, 360,000 offsets went from 8.41 ms and 22 MB to 2.20 ms and 94 KB: the
   -- per-axis arithmetic no longer allocates at all.
   --
-  -- The same 360,000 offsets through a two-axis 'SizedGrid.Coord.Coord' went
+  -- The same 360,000 offsets through a two-axis 'Grid.Sized.Coord.Coord' went
   -- from 32.4 ms and 143 MB to 28.6 ms and 126 MB --- 11%, not the order of
   -- magnitude the issue predicted. So 126 of those 143 MB were never the
   -- 'Integer'; they are the fold over the axis list in
-  -- @'Data.AffineSpace.AffineSpace' ('SizedGrid.Coord.Coord' cs)@, which is
+  -- @'Data.AffineSpace.AffineSpace' ('Grid.Sized.Coord.Coord' cs)@, which is
   -- self-recursive and polymorphic and so cannot unroll. That is still there.
   -- Both benchmarks are in @bench\/Main.hs@ and the pair is what separates the
   -- two costs; the issue's own decomposition removed them together and so

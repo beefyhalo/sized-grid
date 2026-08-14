@@ -14,7 +14,7 @@ module Test.Tiling
 
 import           Data.Foldable    (toList)
 import           Data.Maybe       (fromJust)
-import           SizedGrid
+import           Grid.Sized
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

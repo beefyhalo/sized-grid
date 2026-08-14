@@ -39,7 +39,7 @@
 -- actually be compared with.
 module Main (main) where
 
-import           SizedGrid
+import           Grid.Sized
 
 import           Control.Comonad
 import           Control.Comonad.Store  (peek, pos)
@@ -116,8 +116,8 @@ cornerReads g =
 --
 -- It exists because 'cornerReads' does not reach 'offsetCoord' and neither does
 -- anything else here. @('.+^')@ and 'offsetCoord' are different functions over
--- different folds --- 'SizedGrid.Coord.AffineCoordList' and
--- 'SizedGrid.Coord.Class.IsCoordList' respectively --- so a change to one is
+-- different folds --- 'Grid.Sized.Coord.AffineCoordList' and
+-- 'Grid.Sized.Coord.Class.IsCoordList' respectively --- so a change to one is
 -- invisible to a benchmark of the other. sized-grid-135 was filed against the
 -- neighbourhood benchmark on the assumption that neighbourhoods offset; they do
 -- not, they enumerate ('stepsWithin'), and so the suite had no measurement of
@@ -207,14 +207,14 @@ axisOffsets k =
 -- call, and the coordinate list about 67 bytes a cell.
 --
 -- 'coordPosition' is no longer the expensive half. Moving its fold into
--- 'SizedGrid.Coord.Class.IsCoordList' as a method let it unroll at a concrete
+-- 'Grid.Sized.Coord.Class.IsCoordList' as a method let it unroll at a concrete
 -- axis list, and @index x90000@ went from 27 MB to 38 bytes total --- the whole
 -- benchmark, not per call. What the second group now measures is much closer to
 -- the coordinate list it was originally named for. The list is also not
 -- rebuilt in the sense the issue meant -- @V.zipWith@ fuses with the
 -- @V.fromList@ that feeds it, so the coordinates are produced and consumed one
 -- at a time and never all exist at once. Do not "fix" that; see the note on the
--- instances in SizedGrid.Grid.Grid.
+-- instances in Grid.Sized.Grid.Grid.
 
 main :: IO ()
 main = do

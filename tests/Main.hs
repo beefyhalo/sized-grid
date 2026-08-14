@@ -12,7 +12,7 @@ module Main
   ( main
   ) where
 
-import           SizedGrid
+import           Grid.Sized
 
 import           Test.Arbitrary ()
 import           Test.Boundary

@@ -1,5 +1,5 @@
 -- |
--- Module      :  SizedGrid.Grid.Grid
+-- Module      :  Grid.Sized.Grid.Grid
 -- License     :  MIT -style (see the file LICENSE)
 --
 -- The `Grid` type and the safe operations over it.
@@ -15,9 +15,9 @@
 -- `pure`, or any of the shape-changing functions here. To read one: `gridVector`,
 -- `index`, or the `Foldable` instance. If you genuinely need to assert a length
 -- the compiler cannot see -- the usual case is applying a length-preserving
--- vector function the library does not wrap -- "SizedGrid.Grid.Unsafe" has the
--- escape hatch, and it is not re-exported by "SizedGrid".
-module SizedGrid.Grid.Grid
+-- vector function the library does not wrap -- "Grid.Sized.Grid.Unsafe" has the
+-- escape hatch, and it is not re-exported by "Grid.Sized".
+module Grid.Sized.Grid.Grid
   ( -- * The grid type
     Grid
     -- * Construction
@@ -50,4 +50,4 @@ module SizedGrid.Grid.Grid
   , splitVectorBySize
   ) where
 
-import           SizedGrid.Internal.Grid
+import           Grid.Sized.Internal.Grid

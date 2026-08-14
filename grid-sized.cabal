@@ -1,17 +1,29 @@
 cabal-version:      3.0
-name:               sized-grid
-version:            0.3.0.0
+-- This package began as a fork of edwardwas' 'sized-grid' and has diverged past
+-- any possible merge back: GHC 9.10+ minimum, RequiredTypeArguments throughout,
+-- a sealed Grid constructor, Ordinal as a newtype over Int, and GHC2024. The
+-- upstream name belongs to its author and is still his on Hackage, so this is
+-- released under a new one and the version restarts accordingly.
+name:               grid-sized
+version:            0.1.0.0
 category:           Data
 build-type:         Simple
 license:            MIT
 license-file:       LICENSE
-maintainer:         ed@wastell.co.uk
-bug-reports:        https://github.com/edwardwas/sized-grid/issues
-synopsis:           Multidimensional grids with sized specified at compile time
-author:             edwardwas
-homepage:           https://github.com/edwardwas/sized-grid
+maintainer:         beefyhalo@gmail.com
+bug-reports:        https://github.com/beefyhalo/sized-grid/issues
+synopsis:           Multidimensional grids whose size and boundary policy are types
+author:             Kevin Horlick
+homepage:           https://github.com/beefyhalo/sized-grid
 description:
-  `size-grid` allows you to make finite sized grids and have their size and shape confirmed at compile time
+  `grid-sized` provides finite, multidimensional grids whose size and shape are
+  confirmed at compile time.
+  .
+  The design thesis: __the coordinate type is the boundary policy__. Every axis
+  is indexed by a coordinate that says what happens at the edge -- `Periodic`
+  wraps, `Clamped` stops -- so any operation that could leave the space is
+  either total, because the type says how to come back, or it returns `Maybe`.
+  Nothing clamps silently.
   .
   Consult the readme for a short tutorial and explanation.
 
@@ -30,7 +42,7 @@ tested-with:        GHC ==9.10.1 || ==9.12.3 || ==9.14.1
 
 source-repository head
   type:     git
-  location: https://github.com/edwardwas/sized-grid
+  location: https://github.com/beefyhalo/sized-grid
 
 -- Shared language settings. GHC2024 already implies DataKinds, GADTs,
 -- LambdaCase, MonoLocalBinds, DerivingStrategies, RoleAnnotations and
@@ -43,7 +55,7 @@ source-repository head
 -- compile as a consumer does -- and a consumer does not get our plugins.
 common lang-base
   default-language:   GHC2024
-  -- TypeAbstractions is for @SCons \@xs \@x@ in SizedGrid.Coord: 'SList' has no
+  -- TypeAbstractions is for @SCons \@xs \@x@ in Grid.Sized.Coord: 'SList' has no
   -- fields, so a type abstraction is the only way to name the head and tail of
   -- the list it refines. GHC 9.12 still accepts that under TypeApplications but
   -- warns; from 9.14 it is required.
@@ -82,7 +94,7 @@ common lang
   -- project deliberately do not.
   --
   -- sized-grid-wrc. There is deliberately no third plugin here. The library's
-  -- last 'unsafeCoerce' lived in 'SizedGrid.Internal.Type.windowFits', and the
+  -- last 'unsafeCoerce' lived in 'Grid.Sized.Internal.Type.windowFits', and the
   -- note that used to sit in this file said it needed ghc-typelits-presburger.
   -- That was measured, and it is true as far as it goes -- presburger does
   -- discharge the goal -- but presburger 0.7.4.2 is bounded 'ghc <9.13', as is
@@ -109,23 +121,23 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
-    SizedGrid
-    SizedGrid.Coord
-    SizedGrid.Coord.Clamped
-    SizedGrid.Coord.Class
-    SizedGrid.Coord.Periodic
-    SizedGrid.Grid.Class
-    SizedGrid.Grid.Focused
-    SizedGrid.Grid.Grid
-    SizedGrid.Grid.Unsafe
-    SizedGrid.Ordinal
+    Grid.Sized
+    Grid.Sized.Coord
+    Grid.Sized.Coord.Clamped
+    Grid.Sized.Coord.Class
+    Grid.Sized.Coord.Periodic
+    Grid.Sized.Grid.Class
+    Grid.Sized.Grid.Focused
+    Grid.Sized.Grid.Grid
+    Grid.Sized.Grid.Unsafe
+    Grid.Sized.Ordinal
 
-  -- SizedGrid.Internal.Grid holds the Grid constructor. It is hidden rather
-  -- than exposed so that "SizedGrid.Grid.Unsafe" can be the only public route
+  -- Grid.Sized.Internal.Grid holds the Grid constructor. It is hidden rather
+  -- than exposed so that "Grid.Sized.Grid.Unsafe" can be the only public route
   -- to it; see the header of either module.
   other-modules:
-    SizedGrid.Internal.Grid
-    SizedGrid.Internal.Type
+    Grid.Sized.Internal.Grid
+    Grid.Sized.Internal.Type
   build-depends:
     , adjunctions  >=4.4  && <4.5
     , aeson        >=2.1  && <2.3
@@ -167,7 +179,7 @@ test-suite tests
     , HUnit             >=1.6  && <1.7
     , lens
     , QuickCheck        >=2.14 && <2.16
-    , sized-grid
+    , grid-sized
     , tasty             >=1.4  && <1.6
     , tasty-hunit       >=0.10 && <0.11
     , tasty-quickcheck  >=0.10 && <0.12
@@ -189,7 +201,7 @@ test-suite downstream
     , aeson
     , base
     , bytestring
-    , sized-grid
+    , grid-sized
 
 -- Compiles README.lhs so the tutorial cannot rot unnoticed. markdown-unlit is
 -- what turns the ```haskell fences into the literate source GHC sees.
@@ -201,7 +213,7 @@ test-suite readme
     , base
     , comonad
     , lens
-    , sized-grid
+    , grid-sized
     , vector-space
 
   build-tool-depends: markdown-unlit:markdown-unlit >=0.5 && <0.7
@@ -223,7 +235,7 @@ benchmark benchmarks
     , comonad
     , deepseq      >=1.4  && <1.6
     , lens
-    , sized-grid
+    , grid-sized
     , tasty-bench  >=0.3  && <0.5
     , vector-space
 

@@ -11,7 +11,7 @@ module Test.Ray
   ( rayTests
   ) where
 
-import           SizedGrid
+import           Grid.Sized
 import           Test.Arbitrary        ()
 
 import           Data.Maybe            (fromJust)

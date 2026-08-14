@@ -1,4 +1,36 @@
-# Revision history for sized-grid
+# Revision history for grid-sized
+
+## 0.1.0.0 -- NOT PUBLISHED
+
+First release under the name `grid-sized`, and the version restarts here
+because the name is new. The two `NOT PUBLISHED` sections below this one
+(0.3.0.0 and 0.2.0.0) are this fork's own work under its old name and ship as
+part of this release. The dated 0.1.x sections beneath those are upstream
+`sized-grid`'s published history, kept for provenance — they name modules as
+`SizedGrid.*` because that is what those modules were called at the time.
+
+* The package is renamed from `sized-grid` to `grid-sized`, and the module
+  prefix from `SizedGrid.*` to `Grid.Sized.*`.
+
+  This fork has diverged past any possible merge back upstream — GHC 9.10+
+  minimum, `RequiredTypeArguments` throughout, a sealed `Grid` constructor,
+  `Ordinal` as a newtype over `Int`, GHC2024 — and the `sized-grid` name on
+  Hackage belongs to its original author, so the fork could never have been
+  released under it. `grid-sized` follows the `vector-sized` convention, which
+  is the most legible of the three in use for size-in-the-type packages (the
+  others being `fixed-` as in `fixed-vector`, and `Static` as in `hmatrix`).
+
+  The module prefix follows the package name rather than staying at
+  `SizedGrid.*`, because a package called one thing whose modules are called
+  another leaves the old name at every consumer's import site. It is
+  `Grid.Sized.*` and not `Data.Grid.Sized.*` deliberately: `Data.Grid` is owned
+  by Chris Penner's `grids`, and nesting under another package's namespace
+  would imply a relationship that does not exist.
+
+  **Migration:** replace `import SizedGrid` with `import Grid.Sized`, and any
+  `SizedGrid.X` with `Grid.Sized.X`; in your `.cabal`, `sized-grid` becomes
+  `grid-sized`. Nothing else changes — no type, class, function or instance is
+  affected by this entry.
 
 ## 0.3.0.0 -- NOT PUBLISHED
 

@@ -1,11 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module SizedGrid.Coord.Periodic
+module Grid.Sized.Coord.Periodic
   ( Periodic(..)
   ) where
 
-import           SizedGrid.Coord.Class
-import           SizedGrid.Ordinal
+import           Grid.Sized.Coord.Class
+import           Grid.Sized.Ordinal
 
 import           Control.Lens
 import           Data.AdditiveGroup
@@ -64,7 +64,7 @@ instance IsCoord Periodic where
   -- adjacent across the seam --- nothing distinguishes them from any other
   -- pair, and calling them ends is the mistake this override exists to stop.
   -- It is the same fact as 'offsetIsCoord' being total above, said where a
-  -- caller asks it directly: 'SizedGrid.Coord.isCorner' returns 'False' on an
+  -- caller asks it directly: 'Grid.Sized.Coord.isCorner' returns 'False' on an
   -- all-'Periodic' coord because of this line.
   axisBoundaryIsCoord _ = Nothing
 

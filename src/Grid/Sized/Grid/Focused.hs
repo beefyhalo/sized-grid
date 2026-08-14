@@ -1,9 +1,9 @@
-module SizedGrid.Grid.Focused
+module Grid.Sized.Grid.Focused
   ( FocusedGrid(..)
   ) where
 
-import           SizedGrid.Coord
-import           SizedGrid.Grid.Grid
+import           Grid.Sized.Coord
+import           Grid.Sized.Grid.Grid
 
 import           Control.Comonad
 import           Control.Comonad.Store

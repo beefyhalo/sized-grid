@@ -1,17 +1,17 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- |
--- Module      :  SizedGrid.Internal.Type
--- Copyright   :  (C) 2018-18 Edward Wastell
+-- Module      :  Grid.Sized.Internal.Type
+-- Copyright   :  (C) 2018 Edward Wastell, (C) 2025-2026 Kevin Horlick
 -- License     :  MIT -style (see the file LICENSE)
--- Maintainer  :  Edward Wastell <ed@wastell.co.uk>
+-- Maintainer  :  Kevin Horlick <beefyhalo@gmail.com>
 -- Stability   :  provisional
 --
 -- Type-level facts the library needs but GHC's Nat solver will not derive.
 --
 -- The export list is deliberately closed: a fact that escapes into more modules
 -- than strictly need it is a fact waiting to be misused.
-module SizedGrid.Internal.Type
+module Grid.Sized.Internal.Type
   ( windowFits
   , requiring
   ) where
@@ -61,9 +61,9 @@ windowFits =
 
 -- | Consume a constraint the implementation has no other use for.
 --
--- Several signatures in "SizedGrid.Grid.Grid" carry a bound (@n <= m@,
+-- Several signatures in "Grid.Sized.Grid.Grid" carry a bound (@n <= m@,
 -- @Mod (CoordNat big) (CoordNat small) ~ 0@) whose entire job is to stop the
--- caller building a `SizedGrid.Grid.Grid.Grid` whose type lies about its size.
+-- caller building a `Grid.Sized.Grid.Grid.Grid` whose type lies about its size.
 -- The body never mentions such a bound, so @-Wredundant-constraints@ reports
 -- it, and that module used to answer with a blanket
 -- @-Wno-redundant-constraints@ -- which also hid the constraints that really

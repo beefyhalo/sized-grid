@@ -11,7 +11,7 @@ module Test.Boundary
   ( boundaryTests
   ) where
 
-import           SizedGrid
+import           Grid.Sized
 import           Test.Arbitrary        ()
 
 import           Control.Lens          (IndexedTraversal', asIndex, indices,
