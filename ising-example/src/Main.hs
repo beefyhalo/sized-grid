@@ -11,11 +11,7 @@
 
 module Main where
 
-import           SizedGrid.Coord
-import           SizedGrid.Coord.Periodic
-import           SizedGrid.Grid.Class
-import           SizedGrid.Grid.Focused
-import           SizedGrid.Grid.Grid
+import           Data.Grid.Sized
 
 import           Control.Comonad
 import           Control.Comonad.Store

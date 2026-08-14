@@ -1,15 +1,15 @@
 cabal-version:       3.0
 name:                ising-example
 version:             0.1.0.0
-synopsis:            Ising model example for sized-grid
+synopsis:            Ising model example for grid-sized
 description:
   A Metropolis-Hastings simulation of the 2D Ising model on a
   @Grid '[Periodic 60, Periodic 60]@, streamed through pipes and drawn with
   gloss.
 license:             MIT
 license-file:        LICENSE
-author:              Ed Wastell
-maintainer:          ed@wastell.co.uk
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
 category:            Simulation
 build-type:          Simple
 extra-doc-files:     ChangeLog.md
@@ -26,7 +26,7 @@ executable ising-example
     , mtl          >=2.3  && <2.4
     , pipes        >=4.3  && <4.4
     , random       >=1.2  && <1.4
-    , sized-grid
+    , grid-sized
     , vector-space >=0.16 && <0.20
   hs-source-dirs:      src
   default-language:    GHC2024

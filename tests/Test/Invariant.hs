@@ -11,8 +11,8 @@ module Test.Invariant
   ( invariantTests
   ) where
 
-import           SizedGrid
-import           SizedGrid.Grid.Unsafe (unsafeGridFromVector)
+import           Data.Grid.Sized
+import           Data.Grid.Sized.Unsafe (unsafeGridFromVector)
 
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)

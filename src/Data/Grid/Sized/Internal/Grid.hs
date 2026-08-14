@@ -1,22 +1,22 @@
--- GHC2024 plus the default-extensions in sized-grid.cabal cover everything this
+-- GHC2024 plus the default-extensions in grid-sized.cabal cover everything this
 -- module used to list.
 
 -- |
--- Module      :  SizedGrid.Internal.Grid
+-- Module      :  Data.Grid.Sized.Internal.Grid
 -- License     :  MIT -style (see the file LICENSE)
 --
 -- The `Grid` representation and everything defined over it.
 --
 -- This module is hidden. It exists so that the `Grid` constructor can be shared
--- with "SizedGrid.Grid.Unsafe" without also being shared with the world: the
+-- with "Data.Grid.Sized.Unsafe" without also being shared with the world: the
 -- one invariant this library exists to enforce is that a @Grid cs a@ holds
 -- exactly @MaxCoordSize cs@ elements, and an exported constructor is a licence
--- to break it. "SizedGrid.Grid.Grid" re-exports the safe half of what is here.
+-- to break it. "Data.Grid.Sized" re-exports the safe half of what is here.
 --
 -- Everything below is free to use the constructor directly. The obligation that
 -- comes with that is on each function in turn: it must not change the length of
 -- the vector except in step with the type.
-module SizedGrid.Internal.Grid
+module Data.Grid.Sized.Internal.Grid
   ( -- * Representation
     Grid(..)
   , unsafeGridFromVector
@@ -50,9 +50,9 @@ module SizedGrid.Internal.Grid
   , splitVectorBySize
   ) where
 
-import           SizedGrid.Coord
-import           SizedGrid.Coord.Class
-import           SizedGrid.Internal.Type (requiring, windowFits)
+import           Data.Grid.Sized.Coord
+import           Data.Grid.Sized.Coord.Class
+import           Data.Grid.Sized.Internal.Type (requiring, windowFits)
 
 import           Control.Applicative   (ZipList (..))
 import           Control.Lens          hiding (index)
@@ -79,7 +79,7 @@ newtype Grid (cs :: [Type]) a = Grid
   { unGrid :: V.Vector a
   } deriving (Eq, Show, Functor, Foldable, Traversable, Eq1, Show1, GHC.Generic)
 
--- | The escape hatch, re-exported from "SizedGrid.Grid.Unsafe".
+-- | The escape hatch, re-exported from "Data.Grid.Sized.Unsafe".
 --
 -- Asserts what `gridFromVector` checks: that the vector holds exactly
 -- @MaxCoordSize cs@ elements. Nothing verifies it, and a grid that fails it
@@ -226,7 +226,7 @@ type family CollapseGrid cs a where
 --
 -- As a class the same obligation is discharged during instance resolution,
 -- inductively, from the per-axis 'GHC.KnownNat's -- so @KnownNat n@ alone now
--- suffices at the call site. 'SizedGrid.Coord.AllSizedKnown' has always been a
+-- suffices at the call site. 'Data.Grid.Sized.Coord.AllSizedKnown' has always been a
 -- class for exactly this reason; this is the same treatment applied to the
 -- structural recursions.
 --
@@ -372,7 +372,7 @@ combineGrid :: Grid '[c] (Grid cs a) -> Grid (c ': cs) a
 combineGrid (Grid v) = Grid (v >>= unGrid)
 
 -- | @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
--- comes from @CoordNat@ on the `SizedGrid.Coord.Class.IsCoordLifted` instance,
+-- comes from @CoordNat@ on the `Data.Grid.Sized.Coord.Class.IsCoordLifted` instance,
 -- not from `IsCoord`, so the class could not have justified the @n + m@ in the
 -- result even in principle.
 combineHigherDim ::
@@ -521,7 +521,7 @@ instance ShrinkableGrid '[] '[] '[] where
 --
 -- @KnownNat x@ is new: 'reifyCoord' recovers the offset's type-level value by
 -- comparing against the coord's size at runtime, now that an
--- 'SizedGrid.Ordinal.Ordinal' no longer carries that dictionary in every value.
+-- 'Data.Grid.Sized.Ordinal.Ordinal' no longer carries that dictionary in every value.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as

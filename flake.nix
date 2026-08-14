@@ -1,5 +1,5 @@
 {
-  description = "sized-grid: multidimensional grids with size specified at compile time";
+  description = "grid-sized: multidimensional grids with size specified at compile time";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -27,10 +27,10 @@
             ]) && pkgs.lib.cleanSourceFilter path type;
         };
 
-        # ghc912 matches what ../aoc builds sized-grid with, so the shared
+        # ghc912 matches what ../aoc builds grid-sized with, so the shared
         # cabal.project between the two repos does not recompile the world.
         # ghc914 is kept building so the move is a one-line change.
-        mkPackage = hsPkgs: doCheck (hsPkgs.callCabal2nix "sized-grid" src { });
+        mkPackage = hsPkgs: doCheck (hsPkgs.callCabal2nix "grid-sized" src { });
 
         mkShell = hsPkgs: hsPkgs.shellFor {
           packages = p: [ (mkPackage hsPkgs) ];
@@ -87,8 +87,8 @@
       {
         packages = {
           default = mkPackage ghc912;
-          sized-grid = mkPackage ghc912;
-          sized-grid-ghc914 = mkPackage ghc914;
+          grid-sized = mkPackage ghc912;
+          grid-sized-ghc914 = mkPackage ghc914;
         };
 
         # `nix flake check` builds the library and runs the tasty suite on both.

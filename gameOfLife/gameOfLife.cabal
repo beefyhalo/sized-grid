@@ -8,8 +8,8 @@ description:
   neighbourhood needs no bounds checking when the coordinate type is periodic.
 license:             MIT
 license-file:        LICENSE
-author:              edwardwas
-maintainer:          ed@wastell.co.uk
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
 category:            Game
 build-type:          Simple
 extra-doc-files:     ChangeLog.md
@@ -23,7 +23,7 @@ executable gameOfLife
     , generics-sop >=0.5  && <0.6
     , gloss        >=1.13 && <1.14
     , lens         >=5.2  && <5.4
-    , sized-grid
+    , grid-sized
     , vector-space >=0.16 && <0.20
   hs-source-dirs:      src
   default-language:    GHC2024

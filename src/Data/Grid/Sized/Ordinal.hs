@@ -24,10 +24,10 @@
 -- precondition.
 --
 -- The one thing the GADT gave away for free was recovering the value as a type,
--- which 'SizedGrid.Coord.Class.reifyCoord' needs. 'reifyOrdinal' does that on
+-- which 'Data.Grid.Sized.Coord.Class.reifyCoord' needs. 'reifyOrdinal' does that on
 -- demand, so the 'someNatVal' cost is paid at the one call site that wants it
 -- instead of by every value that might.
-module SizedGrid.Ordinal
+module Data.Grid.Sized.Ordinal
     ( Ordinal
       -- * Conversion
     , ordinalToInt
@@ -42,7 +42,7 @@ module SizedGrid.Ordinal
     , weakenOrdinal
     ) where
 
-import           SizedGrid.Internal.Type (requiring)
+import           Data.Grid.Sized.Internal.Type (requiring)
 
 import           Control.Exception       (assert)
 import           Control.Lens            (Prism', prism')
@@ -118,8 +118,8 @@ ordinalToNum = fromIntegral . ordinalToInt
 -- caller writes @reifyOrdinal o $ \\m -> ...@ and @m@ is a type.
 --
 -- This is the operation the old GADT representation carried in every value. The
--- library needs it in exactly one place --- 'SizedGrid.Coord.Class.reifyCoord',
--- used by 'SizedGrid.Grid.Grid.shrinkGrid' to turn a window offset into a
+-- library needs it in exactly one place --- 'Data.Grid.Sized.Coord.Class.reifyCoord',
+-- used by 'Data.Grid.Sized.shrinkGrid' to turn a window offset into a
 -- @dropGrid@ --- so it is reconstructed here on demand.
 --
 -- The evidence is real: 'cmpNat' compares the reified value against @n@ at
@@ -145,7 +145,7 @@ reifyOrdinal (UnsafeOrdinal i) func =
 invariantViolated :: Int -> Integer -> a
 invariantViolated i m =
     error $
-    "SizedGrid.Ordinal: " ++
+    "Data.Grid.Sized.Ordinal: " ++
     show i ++
     " is not a valid Ordinal " ++
     show m ++

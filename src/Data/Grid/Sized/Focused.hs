@@ -1,9 +1,14 @@
-module SizedGrid.Grid.Focused
+module Data.Grid.Sized.Focused
   ( FocusedGrid(..)
   ) where
 
-import           SizedGrid.Coord
-import           SizedGrid.Grid.Grid
+import           Data.Grid.Sized.Coord
+-- The `Grid` type comes from the hidden module it is defined in, not from
+-- "Data.Grid.Sized", because that one re-exports this module: taking the type
+-- from its own module is what keeps the two from forming a cycle. The import
+-- list is what it is so that the constructor stays behind
+-- "Data.Grid.Sized.Unsafe".
+import           Data.Grid.Sized.Internal.Grid (Grid)
 
 import           Control.Comonad
 import           Control.Comonad.Store

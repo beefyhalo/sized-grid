@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module SizedGrid.Coord.Class
+module Data.Grid.Sized.Coord.Class
   ( IsCoord(..)
   , IsCoordLifted(..)
   , IsCoordList(..)
@@ -13,7 +13,7 @@ module SizedGrid.Coord.Class
   , axisSteps
   ) where
 
-import           SizedGrid.Ordinal
+import           Data.Grid.Sized.Ordinal
 
 import           Control.Lens
 import           Data.AffineSpace (Diff)
@@ -42,7 +42,7 @@ maxCoordSize n = fromIntegral (ordinalSize @n) - 1
 -- neither.
 --
 -- Deliberately not a @Bool@. A caller that only wants "am I on an edge" has
--- 'SizedGrid.Coord.onBoundary', while a caller that has to /do/ something about
+-- 'Data.Grid.Sized.Coord.onBoundary', while a caller that has to /do/ something about
 -- the edge --- reflect a walker, wrap a texture, place a border glyph --- needs
 -- to know which end it met, and recovering that from a @Bool@ means going back
 -- to the arithmetic this method exists to replace.
@@ -81,12 +81,12 @@ class IsCoord (c :: Nat -> Type) where
   --
   -- This was @asSizeProxy@, whose continuation took a @Proxy m@. The name went
   -- with the 'Data.Proxy.Proxy'; it reifies a value as a type, which is what
-  -- 'SizedGrid.Ordinal.reifyOrdinal' is called for doing to an
-  -- 'SizedGrid.Ordinal.Ordinal'.
+  -- 'Data.Grid.Sized.Ordinal.reifyOrdinal' is called for doing to an
+  -- 'Data.Grid.Sized.Ordinal.Ordinal'.
   --
   -- @KnownNat n@ is required because the evidence is produced by comparing
-  -- against @n@ at runtime ('SizedGrid.Ordinal.reifyOrdinal'). It used to come
-  -- from unpacking the 'SizedGrid.Ordinal.Ordinal' GADT, which is precisely the
+  -- against @n@ at runtime ('Data.Grid.Sized.Ordinal.reifyOrdinal'). It used to come
+  -- from unpacking the 'Data.Grid.Sized.Ordinal.Ordinal' GADT, which is precisely the
   -- dictionary every ordinal was paying to carry.
   reifyCoord ::
          KnownNat n
@@ -105,11 +105,11 @@ class IsCoord (c :: Nat -> Type) where
   --
   -- The default is the bounds check, which is what a coord type with real
   -- edges wants. A coord whose space has no edges overrides it and is total:
-  -- 'SizedGrid.Coord.Periodic.Periodic' wraps, so its 'offsetIsCoord' is
+  -- 'Data.Grid.Sized.Coord.Periodic.Periodic' wraps, so its 'offsetIsCoord' is
   -- always 'Just'.
   --
   -- The displacement is an 'Int', which is what
-  -- @'Data.AffineSpace.Diff' ('SizedGrid.Coord.Clamped.Clamped' n)@ is, so this
+  -- @'Data.AffineSpace.Diff' ('Data.Grid.Sized.Coord.Clamped.Clamped' n)@ is, so this
   -- really is a drop-in for the operation it checks. It was an 'Integer' until
   -- sized-grid-0tj, so that a displacement too wide for an 'Int' would be
   -- rejected rather than narrowed into range; that width is not reachable now
@@ -132,12 +132,12 @@ class IsCoord (c :: Nat -> Type) where
   -- for the same reason 'offsetIsCoord' is: the answer is a property of the
   -- boundary policy, not of the two values. The default measures straight,
   -- which is right for an axis with real edges, and
-  -- 'SizedGrid.Coord.Periodic.Periodic' overrides it to take the shorter way
+  -- 'Data.Grid.Sized.Coord.Periodic.Periodic' overrides it to take the shorter way
   -- round --- on a 3-cycle every other cell really is one step away.
   --
   -- Consistency with 'offsetIsCoord' is the law: @axisDistanceIsCoord a b@ is
   -- the least @abs d@ for which @offsetIsCoord a d == Just b@. That is what
-  -- 'SizedGrid.Coord.axisSteps' computes by enumeration, and the two agreeing
+  -- 'Data.Grid.Sized.Coord.axisSteps' computes by enumeration, and the two agreeing
   -- is a property test rather than something the types can enforce.
   axisDistanceIsCoord :: (KnownNat n, 1 <= n) => c n -> c n -> Int
   axisDistanceIsCoord a b =
@@ -150,9 +150,9 @@ class IsCoord (c :: Nat -> Type) where
   -- than of the value, alongside 'offsetIsCoord' and 'axisDistanceIsCoord', and
   -- it is in the class for the same reason they are. The default is the bounds
   -- check, which is what an axis with real edges wants;
-  -- 'SizedGrid.Coord.Periodic.Periodic' overrides it to 'Nothing' everywhere,
+  -- 'Data.Grid.Sized.Coord.Periodic.Periodic' overrides it to 'Nothing' everywhere,
   -- because a torus has no edges and so no value is at one. That symmetry is
-  -- the whole argument: a free function over 'SizedGrid.Coord.Coord' would have
+  -- the whole argument: a free function over 'Data.Grid.Sized.Coord.Coord' would have
   -- to pick one answer for every axis type, and the right answer differs.
   --
   -- Consistency with 'offsetIsCoord' is the law, and it is what makes this
@@ -189,7 +189,7 @@ class IsCoord (c :: Nat -> Type) where
 -- 'unsafeOrdinal''s precondition.
 --
 -- Worth being exact about what the 'Integer' was buying, because
--- @('Data.AffineSpace..+^')@ on 'SizedGrid.Coord.Clamped.Clamped' needed it and
+-- @('Data.AffineSpace..+^')@ on 'Data.Grid.Sized.Coord.Clamped.Clamped' needed it and
 -- this did not. There, an overflowing @i + b@ lands on a large negative number
 -- and the clamp folds it to the /low/ edge, which is the wrong answer for a
 -- large positive offset. Here every wrong answer is the same wrong answer ---
@@ -197,7 +197,7 @@ class IsCoord (c :: Nat -> Type) where
 -- Both are written to compare rather than add, so neither depends on that
 -- argument holding.
 --
--- Same shape as the 'SizedGrid.Coord.Clamped.Clamped' operation otherwise: it
+-- Same shape as the 'Data.Grid.Sized.Coord.Clamped.Clamped' operation otherwise: it
 -- meets the two out-of-range cases with the near edge where this one meets them
 -- with 'Nothing'. That is the whole difference between the checked and the total
 -- operation, and the two agreeing is the law on 'offsetIsCoord'.
@@ -210,7 +210,7 @@ class IsCoord (c :: Nat -> Type) where
 -- Without the pragma the size is read from a run-time 'Natural' on every call,
 -- per axis. 'IsCoord' is indexed by @c@ alone, so @n@ cannot arrive through the
 -- instance the way it does for @('Data.AffineSpace..+^')@ on
--- 'SizedGrid.Coord.Clamped.Clamped' --- there @KnownNat n@ is in the /instance
+-- 'Data.Grid.Sized.Coord.Clamped.Clamped' --- there @KnownNat n@ is in the /instance
 -- context/, is fixed by instance resolution at a concrete axis, and the size
 -- constant-folds. Here it is on the /method/, so it is a dictionary argument,
 -- and out of line the body has nothing to fold against:
@@ -243,7 +243,7 @@ class IsCoord (c :: Nat -> Type) where
 --
 -- @extend neighbourSum 50x50@ fell 8.88 ms and 28 MB to 7.01 ms and 25 MB in
 -- the same change, without the neighbourhood fold being touched, because
--- 'SizedGrid.Coord.axisSteps' calls 'offsetIsCoord' per candidate. The rest of
+-- 'Data.Grid.Sized.Coord.axisSteps' calls 'offsetIsCoord' per candidate. The rest of
 -- that cost is the fold above it, which is sized-grid-5uq.
 offsetByPosition ::
        forall c n. (IsCoord c, KnownNat n)
@@ -309,7 +309,7 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
 -- torus axis does as soon as @2 * r >= n@ --- the one that took fewer steps
 -- wins, so the recorded distance is the true distance on that axis rather than
 -- whichever offset the enumeration happened to try first. That is what makes
--- 'SizedGrid.Coord.vonNeumannNeighbours' correct on a small torus instead of
+-- 'Data.Grid.Sized.Coord.vonNeumannNeighbours' correct on a small torus instead of
 -- accidentally right, and it is also what stops a bounded axis from reporting
 -- the same edge cell several times.
 --
@@ -317,7 +317,7 @@ instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
 -- middle and the caller sees a coordinate order that does not depend on the
 -- boundary policy.
 --
--- It lives here rather than in "SizedGrid.Coord", which still re-exports it
+-- It lives here rather than in "Data.Grid.Sized.Coord", which still re-exports it
 -- under the same name, for the reason 'MapDiff' does: it is the per-axis step of
 -- 'npStepsWithin', and that method has to be in this module to be a method of
 -- 'IsCoordList'. Its only obligation is 'IsCoordLifted', which is exactly what
@@ -352,28 +352,28 @@ axisSteps r c =
 -- families can't be partially applied.
 --
 -- The displacement between two coords is itself coord-shaped: a
--- @'SizedGrid.Coord.Coord' cs@ is displaced by a
--- @'SizedGrid.Coord.Coord' ('MapDiff' cs)@, one 'Diff' per axis.
+-- @'Data.Grid.Sized.Coord.Coord' cs@ is displaced by a
+-- @'Data.Grid.Sized.Coord.Coord' ('MapDiff' cs)@, one 'Diff' per axis.
 --
 -- This follows @manifolds@, where @Needle@ is an associated type and a product
 -- gets its own structurally --- @Needle (a,b) = (Needle a, Needle b)@. The
--- displacement there is a 'SizedGrid.Coord.Coord' rather than a new product
--- type, so it inherits @(':|')@, 'SizedGrid.Coord.EmptyCoord', 'Show', 'Eq',
+-- displacement there is a 'Data.Grid.Sized.Coord.Coord' rather than a new product
+-- type, so it inherits @(':|')@, 'Data.Grid.Sized.Coord.EmptyCoord', 'Show', 'Eq',
 -- 'Data.AdditiveGroup.AdditiveGroup' and 'System.Random.Random' from the
--- 'SizedGrid.Coord.Coord' instances at no cost.
+-- 'Data.Grid.Sized.Coord.Coord' instances at no cost.
 --
 -- It replaces a @CoordDiff@ family whose instances were written out one per
 -- arity, up to six. That was a real ceiling: a seven-axis
--- 'SizedGrid.Coord.Coord' had no 'Diff', so no 'Data.AffineSpace.AffineSpace'
--- instance and no 'SizedGrid.Coord.offsetCoord'. 'MapDiff' recurses, so there
+-- 'Data.Grid.Sized.Coord.Coord' had no 'Diff', so no 'Data.AffineSpace.AffineSpace'
+-- instance and no 'Data.Grid.Sized.Coord.offsetCoord'. 'MapDiff' recurses, so there
 -- is no ceiling and no per-arity code. It also drops
 -- @IsProductType (CoordDiff cs) (MapDiff cs)@ from the context, which is why
 -- @generics-sop@ no longer appears in the signature of everything that offsets.
 --
 -- Tuple literals no longer typecheck as displacements. Use @(':|')@, or
--- 'SizedGrid.Coord.coordFromTuple' where a tuple reads better.
+-- 'Data.Grid.Sized.Coord.coordFromTuple' where a tuple reads better.
 --
--- It lives here rather than in "SizedGrid.Coord" because 'npOffset' is stated
+-- It lives here rather than in "Data.Grid.Sized.Coord" because 'npOffset' is stated
 -- in terms of it, and that method has to be in this module to be a method of
 -- 'IsCoordList'.
 type family MapDiff xs where
@@ -403,7 +403,7 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
   IsCoordListF '[]        = ()
   IsCoordListF (x ': xs)  = (IsCoordLifted x, IsCoordList xs)
 
--- | A list of axes that a 'SizedGrid.Coord.Coord' can be built from, with the
+-- | A list of axes that a 'Data.Grid.Sized.Coord.Coord' can be built from, with the
 -- row-major fold over that list available as a method.
 --
 -- This is @'All' 'IsCoordLifted' cs@ --- a superclass, so every body that held
@@ -416,7 +416,7 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- This is a compilation fact rather than a matter of taste, and it was measured
 -- rather than guessed.
 --
--- 'SizedGrid.Coord.coordPosition' folds over the axis list. Written as a
+-- 'Data.Grid.Sized.Coord.coordPosition' folds over the axis list. Written as a
 -- /self-recursive function/ --- the @where@ helper this used to have --- that
 -- fold can never unroll, because GHC does not inline a self-recursive binding
 -- and the recursion is polymorphic: each call is at a shorter list. Specialising
@@ -431,7 +431,7 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 --
 -- Written as an instance method the dictionary is resolved at compile time, one
 -- instance per axis, so the fold unrolls and the sizes become literals: at
--- @'[Clamped 50, Clamped 50]@ the Core for 'SizedGrid.Coord.coordPosition' is
+-- @'[Clamped 50, Clamped 50]@ the Core for 'Data.Grid.Sized.Coord.coordPosition' is
 -- @+# (*# x 50#) y@ and nothing else. Measured on @extract 50x50@, that is 320
 -- bytes a call against none at all; on @index x90000@, 27 MB against 34 bytes.
 --
@@ -443,7 +443,7 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- @cpara_SList@ is genuinely different from the @where@ helper: it is not
 -- self-recursive in the Core, since each instance's method body calls the method
 -- at a different, statically known dictionary. It /does/ unroll. A
--- 'SizedGrid.Coord.coordSpaceSize'-shaped fold through it constant-folds all the
+-- 'Data.Grid.Sized.Coord.coordSpaceSize'-shaped fold through it constant-folds all the
 -- way to a literal.
 --
 -- It unrolls only where the axis list is concrete, though, and that is the
@@ -467,20 +467,20 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- yields both. It is a fold accumulator rather than anything a caller wants,
 -- and the two instances below cover every type-level list, so there is no
 -- instance left for anyone to write. The same goes for 'npOffset'.
--- "SizedGrid.Coord" therefore re-exports the class without its methods.
+-- "Data.Grid.Sized.Coord" therefore re-exports the class without its methods.
 class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- | The product of the axis sizes, and the row-major position of the given
     -- coordinate within them.
     sizeAndPosition :: NP I cs -> (Int, Int)
 
     -- | Offset each axis by its own displacement, or 'Nothing' if any axis
-    -- refuses. The fold behind 'SizedGrid.Coord.offsetCoord'.
+    -- refuses. The fold behind 'Data.Grid.Sized.Coord.offsetCoord'.
     --
-    -- == Why it is here and not on 'SizedGrid.Coord.AffineCoordList'
+    -- == Why it is here and not on 'Data.Grid.Sized.Coord.AffineCoordList'
     --
     -- The per-axis step is 'offsetIsCoord', whose only obligation is
     -- 'IsCoordLifted' --- which is precisely what this class already supplies
-    -- per axis. 'SizedGrid.Coord.AffineCoordList' is a separate class because
+    -- per axis. 'Data.Grid.Sized.Coord.AffineCoordList' is a separate class because
     -- /its/ step is @('Data.AffineSpace..+^')@ and needs
     -- @'Data.AffineSpace.AffineSpace' x@, which 'IsCoordLifted' does not give.
     -- The checked offset needs no such thing, so it belongs to the class that
@@ -503,20 +503,20 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
 
     -- | Every combination of per-axis values reachable within @r@ steps on
     -- each axis, paired with the total number of steps across all axes. The
-    -- fold behind 'SizedGrid.Coord.stepsWithin', and so behind every
+    -- fold behind 'Data.Grid.Sized.Coord.stepsWithin', and so behind every
     -- neighbourhood in the library.
     --
-    -- == Why it is here and not on 'SizedGrid.Coord.AffineCoordList'
+    -- == Why it is here and not on 'Data.Grid.Sized.Coord.AffineCoordList'
     --
     -- Same reason as 'npOffset', and it is worth stating because the third
     -- fold could plausibly have gone either way. The per-axis step is
-    -- 'SizedGrid.Coord.axisSteps', whose only obligation is 'IsCoordLifted',
+    -- 'Data.Grid.Sized.Coord.axisSteps', whose only obligation is 'IsCoordLifted',
     -- which this class already supplies per axis. Nothing here needs
     -- @'Data.AffineSpace.AffineSpace' x@ --- a neighbourhood is enumerated
     -- through 'offsetIsCoord', not offset through @('Data.AffineSpace..+^')@,
     -- which is the whole reason a bounded axis loses neighbours at its edge
     -- rather than clamping onto it. So this needed no new class and, unlike
-    -- 'SizedGrid.Coord.AffineCoordList', it is not a breaking change: every
+    -- 'Data.Grid.Sized.Coord.AffineCoordList', it is not a breaking change: every
     -- caller already held 'IsCoordList'.
     --
     -- == Why the radius is an argument

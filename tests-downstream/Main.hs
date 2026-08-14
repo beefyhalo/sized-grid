@@ -3,7 +3,7 @@
 -- | What a consumer has to write, compiled the way a consumer compiles.
 --
 -- This module is built without @ghc-typelits-natnormalise@ and
--- @ghc-typelits-knownnat@ -- see the @downstream@ stanza in @sized-grid.cabal@
+-- @ghc-typelits-knownnat@ -- see the @downstream@ stanza in @grid-sized.cabal@
 -- -- because @-fplugin@ is not transitive and so no consumer has them. Every
 -- signature below is therefore a claim about what the library asks of code
 -- outside it, and the claim is checked by the fact that this module compiles at
@@ -24,7 +24,7 @@ module Main
   ( main
   ) where
 
-import           SizedGrid
+import           Data.Grid.Sized
 
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)

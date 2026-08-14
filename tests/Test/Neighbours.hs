@@ -11,7 +11,7 @@ module Test.Neighbours
   ( neighbourTests
   ) where
 
-import           SizedGrid
+import           Data.Grid.Sized
 import           Test.Arbitrary        ()
 
 import           Data.AdditiveGroup    (zeroV)

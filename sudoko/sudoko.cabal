@@ -1,15 +1,15 @@
 cabal-version:       3.0
 name:                sudoko
 version:             0.1.0.0
-synopsis:            Sudoku solver example for sized-grid
+synopsis:            Sudoku solver example for grid-sized
 description:
   Uses gridWindows/mapLowerDim to slice a 9x9 board into its rows, columns and
   3x3 squares, then searches for a solution. This is the driver example for the
   grid-slicing API.
 license:             MIT
 license-file:        LICENSE
-author:              Ed Wastell
-maintainer:          ed@wastell.co.uk
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
 category:            Game
 build-type:          Simple
 extra-doc-files:     ChangeLog.md
@@ -21,7 +21,7 @@ executable sudoko
   -- They come back when the solver does.
   build-depends:
     , base       >=4.19 && <5
-    , sized-grid
+    , grid-sized
   hs-source-dirs:      src
   default-language:    GHC2024
   ghc-options: -O2 -threaded -Wall

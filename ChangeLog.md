@@ -1,4 +1,76 @@
-# Revision history for sized-grid
+# Revision history for grid-sized
+
+## 0.1.0.0 -- NOT PUBLISHED
+
+First release under the name `grid-sized`, and the version restarts here
+because the name is new. The two `NOT PUBLISHED` sections below this one
+(0.3.0.0 and 0.2.0.0) are this fork's own work under its old name and ship as
+part of this release. The dated 0.1.x sections beneath those are upstream
+`sized-grid`'s published history, kept for provenance — they name modules as
+`SizedGrid.*` because that is what those modules were called at the time.
+
+* The package is renamed from `sized-grid` to `grid-sized`, and the module
+  prefix from `SizedGrid.*` to `Data.Grid.Sized.*`.
+
+  This fork has diverged past any possible merge back upstream — GHC 9.10+
+  minimum, `RequiredTypeArguments` throughout, a sealed `Grid` constructor,
+  `Ordinal` as a newtype over `Int`, GHC2024 — and the `sized-grid` name on
+  Hackage belongs to its original author, so the fork could never have been
+  released under it. `grid-sized` follows the `vector-sized` convention, which
+  is the most legible of the three in use for size-in-the-type packages (the
+  others being `fixed-` as in `fixed-vector`, and `Static` as in `hmatrix`).
+
+  The module prefix follows the package name rather than staying at
+  `SizedGrid.*`, because a package called one thing whose modules are called
+  another leaves the old name at every consumer's import site. The `Data.`
+  head is there because it is the near-universal convention for a data
+  structure library, and because `vector-sized` — the package this one takes
+  its name from — ships `Data.Vector.Sized` rather than a top-level
+  `Vector.Sized`.
+
+  Against that: `Data.Grid` belongs to Chris Penner's `grids`, so nesting
+  beneath it implies a lineage that does not exist. That was weighed and judged
+  not decisive. `grids` was last released in 2019, Haskell module names are
+  neither registered nor enforced, `Data.Grid` and `Data.Grid.Sized` do not
+  collide in a build plan, and `vector-sized` nests inside `vector`'s
+  `Data.Vector.*` namespace in exactly the same way — the difference being that
+  it genuinely wraps `vector`, where this package wraps nothing.
+
+* The `Grid` layer collapses into the head module. `SizedGrid.Grid.Grid` becomes
+  `Data.Grid.Sized` itself, and `Class`, `Focused` and `Unsafe` move up beside
+  it.
+
+  The old tree had no module at `SizedGrid.Grid` at all: the `Grid` type lived
+  one level further down, at `SizedGrid.Grid.Grid`, with `Class`, `Focused` and
+  `Unsafe` beside it. `Coord` was never arranged that way — `SizedGrid.Coord`
+  held the type and `SizedGrid.Coord.{Class,Clamped,Periodic}` sat beneath it,
+  which is the ordinary `Data.Vector` / `Data.Vector.Mutable` shape.
+
+  Renaming alone would have left `Data.Grid.Sized.Grid`, which still says grid
+  twice — at positions 2 and 4 — because the namespace has already said it.
+  Every sibling earns its last component: `.Coord`, `.Ordinal`, `.Focused`,
+  `.Class`, `.Unsafe` each add information, and `.Grid` adds none.
+  `vector-sized`, the package this one takes its name from, has no
+  `Data.Vector.Sized.Vector` for the same reason: the type lives in the head
+  module, and the head module _is_ the type's module. Ours was a re-export shim
+  instead, so the type had been pushed a level down and had to re-say its own
+  name. It no longer is one — `Data.Grid.Sized` now publishes the safe half of
+  the hidden `Data.Grid.Sized.Internal.Grid` directly, which is where the type
+  was always defined.
+
+  | | type | beside it |
+  |---|---|---|
+  | before | `SizedGrid.Grid.Grid` | `SizedGrid.Grid.{Class,Focused,Unsafe}` |
+  | after | `Data.Grid.Sized` | `Data.Grid.Sized.{Class,Focused,Unsafe}` |
+
+  **Migration:** replace `import SizedGrid` with `import Data.Grid.Sized`, and
+  any `SizedGrid.X` with `Data.Grid.Sized.X`; in your `.cabal`, `sized-grid`
+  becomes `grid-sized`. The imports that are not a plain prefix swap are the
+  four in the `Grid` layer: `SizedGrid.Grid.Grid` becomes `Data.Grid.Sized`,
+  and `SizedGrid.Grid.{Class,Focused,Unsafe}` become
+  `Data.Grid.Sized.{Class,Focused,Unsafe}`. Since `Data.Grid.Sized` re-exports
+  all of those but `Unsafe`, importing it alone is usually enough. Nothing else
+  changes: no type, class, function or instance is affected by any of this.
 
 ## 0.3.0.0 -- NOT PUBLISHED
 

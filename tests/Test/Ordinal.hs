@@ -11,7 +11,7 @@ module Test.Ordinal
   ( ordinalTests
   ) where
 
-import           SizedGrid
+import           Data.Grid.Sized
 
 import           Control.Lens     (re, view)
 import           Data.AffineSpace ((.+^), (.-.))

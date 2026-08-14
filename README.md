@@ -1,11 +1,42 @@
-[![Build Status](https://travis-ci.org/edwardwas/sized-grid.svg?branch=master)](https://travis-ci.org/edwardwas/sized-grid)
-
-![Hackage](https://img.shields.io/hackage/v/sized-grid)
-
-sized-grid
+grid-sized
 ===========
 
 A way of working with grids in Haskell with size encoded at the type level.
+
+The design thesis
+=================
+
+**The coordinate type is the boundary policy.**
+
+Every axis of a grid is indexed by a coordinate type that says what happens at
+the edge. `Periodic n` wraps, `Clamped n` stops, `Ordinal n` cannot leave at
+all. That single decision is what the rest of the API is derived from:
+
+> Any operation that can leave the space is either total, because the type says
+> how to come back, or it returns `Maybe`. **Nothing clamps silently.**
+
+The negative half of that sentence is the load-bearing one. A grid library that
+silently clamps an out-of-range index is not merely imprecise, it is a library
+in which the difference between "the cell you asked for" and "some other cell"
+has been erased at the point where you could still have handled it. So
+`offsetCoord` reports leaving the grid rather than sliding back onto it,
+`offsetCoordUpTo` says where a walk stopped, `numToOrdinal` returns `Maybe`, and
+a `Clamped` axis clamps only because you named it `Clamped` — never as a
+fallback for an operation that had no better answer.
+
+Read that as the rule for judging any proposed addition. If a new function has
+to clamp, wrap, or truncate to stay total, it either takes the coordinate type
+that licenses it or it returns `Maybe`. There is no third option.
+
+Provenance and name
+===================
+
+This package began as a fork of [edwardwas'
+`sized-grid`](https://github.com/edwardwas/sized-grid) and has diverged past any
+possible merge back: GHC 9.10+ minimum, `RequiredTypeArguments` throughout, a
+sealed `Grid` constructor, `Ordinal` as a newtype over `Int`, and GHC2024. The
+`sized-grid` name on Hackage is his, so this is released as `grid-sized`,
+following the `vector-sized` convention, with the version restarted at 0.1.0.0.
 
 Quick tutorial
 ========
@@ -68,7 +99,7 @@ This is a literate Haskell file, so we start by turning on some language extensi
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE DataKinds #-}
 
-import SizedGrid
+import Data.Grid.Sized
 
 import Control.Comonad
 import Control.Lens
