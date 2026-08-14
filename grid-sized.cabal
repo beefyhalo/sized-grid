@@ -55,7 +55,7 @@ source-repository head
 -- compile as a consumer does -- and a consumer does not get our plugins.
 common lang-base
   default-language:   GHC2024
-  -- TypeAbstractions is for @SCons \@xs \@x@ in Grid.Sized.Coord: 'SList' has no
+  -- TypeAbstractions is for @SCons \@xs \@x@ in Data.Grid.Sized.Coord: 'SList' has no
   -- fields, so a type abstraction is the only way to name the head and tail of
   -- the list it refines. GHC 9.12 still accepts that under TypeApplications but
   -- warns; from 9.14 it is required.
@@ -94,7 +94,7 @@ common lang
   -- project deliberately do not.
   --
   -- sized-grid-wrc. There is deliberately no third plugin here. The library's
-  -- last 'unsafeCoerce' lived in 'Grid.Sized.Internal.Type.windowFits', and the
+  -- last 'unsafeCoerce' lived in 'Data.Grid.Sized.Internal.Type.windowFits', and the
   -- note that used to sit in this file said it needed ghc-typelits-presburger.
   -- That was measured, and it is true as far as it goes -- presburger does
   -- discharge the goal -- but presburger 0.7.4.2 is bounded 'ghc <9.13', as is
@@ -121,23 +121,23 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
-    Grid.Sized
-    Grid.Sized.Coord
-    Grid.Sized.Coord.Clamped
-    Grid.Sized.Coord.Class
-    Grid.Sized.Coord.Periodic
-    Grid.Sized.Grid.Class
-    Grid.Sized.Grid.Focused
-    Grid.Sized.Grid.Grid
-    Grid.Sized.Grid.Unsafe
-    Grid.Sized.Ordinal
+    Data.Grid.Sized
+    Data.Grid.Sized.Coord
+    Data.Grid.Sized.Coord.Clamped
+    Data.Grid.Sized.Coord.Class
+    Data.Grid.Sized.Coord.Periodic
+    Data.Grid.Sized.Grid
+    Data.Grid.Sized.Grid.Class
+    Data.Grid.Sized.Grid.Focused
+    Data.Grid.Sized.Grid.Unsafe
+    Data.Grid.Sized.Ordinal
 
-  -- Grid.Sized.Internal.Grid holds the Grid constructor. It is hidden rather
-  -- than exposed so that "Grid.Sized.Grid.Unsafe" can be the only public route
+  -- Data.Grid.Sized.Internal.Grid holds the Grid constructor. It is hidden rather
+  -- than exposed so that "Data.Grid.Sized.Grid.Unsafe" can be the only public route
   -- to it; see the header of either module.
   other-modules:
-    Grid.Sized.Internal.Grid
-    Grid.Sized.Internal.Type
+    Data.Grid.Sized.Internal.Grid
+    Data.Grid.Sized.Internal.Type
   build-depends:
     , adjunctions  >=4.4  && <4.5
     , aeson        >=2.1  && <2.3

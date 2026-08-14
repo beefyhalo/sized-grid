@@ -1,8 +1,8 @@
 -- |
--- Module      :  Grid.Sized.Grid.Unsafe
+-- Module      :  Data.Grid.Sized.Grid.Unsafe
 -- License     :  MIT -style (see the file LICENSE)
 --
--- The escape hatch: building a `Grid.Sized.Grid.Grid.Grid` from a vector without
+-- The escape hatch: building a `Data.Grid.Sized.Grid.Grid` from a vector without
 -- checking its length.
 --
 -- Importing this module opts out of the one guarantee the library provides. A
@@ -11,11 +11,11 @@
 -- too short makes `Data.Functor.Rep.index` throw on positions its own type says
 -- are valid, and makes ('<*>') truncate silently against a well-formed grid.
 --
--- It is a separate module, and not re-exported by "Grid.Sized", so that reaching
+-- It is a separate module, and not re-exported by "Data.Grid.Sized", so that reaching
 -- for it is a decision that shows up in an import list.
 --
 -- Reading a grid's vector is not here, because reading is safe: that is
--- `Grid.Sized.Grid.Grid.gridVector`, and it needs no unsafe import.
+-- `Data.Grid.Sized.Grid.gridVector`, and it needs no unsafe import.
 --
 -- The legitimate use is applying a vector function that preserves length, where
 -- you can see that it does but the type cannot say so:
@@ -24,13 +24,13 @@
 -- > rotateRows = unsafeGridFromVector . (\v -> V.backpermute v ixs) . gridVector
 --
 -- Before writing that, check whether the safe API already covers it:
--- `Grid.Sized.Grid.Grid.scanl1Grid` for running totals, `fmap` and
+-- `Data.Grid.Sized.Grid.scanl1Grid` for running totals, `fmap` and
 -- `Control.Lens.Indexed.imap` for pointwise changes,
 -- `Data.Functor.Rep.tabulate` to build from a function of the coordinate, and
--- `Grid.Sized.Grid.Grid.gridFromVector` whenever the length can be checked at
+-- `Data.Grid.Sized.Grid.gridFromVector` whenever the length can be checked at
 -- runtime instead of asserted.
-module Grid.Sized.Grid.Unsafe
+module Data.Grid.Sized.Grid.Unsafe
   ( unsafeGridFromVector
   ) where
 
-import           Grid.Sized.Internal.Grid (unsafeGridFromVector)
+import           Data.Grid.Sized.Internal.Grid (unsafeGridFromVector)

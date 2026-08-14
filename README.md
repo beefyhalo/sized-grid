@@ -99,7 +99,7 @@ This is a literate Haskell file, so we start by turning on some language extensi
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE DataKinds #-}
 
-import Grid.Sized
+import Data.Grid.Sized
 
 import Control.Comonad
 import Control.Lens

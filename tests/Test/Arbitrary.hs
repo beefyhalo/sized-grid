@@ -19,7 +19,7 @@ module Test.Arbitrary
   (
   ) where
 
-import           Grid.Sized
+import           Data.Grid.Sized
 
 import           Data.Proxy
 import           Generics.SOP    hiding (S, Z)

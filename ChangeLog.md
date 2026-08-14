@@ -10,7 +10,7 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `SizedGrid.*` because that is what those modules were called at the time.
 
 * The package is renamed from `sized-grid` to `grid-sized`, and the module
-  prefix from `SizedGrid.*` to `Grid.Sized.*`.
+  prefix from `SizedGrid.*` to `Data.Grid.Sized.*`.
 
   This fork has diverged past any possible merge back upstream — GHC 9.10+
   minimum, `RequiredTypeArguments` throughout, a sealed `Grid` constructor,
@@ -22,15 +22,41 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 
   The module prefix follows the package name rather than staying at
   `SizedGrid.*`, because a package called one thing whose modules are called
-  another leaves the old name at every consumer's import site. It is
-  `Grid.Sized.*` and not `Data.Grid.Sized.*` deliberately: `Data.Grid` is owned
-  by Chris Penner's `grids`, and nesting under another package's namespace
-  would imply a relationship that does not exist.
+  another leaves the old name at every consumer's import site. The `Data.`
+  head is there because it is the near-universal convention for a data
+  structure library, and because `vector-sized` — the package this one takes
+  its name from — ships `Data.Vector.Sized` rather than a top-level
+  `Vector.Sized`.
 
-  **Migration:** replace `import SizedGrid` with `import Grid.Sized`, and any
-  `SizedGrid.X` with `Grid.Sized.X`; in your `.cabal`, `sized-grid` becomes
-  `grid-sized`. Nothing else changes — no type, class, function or instance is
-  affected by this entry.
+  Against that: `Data.Grid` belongs to Chris Penner's `grids`, so nesting
+  beneath it implies a lineage that does not exist. That was weighed and judged
+  not decisive. `grids` was last released in 2019, Haskell module names are
+  neither registered nor enforced, `Data.Grid` and `Data.Grid.Sized` do not
+  collide in a build plan, and `vector-sized` nests inside `vector`'s
+  `Data.Vector.*` namespace in exactly the same way — the difference being that
+  it genuinely wraps `vector`, where this package wraps nothing.
+
+* `SizedGrid.Grid.Grid` becomes `Data.Grid.Sized.Grid`, losing a repetition
+  rather than gaining one.
+
+  The old tree had no module at `SizedGrid.Grid` at all: the `Grid` type lived
+  one level further down, at `SizedGrid.Grid.Grid`, with `Class`, `Focused` and
+  `Unsafe` beside it. `Coord` was never arranged that way — `SizedGrid.Coord`
+  held the type and `SizedGrid.Coord.{Class,Clamped,Periodic}` sat beneath it,
+  which is the ordinary `Data.Vector` / `Data.Vector.Mutable` shape. So this
+  makes `Grid` match `Coord` instead of breaking a symmetry:
+
+  | | type | beneath it |
+  |---|---|---|
+  | before | `SizedGrid.Grid.Grid` | `SizedGrid.Grid.{Class,Focused,Unsafe}` |
+  | after | `Data.Grid.Sized.Grid` | `Data.Grid.Sized.Grid.{Class,Focused,Unsafe}` |
+
+  **Migration:** replace `import SizedGrid` with `import Data.Grid.Sized`, and
+  any `SizedGrid.X` with `Data.Grid.Sized.X`; in your `.cabal`, `sized-grid`
+  becomes `grid-sized`. The one import that is not a plain prefix swap is
+  `SizedGrid.Grid.Grid`, which becomes `Data.Grid.Sized.Grid` — one `Grid`, not
+  two. Nothing else changes: no type, class, function or instance is affected
+  by either entry.
 
 ## 0.3.0.0 -- NOT PUBLISHED
 

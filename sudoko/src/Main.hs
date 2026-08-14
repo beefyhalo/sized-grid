@@ -8,7 +8,7 @@
 -- still to be written.
 module Main where
 
-import           Grid.Sized            hiding (All, Compose)
+import           Data.Grid.Sized            hiding (All, Compose)
 
 import           Data.Foldable        (toList)
 import           Data.List            (intercalate)

@@ -24,7 +24,7 @@ module Main
   ( main
   ) where
 
-import           Grid.Sized
+import           Data.Grid.Sized
 
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)

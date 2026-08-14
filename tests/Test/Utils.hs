@@ -23,8 +23,8 @@ module Test.Utils
   , distributiveLaws
   ) where
 
-import           Grid.Sized.Coord.Class
-import           Grid.Sized.Ordinal
+import           Data.Grid.Sized.Coord.Class
+import           Data.Grid.Sized.Ordinal
 
 -- The orphan 'Arbitrary' instances. 'isCoordLaws' takes @Arbitrary (c n)@ as a
 -- constraint, because @c@ is the caller's, but it generates the @'Ordinal' n@
@@ -218,7 +218,7 @@ traversalLaws t =
        "Traveral Laws"
        [testProperty "Pure Id" pureId, testProperty "Compose" compose]
 
--- | The three comonad laws, for `Grid.Sized.Grid.Focused.FocusedGrid`.
+-- | The three comonad laws, for `Data.Grid.Sized.Grid.Focused.FocusedGrid`.
 --
 -- Its `Control.Comonad.Comonad` instance is the whole reason the type exists --
 -- it is what a cellular automaton step is written against -- and nothing tested
@@ -270,7 +270,7 @@ comonadLaws _ =
 -- @index (tabulate h) r == h r@ for every @h :: Rep f -> a@, and for a finite
 -- representable it is not: every such @h@ is @index g@ for exactly one @g@, and
 -- @g@ here is arbitrary. Quantifying over grids rather than over functions also
--- avoids needing `Function` for `Grid.Sized.Coord.Coord`.
+-- avoids needing `Function` for `Data.Grid.Sized.Coord.Coord`.
 representableLaws ::
      forall f a proxy.
      ( Representable f
@@ -407,7 +407,7 @@ isCoordLaws ::
 isCoordLaws _ =
   let -- The range half of the same obligation, said in numbers. Note what it
       -- does /not/ cover: it quantifies over 'arbitrary', which draws through
-      -- 'Grid.Sized.Ordinal.unsafeOrdinal' at an already-reduced index, so every
+      -- 'Data.Grid.Sized.Ordinal.unsafeOrdinal' at an already-reduced index, so every
       -- coord it sees is in range before 'asOrdinal' is applied. A coord built
       -- by an /operation/ --- a wrong @mod@ in 'Semigroup', a wrong clamp in
       -- ('.+^') --- is not reached from here, and 'unsafeOrdinal''s own
@@ -422,7 +422,7 @@ isCoordLaws _ =
       -- through 'asOrdinal', but 'Ordinal' overrides it with 'reifyOrdinal', so
       -- the two routes agreeing is a real obligation on an instance rather than
       -- a restatement of the default. "Test.Ordinal" checks it at every value
-      -- of an @Ordinal 5@ and at one 'Grid.Sized.Coord.Periodic.Periodic 5';
+      -- of an @Ordinal 5@ and at one 'Data.Grid.Sized.Coord.Periodic.Periodic 5';
       -- this is the same fact quantified over the coord.
       reifyAgrees :: c n -> Property
       reifyAgrees c =
