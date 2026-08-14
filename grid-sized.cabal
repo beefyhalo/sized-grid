@@ -122,18 +122,17 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Data.Grid.Sized
+    Data.Grid.Sized.Class
     Data.Grid.Sized.Coord
     Data.Grid.Sized.Coord.Clamped
     Data.Grid.Sized.Coord.Class
     Data.Grid.Sized.Coord.Periodic
-    Data.Grid.Sized.Grid
-    Data.Grid.Sized.Grid.Class
-    Data.Grid.Sized.Grid.Focused
-    Data.Grid.Sized.Grid.Unsafe
+    Data.Grid.Sized.Focused
     Data.Grid.Sized.Ordinal
+    Data.Grid.Sized.Unsafe
 
   -- Data.Grid.Sized.Internal.Grid holds the Grid constructor. It is hidden rather
-  -- than exposed so that "Data.Grid.Sized.Grid.Unsafe" can be the only public route
+  -- than exposed so that "Data.Grid.Sized.Unsafe" can be the only public route
   -- to it; see the header of either module.
   other-modules:
     Data.Grid.Sized.Internal.Grid

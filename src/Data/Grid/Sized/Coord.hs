@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- | Unlike `Data.Grid.Sized.Grid.Grid`, `Coord`\'s constructor is safe to export:
+-- | Unlike `Data.Grid.Sized.Grid`, `Coord`\'s constructor is safe to export:
 -- an @NP I cs@ is correct by construction for its own index, so there is no
 -- length invariant a caller could break.
 module Data.Grid.Sized.Coord
@@ -766,7 +766,7 @@ isCorner c =
 -- this is 'allCoord'.
 --
 -- This enumerates. To read or write the interior of a
--- `Data.Grid.Sized.Grid.Grid` in place, compose 'onBoundary' with the indexed
+-- `Data.Grid.Sized.Grid` in place, compose 'onBoundary' with the indexed
 -- traversal that grid already has --- there is no separate function for it
 -- because there does not need to be:
 --

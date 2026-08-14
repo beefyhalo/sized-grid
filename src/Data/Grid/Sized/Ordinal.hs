@@ -119,7 +119,7 @@ ordinalToNum = fromIntegral . ordinalToInt
 --
 -- This is the operation the old GADT representation carried in every value. The
 -- library needs it in exactly one place --- 'Data.Grid.Sized.Coord.Class.reifyCoord',
--- used by 'Data.Grid.Sized.Grid.shrinkGrid' to turn a window offset into a
+-- used by 'Data.Grid.Sized.shrinkGrid' to turn a window offset into a
 -- @dropGrid@ --- so it is reconstructed here on demand.
 --
 -- The evidence is real: 'cmpNat' compares the reified value against @n@ at

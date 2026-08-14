@@ -8,10 +8,10 @@
 -- The `Grid` representation and everything defined over it.
 --
 -- This module is hidden. It exists so that the `Grid` constructor can be shared
--- with "Data.Grid.Sized.Grid.Unsafe" without also being shared with the world: the
+-- with "Data.Grid.Sized.Unsafe" without also being shared with the world: the
 -- one invariant this library exists to enforce is that a @Grid cs a@ holds
 -- exactly @MaxCoordSize cs@ elements, and an exported constructor is a licence
--- to break it. "Data.Grid.Sized.Grid" re-exports the safe half of what is here.
+-- to break it. "Data.Grid.Sized" re-exports the safe half of what is here.
 --
 -- Everything below is free to use the constructor directly. The obligation that
 -- comes with that is on each function in turn: it must not change the length of
@@ -79,7 +79,7 @@ newtype Grid (cs :: [Type]) a = Grid
   { unGrid :: V.Vector a
   } deriving (Eq, Show, Functor, Foldable, Traversable, Eq1, Show1, GHC.Generic)
 
--- | The escape hatch, re-exported from "Data.Grid.Sized.Grid.Unsafe".
+-- | The escape hatch, re-exported from "Data.Grid.Sized.Unsafe".
 --
 -- Asserts what `gridFromVector` checks: that the vector holds exactly
 -- @MaxCoordSize cs@ elements. Nothing verifies it, and a grid that fails it

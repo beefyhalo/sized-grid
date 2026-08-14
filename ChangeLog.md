@@ -36,27 +36,41 @@ part of this release. The dated 0.1.x sections beneath those are upstream
   `Data.Vector.*` namespace in exactly the same way — the difference being that
   it genuinely wraps `vector`, where this package wraps nothing.
 
-* `SizedGrid.Grid.Grid` becomes `Data.Grid.Sized.Grid`, losing a repetition
-  rather than gaining one.
+* The `Grid` layer collapses into the head module. `SizedGrid.Grid.Grid` becomes
+  `Data.Grid.Sized` itself, and `Class`, `Focused` and `Unsafe` move up beside
+  it.
 
   The old tree had no module at `SizedGrid.Grid` at all: the `Grid` type lived
   one level further down, at `SizedGrid.Grid.Grid`, with `Class`, `Focused` and
   `Unsafe` beside it. `Coord` was never arranged that way — `SizedGrid.Coord`
   held the type and `SizedGrid.Coord.{Class,Clamped,Periodic}` sat beneath it,
-  which is the ordinary `Data.Vector` / `Data.Vector.Mutable` shape. So this
-  makes `Grid` match `Coord` instead of breaking a symmetry:
+  which is the ordinary `Data.Vector` / `Data.Vector.Mutable` shape.
 
-  | | type | beneath it |
+  Renaming alone would have left `Data.Grid.Sized.Grid`, which still says grid
+  twice — at positions 2 and 4 — because the namespace has already said it.
+  Every sibling earns its last component: `.Coord`, `.Ordinal`, `.Focused`,
+  `.Class`, `.Unsafe` each add information, and `.Grid` adds none.
+  `vector-sized`, the package this one takes its name from, has no
+  `Data.Vector.Sized.Vector` for the same reason: the type lives in the head
+  module, and the head module _is_ the type's module. Ours was a re-export shim
+  instead, so the type had been pushed a level down and had to re-say its own
+  name. It no longer is one — `Data.Grid.Sized` now publishes the safe half of
+  the hidden `Data.Grid.Sized.Internal.Grid` directly, which is where the type
+  was always defined.
+
+  | | type | beside it |
   |---|---|---|
   | before | `SizedGrid.Grid.Grid` | `SizedGrid.Grid.{Class,Focused,Unsafe}` |
-  | after | `Data.Grid.Sized.Grid` | `Data.Grid.Sized.Grid.{Class,Focused,Unsafe}` |
+  | after | `Data.Grid.Sized` | `Data.Grid.Sized.{Class,Focused,Unsafe}` |
 
   **Migration:** replace `import SizedGrid` with `import Data.Grid.Sized`, and
   any `SizedGrid.X` with `Data.Grid.Sized.X`; in your `.cabal`, `sized-grid`
-  becomes `grid-sized`. The one import that is not a plain prefix swap is
-  `SizedGrid.Grid.Grid`, which becomes `Data.Grid.Sized.Grid` — one `Grid`, not
-  two. Nothing else changes: no type, class, function or instance is affected
-  by either entry.
+  becomes `grid-sized`. The imports that are not a plain prefix swap are the
+  four in the `Grid` layer: `SizedGrid.Grid.Grid` becomes `Data.Grid.Sized`,
+  and `SizedGrid.Grid.{Class,Focused,Unsafe}` become
+  `Data.Grid.Sized.{Class,Focused,Unsafe}`. Since `Data.Grid.Sized` re-exports
+  all of those but `Unsafe`, importing it alone is usually enough. Nothing else
+  changes: no type, class, function or instance is affected by any of this.
 
 ## 0.3.0.0 -- NOT PUBLISHED
 

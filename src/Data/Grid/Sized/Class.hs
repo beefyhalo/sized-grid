@@ -1,13 +1,15 @@
-module Data.Grid.Sized.Grid.Class
+module Data.Grid.Sized.Class
   ( IsGrid(..)
   ) where
 
 import           Data.Grid.Sized.Coord
-import           Data.Grid.Sized.Grid.Focused
-import           Data.Grid.Sized.Grid
+import           Data.Grid.Sized.Focused
+-- As in "Data.Grid.Sized.Focused": the type is taken from its own hidden module
+-- rather than from "Data.Grid.Sized", which re-exports this one.
+import           Data.Grid.Sized.Internal.Grid (Grid, gridVector)
 -- (& ix .~) replaces one element, so the length is unchanged. That is the whole
 -- of the obligation unsafeGridFromVector carries, discharged here by inspection.
-import           Data.Grid.Sized.Grid.Unsafe  (unsafeGridFromVector)
+import           Data.Grid.Sized.Unsafe        (unsafeGridFromVector)
 
 import           Control.Lens           hiding (index)
 import           Data.Functor.Rep

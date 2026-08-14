@@ -214,7 +214,7 @@ axisOffsets k =
 -- rebuilt in the sense the issue meant -- @V.zipWith@ fuses with the
 -- @V.fromList@ that feeds it, so the coordinates are produced and consumed one
 -- at a time and never all exist at once. Do not "fix" that; see the note on the
--- instances in Data.Grid.Sized.Grid.
+-- instances in Data.Grid.Sized.Internal.Grid.
 
 main :: IO ()
 main = do

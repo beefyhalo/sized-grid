@@ -218,7 +218,7 @@ traversalLaws t =
        "Traveral Laws"
        [testProperty "Pure Id" pureId, testProperty "Compose" compose]
 
--- | The three comonad laws, for `Data.Grid.Sized.Grid.Focused.FocusedGrid`.
+-- | The three comonad laws, for `Data.Grid.Sized.Focused.FocusedGrid`.
 --
 -- Its `Control.Comonad.Comonad` instance is the whole reason the type exists --
 -- it is what a cellular automaton step is written against -- and nothing tested

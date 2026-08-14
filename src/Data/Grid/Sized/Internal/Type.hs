@@ -61,9 +61,9 @@ windowFits =
 
 -- | Consume a constraint the implementation has no other use for.
 --
--- Several signatures in "Data.Grid.Sized.Grid" carry a bound (@n <= m@,
+-- Several signatures in "Data.Grid.Sized.Internal.Grid" carry a bound (@n <= m@,
 -- @Mod (CoordNat big) (CoordNat small) ~ 0@) whose entire job is to stop the
--- caller building a `Data.Grid.Sized.Grid.Grid` whose type lies about its size.
+-- caller building a `Data.Grid.Sized.Grid` whose type lies about its size.
 -- The body never mentions such a bound, so @-Wredundant-constraints@ reports
 -- it, and that module used to answer with a blanket
 -- @-Wno-redundant-constraints@ -- which also hid the constraints that really
