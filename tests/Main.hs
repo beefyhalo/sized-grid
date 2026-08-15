@@ -1,13 +1,3 @@
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE UndecidableInstances  #-}
-
 module Main
   ( main
   ) where
@@ -33,7 +23,6 @@ import           Data.Maybe            (isNothing)
 import           Data.Functor.Rep
 import           Data.Proxy
 import           GHC.TypeLits
-import qualified GHC.TypeLits          as GHC
 import           Test.QuickCheck       (Arbitrary (..), Property, property,
                                         (.&&.), (===))
 import           Test.Tasty
@@ -89,11 +78,10 @@ gridTests ::
        , Eq (Coord cs)
        , IsCoordList cs
        , AllSizedKnown cs
+       , AllGridSizeKnown [f x, g y]
        , Show a
        , Eq a
        , cs ~ '[ f x, g y]
-       , KnownNat (y GHC.* x)
-       , KnownNat (x GHC.* y)
        , Arbitrary a
        , Arbitrary (f x)
        , Arbitrary (g y)
@@ -101,7 +89,7 @@ gridTests ::
     => Proxy (Coord cs)
     -> Proxy a
     -> [TestTree]
-gridTests genC genA =
+gridTests _genC _genA =
   let tabulateIndex :: Coord cs -> Property
       tabulateIndex c = c === index (tabulate id :: Grid cs (Coord cs)) c
       collapseUnCollapse :: Property
@@ -113,8 +101,7 @@ gridTests genC genA =
         property $ do
           cg :: [[a]] <-
             replicateM (fromIntegral $ natVal (Proxy @x)) $
-            replicateM (fromIntegral $ natVal (Proxy @y)) $
-            arbitrary
+            replicateM (fromIntegral $ natVal (Proxy @y)) arbitrary
           return (Just cg === (collapseGrid <$> gridFromList @cs cg))
       doubleTranspose =
         property $ do
@@ -127,7 +114,7 @@ gridTests genC genA =
       imapIsTabulate =
         property $ do
           g :: Grid cs a <- sequenceA $ pure arbitrary
-          return (imap (\c _ -> c) g === (tabulate id :: Grid cs (Coord cs)))
+          return (imap const g === (tabulate id :: Grid cs (Coord cs)))
       indexedFoldsAgree =
         property $ do
           g :: Grid cs a <- sequenceA $ pure arbitrary
@@ -147,25 +134,18 @@ splitTests ::
        forall c x cs a.
        ( Show a
        , Eq a
-       , Num a
-       , IsCoordList ((c x) ': cs)
-       , KnownNat (x GHC.* MaxCoordSize cs)
-       , KnownNat (MaxCoordSize cs)
-       , KnownNat (5 GHC.* MaxCoordSize cs)
-       , KnownNat (3 GHC.* MaxCoordSize cs)
-       , KnownNat (2 GHC.* MaxCoordSize cs)
-       , KnownNat (2 GHC.* MaxCoordSize cs)
-       , KnownNat 2
        , AllSizedKnown cs
+       , AllSizedKnown '[c x]
+       , AllSizedKnown (c x : cs)
        , Arbitrary a
        )
-    => Proxy ((c x) ': cs)
+    => Proxy (c x ': cs)
     -> Proxy a
     -> [TestTree]
 splitTests _ _ =
   let splitAndCombine =
         property $ do
-          g :: Grid ((c x) ': cs) a <- sequenceA $ pure arbitrary
+          g :: Grid (c x ': cs) a <- sequenceA $ pure arbitrary
           return (g === combineGrid (splitGrid g))
       combineAndSplit =
         property $ do
@@ -213,9 +193,9 @@ coordCreationTests ::
   => Proxy (Coord (c ': cs))
   -> Proxy a
   -> [TestTree]
-coordCreationTests genC gen =
+coordCreationTests _genC _gen =
   [ testProperty "Create single coord" $
-    property $ \(g :: a) -> g === (singleCoord g ^. _1)
+    property $ \(g :: a) -> g === singleCoord g ^. _1
   , testProperty "Create double coord" $
     property $ \(a :: a) (b :: a) ->
       let coord = b :| singleCoord a
@@ -317,19 +297,19 @@ main =
               (Proxy @Int))
        , testGroup
            "Grid"
-           ((gridTests
-               (Proxy @(Coord ('[ Periodic 10, Periodic 11])))
+           (gridTests
+               (Proxy @(Coord '[ Periodic 10, Periodic 11]))
                (Proxy @Int) ++
              [ applicativeLaws
                  (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                  (Proxy @Int)
              , aesonLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
-             ]))
+             ])
        , testGroup
            "Splitting"
            (splitTests
-              (Proxy @('[ Clamped 8, Clamped 3, Clamped 5]))
+              (Proxy @'[ Clamped 8, Clamped 3, Clamped 5])
               (Proxy @Int))
          -- `Representable` is the instance the whole `Grid` API is built on:
          -- `index`, `tabulate`, `Distributive` and the `Comonad` for

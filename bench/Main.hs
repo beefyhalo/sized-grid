@@ -3,7 +3,7 @@
 {-# LANGUAGE MonoLocalBinds      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
+
 
 -- |
 -- Baseline benchmarks for the operations the real workloads hit.
@@ -75,7 +75,7 @@ stepGrid = FocusedGrid (tabulate coordPosition) zeroCoord
 
 -- | Total a grid, forcing every element on the way.
 total :: (Foldable f) => f Int -> Int
-total = foldl' (+) 0
+total = sum
 
 -- | A game-of-life shaped step: read the Moore neighbourhood and fold it.
 -- Mirrors the 'experiment'/'peek' pattern in the consumer's rules.
@@ -227,7 +227,7 @@ main = do
         [ bgroup
               "coord arithmetic"
               [ bench "(.+^) x10000, Periodic 300x300" $
-                whnf (\n -> walk n zeroCoord) 10000
+                whnf (`walk` zeroCoord) 10000
               , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 whnf
                     -- No 'fromIntegral': the displacement is an 'Int' as of
@@ -253,9 +253,9 @@ main = do
               , bench "pure 300x300      [no coord at all]" $
                 whnf (\x -> total (pure x :: Grid Big Int)) 1
               , bench "imap 300x300      [coordPosition per cell]" $
-                whnf (\g -> total (imap (\c x -> coordPosition c + x) g)) bigGrid
+                whnf (total . imap (\c x -> coordPosition c + x)) bigGrid
               , bench "fmap 300x300      [no coord at all]" $
-                whnf (\g -> total (fmap (+ 1) g)) bigGrid
+                whnf (total . fmap (+ 1)) bigGrid
               ]
         , bgroup
               "grid access"
@@ -268,7 +268,7 @@ main = do
                 whnf (ifoldl' (\c acc x -> acc + coordPosition c + x) 0) bigGrid
               , bench "itraverse 100x100" $
                 whnf
-                    (\g -> maybe 0 total (itraverse (\_ x -> Just x) g))
+                    (maybe 0 total . itraverse (const Just))
                     midGrid
               ]
         , bgroup

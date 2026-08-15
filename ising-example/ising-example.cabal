@@ -30,4 +30,8 @@ executable ising-example
     , vector-space >=0.16 && <0.20
   hs-source-dirs:      src
   default-language:    GHC2024
-  ghc-options: -O2 -threaded -Wall
+  ghc-options: -O2 -threaded
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints
+  

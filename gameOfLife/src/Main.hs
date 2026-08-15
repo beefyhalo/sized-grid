@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -9,7 +8,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module Main where
+module Main (main) where
 
 import           Data.Grid.Sized
 
@@ -42,14 +41,7 @@ gameOfLife = Rule $ \here neigh ->
           | otherwise -> Dead
 
 applyRule ::
-       ( All Monoid cs
-       , IsCoordList cs
-       , All Semigroup cs
-       , AllDiffSame Int cs
-       , All Eq cs
-       , Length cs ~ n
-       , All AffineSpace cs
-       , KnownNat (MaxCoordSize cs)
+       ( IsCoordList cs
        , AllSizedKnown cs
        )
     => Rule n
@@ -58,11 +50,10 @@ applyRule ::
 applyRule rule =
     extend $ \fg ->
         runRule rule (extract fg) $
-        map (\p -> peek p fg) $ neighbours $ pos fg
+        map (`peek` fg) $ neighbours $ pos fg
 
 data DisplayInfo = DisplayInfo {
-  tileSize :: Float
-  , offset :: Float
+  tileSize, offset :: Float
 }
 
 data WorldState cs = WorldState
@@ -94,7 +85,6 @@ drawWorld ::
        ( cs ~ '[ a, b]
        , All Monoid cs
        , IsCoordList cs
-       , All Semigroup cs
        , All AffineSpace cs
        , All Integral (MapDiff cs)
        )
@@ -115,14 +105,6 @@ drawWorld DisplayInfo{..} ws =
 updateWorld :: forall x y .
        ( IsCoordLifted x
        , IsCoordLifted y
-       , Semigroup x
-       , Semigroup y
-       , AffineSpace x
-       , AffineSpace y
-       , Monoid x
-       , Monoid y
-       , Show x
-       , Show y
        )
     => DisplayInfo
     -> Event
@@ -136,23 +118,16 @@ updateWorld _ (EventKey (Char 't') Up _ _) world = world & isTicking %~ not
 updateWorld _ _ world = world
 
 tickWorld ::
-       ( All Monoid cs
-       , All Semigroup cs
-       , IsCoordList cs
-       , All Eq cs
-       , AllDiffSame Int cs
-       , All AffineSpace cs
-       , KnownNat (MaxCoordSize cs)
+       ( IsCoordList cs
        , AllSizedKnown cs
        )
-    => Float
+    =>Float
     -> WorldState cs
     -> WorldState cs
 tickWorld dt world
     | world ^. timeElapsedSinceLastTick + dt >= 0.1 && world ^. isTicking  =
-        world & grid . asFocusedGrid %~ applyRule (world ^. rule) &
-        timeElapsedSinceLastTick +~
-        (dt - 0.1)
+        world & grid . asFocusedGrid %~ applyRule (world ^. rule)
+              & timeElapsedSinceLastTick +~ dt - 0.1
     | world ^. isTicking = world & timeElapsedSinceLastTick +~ dt
     | otherwise = world
 
@@ -171,6 +146,6 @@ main =
            white
            60
            startGame
-           (\w -> translate (negate $ offset di) (negate $ offset di) $ drawWorld di w)
+           (translate (negate $ offset di) (negate $ offset di) . drawWorld di)
            (updateWorld di)
            tickWorld

@@ -1,10 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
-
 -- | Tests for boundary detection: which end of its axis a coordinate sits at,
 -- and the whole-coordinate questions built on it (@sized-grid-4lt@).
 module Test.Boundary
@@ -19,7 +12,7 @@ import           Control.Lens          (IndexedTraversal', asIndex, indices,
                                         (&), (.~))
 import           Data.Functor.Rep      (tabulate)
 import           Data.List             (sort)
-import           Data.Maybe            (fromJust, isNothing)
+import           Data.Maybe            (fromJust, isJust, isNothing)
 import           GHC.TypeLits          (KnownNat)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -79,14 +72,14 @@ axisBoundaryLawTests =
         "axisBoundary agrees with offsetIsCoord"
         [ testProperty "a bounded axis is interior iff both steps succeed" $ \(c :: Clamped 5) ->
               isNothing (axisBoundary c) ===
-              (offsetIsCoord c (-1) /= Nothing && offsetIsCoord c 1 /= Nothing)
+              (isJust (offsetIsCoord c (-1)) && isJust (offsetIsCoord c 1))
         , testProperty "a bounded axis is AtMin iff the step down fails" $ \(c :: Clamped 5) ->
               (axisBoundary c == Just AtMin) === isNothing (offsetIsCoord c (-1))
         , testProperty "a bounded axis is AtMax iff the step up fails" $ \(c :: Clamped 5) ->
               (axisBoundary c == Just AtMax) === isNothing (offsetIsCoord c 1)
         , testProperty "a torus is interior everywhere, and every step succeeds" $ \(c :: Periodic 5) ->
               isNothing (axisBoundary c) ===
-              (offsetIsCoord c (-1) /= Nothing && offsetIsCoord c 1 /= Nothing)
+              (isJust (offsetIsCoord c (-1)) && isJust (offsetIsCoord c 1))
         ]
 
 hwc :: Int -> Int -> Coord '[Clamped 5, Clamped 5]

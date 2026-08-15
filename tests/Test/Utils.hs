@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -85,7 +84,7 @@ monoidLaws _ =
   let assoc :: a -> a -> a -> Property
       assoc a b c = mappend a (mappend b c) === mappend (mappend a b) c
       memptyId :: a -> Property
-      memptyId a = (a === (mappend mempty a)) .&&. ((a === mappend a mempty))
+      memptyId a = (a === mappend mempty a) .&&. (a === mappend a mempty)
       concatIsFold :: [a] -> Property
       concatIsFold as = mconcat as === foldr mappend mempty as
   in testGroup

@@ -1,5 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-
 module Data.Grid.Sized.Coord.Periodic
   ( Periodic(..)
   ) where

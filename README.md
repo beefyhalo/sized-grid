@@ -106,7 +106,6 @@ import Control.Lens
 import Control.Comonad.Store
 import Data.AffineSpace
 import GHC.TypeLits
-import qualified GHC.TypeLits as GHC
 ```
 
 We create a datatype for alive or dead.
@@ -134,10 +133,6 @@ We can then write a function to apply this to every point in a grid.
 applyRule :: 
        ( IsCoordList cs
        , All Monoid cs
-       , All Semigroup cs
-       , All AffineSpace cs
-       , All Eq cs
-       , AllDiffSame Int cs
        , AllSizedKnown cs
        , IsGrid cs (grid cs)
        )
@@ -157,7 +152,7 @@ displayTileState :: TileState -> Char
 displayTileState Alive = '#'
 displayTileState Dead = '.'
 
-displayGrid :: (KnownNat (x GHC.* y), KnownNat x, KnownNat y) => 
+displayGrid :: (KnownNat x, KnownNat y) => 
       Grid '[f x, g y] TileState -> String
 displayGrid = unlines . collapseGrid . fmap displayTileState
 ```

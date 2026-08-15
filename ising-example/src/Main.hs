@@ -1,15 +1,7 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
 
-module Main where
+module Main (main) where
 
 import           Data.Grid.Sized
 
@@ -36,7 +28,7 @@ spinNumber :: Num a => Spin -> a
 spinNumber Up   = 1
 spinNumber Down = -1
 
-data PhysicalOptions = PhysicalOptions
+newtype PhysicalOptions = PhysicalOptions
   { coupling :: Double
   } deriving (Eq, Show)
 
@@ -61,13 +53,13 @@ gridSize :: Integer
 gridSize = GHC.natVal (Proxy :: Proxy (MaxCoordSize GridType))
 
 randomGrid ::
-     (GHC.KnownNat (MaxCoordSize cs), MonadRandom m, AllSizedKnown cs)
+     (MonadRandom m, AllSizedKnown cs)
   => m (Grid cs Spin)
-randomGrid = sequence $ pure $ getRandom
+randomGrid = sequence $ pure getRandom
 
 singleEnergy :: PhysicalOptions -> FocusedGrid GridType Spin -> Double
 singleEnergy PhysicalOptions {..} fg =
-  -0.5 * coupling *
+  (-0.5) * coupling *
   sum
     (map (\p -> spinNumber (peek p fg) * spinNumber (extract fg)) $
      vonNeumannNeighbours 1 (pos fg))
@@ -116,7 +108,7 @@ runSimulation po n =
 takeOneIn :: Monad m => Int -> Pipe a a m ()
 takeOneIn n = forever $ do
   a <- await
-  _ <- replicateM (n - 1) await
+  replicateM_ (n - 1) await
   yield a
 
 data SimulationState = SimulationState

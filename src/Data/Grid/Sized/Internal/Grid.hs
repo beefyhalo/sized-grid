@@ -59,6 +59,7 @@ import           Control.Lens          hiding (index)
 import           Data.Aeson
 import           Data.Constraint
 import           Data.Distributive
+import           Data.Foldable (fold)
 import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Proxy            (Proxy (..))
@@ -189,7 +190,7 @@ instance (IsCoordList cs) => FunctorWithIndex (Coord cs) (Grid cs) where
 -- builds them out of 'ifoldMap' and an 'Endo' chain, which is a closure per
 -- cell on top of the coordinate.
 instance (IsCoordList cs) => FoldableWithIndex (Coord cs) (Grid cs) where
-  ifoldMap func (Grid v) = foldMap id $ V.zipWith func (V.fromList allCoord) v
+  ifoldMap func (Grid v) = fold $ V.zipWith func (V.fromList allCoord) v
   ifoldr func z (Grid v) = V.foldr ($) z $ V.zipWith func (V.fromList allCoord) v
   ifoldl' func z (Grid v) =
     V.foldl' (&) z $ V.zipWith (\c x acc -> func c acc x) (V.fromList allCoord) v
@@ -262,7 +263,7 @@ instance AllGridSizeKnown '[] where
 -- That plugin step is the induction, and it happens here rather than at the
 -- call site.
 instance (GHC.KnownNat n, AllGridSizeKnown as) =>
-         AllGridSizeKnown ((c n) ': as) where
+         AllGridSizeKnown (c n ': as) where
   gridSizeProof = GridSizeCons
 
 -- | Convert a vector into a list of `Vector`s, where all the elements of the
@@ -276,10 +277,10 @@ instance (GHC.KnownNat n, AllGridSizeKnown as) =>
 -- A size of zero would otherwise loop forever taking empty prefixes.
 splitVectorBySize :: Int -> V.Vector a -> [V.Vector a]
 splitVectorBySize n v
-  | n <= 0 = error $ "splitVectorBySize: chunk size must be positive, got " ++ show n
-  | V.length v >= n = V.take n v : splitVectorBySize n (V.drop n v)
-  | V.null v = []
-  | otherwise = [v]
+  | n <= 0    = error $ "splitVectorBySize: chunk size must be positive, got " ++ show n
+  | otherwise = [ V.slice i (min n (len - i)) v | i <- [0, n .. len - 1] ]
+  where
+    len = V.length v
 
 -- | Convert a grid to a series of nested lists. This removes type level information, but it is sometimes easier to work with lists
 collapseGrid ::
@@ -302,7 +303,7 @@ gridFromList ::
   -> Maybe (Grid cs a)
 gridFromList cg =
   case gridSizeProof @cs of
-    GridSizeNil -> Just $ Grid $ V.singleton $ cg
+    GridSizeNil -> Just $ Grid $ V.singleton cg
     GridSizeCons @_ @n @xs ->
       if length cg == fromIntegral (GHC.natVal (Proxy @n))
         then Grid . mconcat <$>
@@ -351,7 +352,7 @@ transposeGrid ::
      )
   => Grid '[ w x, h y] a
   -> Grid '[ h y, w x] a
-transposeGrid g = tabulate $ \i -> index g $ tranposeCoord i
+transposeGrid g = tabulate (index g . tranposeCoord)
 
 splitGrid ::
        forall c cs a. (AllSizedKnown cs)

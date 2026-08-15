@@ -406,12 +406,12 @@ allCoord ::
 allCoord =
     Coord <$>
     hsequence
-        (hcpure (Proxy :: Proxy IsCoordLifted) (allCoordLike))
+        (hcpure (Proxy :: Proxy IsCoordLifted) allCoordLike)
 
 -- | The number of elements a coord can have. This is equal to the product of the `CoordSized` of each element
 type family MaxCoordSize (cs :: [k]) :: GHC.Nat where
   MaxCoordSize '[] = 1
-  MaxCoordSize ((c n) ': cs) = n GHC.* (MaxCoordSize cs)
+  MaxCoordSize (c n ': cs) = n GHC.* MaxCoordSize cs
 
 -- | Convert a `Coord` to its position in a vector.
 --
@@ -480,17 +480,17 @@ coordDigits ::
     => Int
     -> (NP I xs, Int)
 coordDigits p =
-    case sList :: SList xs of
-        SNil -> (Nil, p)
-        -- 'unsafeOrdinal' holds on @r@: 'quotRem' by a positive divisor with a
-        -- non-negative numerator gives @0 <= r < size@, and @q@ is non-negative
-        -- whenever the @p@ it came from was.
-        SCons @ys @y ->
-            case coordDigits @ys p of
-                (rest, q) ->
-                    case q `quotRem` ordinalSize @(CoordNat y) of
-                        (q', r) ->
-                            (I (review asOrdinal (unsafeOrdinal r)) :* rest, q')
+  case sList :: SList xs of
+    SNil -> (Nil, p)
+    -- 'unsafeOrdinal' holds on @r@: 'quotRem' by a positive divisor with a
+    -- non-negative numerator gives @0 <= r < size@, and @q@ is non-negative
+    -- whenever the @p@ it came from was.
+    SCons @ys @y ->
+      case coordDigits @ys p of
+        (rest, q) ->
+          case q `quotRem` ordinalSize @(CoordNat y) of
+            (q', r) ->
+              (I (review asOrdinal (unsafeOrdinal r)) :* rest, q')
 
 -- | Move by a signed displacement, or 'Nothing' if that leaves the grid.
 --
@@ -963,9 +963,9 @@ onBoundary = any isJust . axisBoundaries
 -- 'onBoundary' has nothing to report on a space of one point.
 isCorner :: IsCoordList cs => Coord cs -> Bool
 isCorner c =
-    case axisBoundaries c of
-        [] -> False
-        bs -> all isJust bs
+  case axisBoundaries c of
+    [] -> False
+    bs -> all isJust bs
 
 -- | Every coordinate that is not 'onBoundary', in 'allCoord' order.
 --
@@ -1007,7 +1007,7 @@ tranposeCoord (Coord (a :* b :* Nil)) = Coord (b :* a :* Nil)
 
 -- | The zero position for a coord
 zeroCoord :: IsCoordList cs => Coord cs
-zeroCoord = Coord $ hcpure (Proxy :: Proxy IsCoordLifted) (I $ zeroPosition)
+zeroCoord = Coord $ hcpure (Proxy :: Proxy IsCoordLifted) (I zeroPosition)
 
 -- | An axis contributing to 'centreCoord': lifted, and odd, via
 -- 'Data.Grid.Sized.Coord.Class.OddC'.
@@ -1063,17 +1063,17 @@ instance AllSizedKnown '[] where
     sizeProof = Dict
 
 instance (KnownNat n, AllSizedKnown as) =>
-         AllSizedKnown ((c n) ': as) where
+         AllSizedKnown (c n ': as) where
     sizeProof = withDict (sizeProof @as) Dict
 
 class WeakenCoord as bs where
   weakenCoord :: Coord as -> Maybe (Coord bs)
 
 instance WeakenCoord '[] '[] where
-  weakenCoord c = Just c
+  weakenCoord = Just
 
 instance (WeakenCoord as bs, IsCoord c, KnownNat m) =>
-         WeakenCoord ((c n) ': as) ((c m) ': bs) where
+         WeakenCoord (c n ': as) (c m ': bs) where
     weakenCoord (a :| as) = do
         bs <- weakenCoord as
         b <- weakenIsCoord a
@@ -1090,5 +1090,5 @@ instance ( StrengthenCoord as bs
          , n <= m
          , KnownNat m
          ) =>
-         StrengthenCoord ((c n) ': as) ((c m) ': bs) where
+         StrengthenCoord (c n ': as) (c m ': bs) where
   strengthenCoord (a :| as) = strengthenIsCoord a :| strengthenCoord as

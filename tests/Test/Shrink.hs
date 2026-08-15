@@ -35,7 +35,7 @@ sourceOfFive = fromJust $ gridFromList [1, 2, 3, 4, 5]
 windowAt :: Int -> Grid '[ Ordinal 3] Int
 windowAt n =
   let c :: Coord '[ Ordinal 3]
-      c = fromJust $ (:| EmptyCoord) <$> numToOrdinal n
+      c = fromJust (numToOrdinal n) :| EmptyCoord
    in shrinkGrid c sourceOfFive
 
 -- | What the four cases above check one offset at a time, stated once for every

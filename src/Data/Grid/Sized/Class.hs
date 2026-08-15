@@ -27,18 +27,15 @@ instance (AllSizedKnown cs, IsCoordList cs) =>
          IsGrid cs (Grid cs) where
     gridIndex coord =
         lens
-            (\g -> index g coord)
+            (`index` coord)
             (\g a ->
                  unsafeGridFromVector
                      (gridVector g & ix (coordPosition coord) .~ a))
     asGrid = id
-    asFocusedGrid =
-        lens (\g -> FocusedGrid g zeroCoord) (\_ fg -> focusedGrid fg)
+    asFocusedGrid = lens (`FocusedGrid` zeroCoord) (const focusedGrid)
 
 instance (AllSizedKnown cs, IsCoordList cs) =>
          IsGrid cs (FocusedGrid cs) where
-    gridIndex c =
-        (\f (FocusedGrid g p) -> (\g' -> FocusedGrid g' p) <$> f g) .
-        gridIndex c
+    gridIndex c = (\f (FocusedGrid g p) -> (`FocusedGrid` p) <$> f g) . gridIndex c
     asGrid = lens focusedGrid (\(FocusedGrid _ p) g -> FocusedGrid g p)
     asFocusedGrid = id
