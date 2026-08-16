@@ -19,6 +19,7 @@ import           Test.Boundary
 import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
+import           Test.Path
 import           Test.Ray
 import           Test.Reflective
 import           Test.Shrink
@@ -359,6 +360,7 @@ main =
        , neighbourTests
        , boundaryTests
        , rayTests
+       , pathTests
        , invariantTests
        , ordinalTests
        ]

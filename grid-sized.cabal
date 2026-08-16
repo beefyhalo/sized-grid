@@ -164,6 +164,7 @@ test-suite tests
     Test.Invariant
     Test.Neighbours
     Test.Ordinal
+    Test.Path
     Test.Ray
     Test.Reflective
     Test.Shrink

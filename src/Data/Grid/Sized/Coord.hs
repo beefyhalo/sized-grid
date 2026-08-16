@@ -34,6 +34,10 @@ module Data.Grid.Sized.Coord
   , OffGrid(..)
   , offsetCoordUpTo
   , coordRay
+    -- * Paths
+  , Path(..)
+  , walkPath
+  , pathOffset
     -- * Distance
   , axisDistance
   , axisDistances
@@ -70,6 +74,7 @@ import           Data.Grid.Sized.Ordinal
 
 import           Control.Applicative   (empty)
 import           Control.Lens          hiding (from, to)
+import           Control.Monad         (foldM)
 import           Control.Monad.State
 import           Data.AdditiveGroup
 import           Data.Aeson
@@ -594,6 +599,100 @@ coordRay ::
     -> Diff (Coord cs)
     -> [Coord cs]
 coordRay c d = unfoldr (\x -> (\y -> (y, y)) <$> offsetCoord x d) c
+
+-- | An ordered sequence of elementary displacements: unlike @'Diff' ('Coord'
+-- cs)@, which is a single 'Coord' of per-axis 'Int's summed down to one
+-- number per axis, a 'Path' keeps the steps that produced it (sized-grid-ghj).
+--
+-- On a flat space the distinction is bookkeeping: @'Diff' ('Coord' cs)@ is the
+-- right representation because two routes to the same total displacement land
+-- in the same place, so nothing is lost by summing first and applying once.
+-- That is true of every boundary policy this library has --- 'axisSteps',
+-- 'Data.Grid.Sized.Coord.Class.offsetIsCoord' and every 'AffineSpace' instance
+-- act on one axis at a time and cannot see a sibling axis, which is exactly
+-- what makes them separable (see the note on
+-- 'Data.Grid.Sized.Coord.Class.IsCoordList', sized-grid-3u1). A policy that
+-- transforms the frame at a seam --- a Möbius strip, an atlas tile --- is not
+-- separable, and there the distinction stops being bookkeeping: crossing such
+-- a seam changes what a later step means, so north-then-east-twice can land
+-- somewhere east-twice-then-north does not. Summing the steps first throws
+-- that away before it can be answered; walking them one at a time, through
+-- 'walkPath', does not.
+--
+-- Nothing in the library transforms a frame yet --- that is sized-grid-o1n ---
+-- so today every 'IsCoord' instance treats a 'Path' exactly as its summed
+-- 'pathOffset' would predict, on any route a wall does not block; see the
+-- note on 'walkPath' for the one way the two still disagree even now, and why
+-- it is a different fact from the one this type is filed for. 'Path' exists
+-- ahead of the seam rule so that work has a place to attach the frame
+-- transform without touching @'Coord' cs@'s own offset path, which
+-- sized-grid-135 and its siblings measured and unrolled; see the note on
+-- 'AffineCoordList' for why that path stays as it is.
+newtype Path cs = Path
+    { pathSteps :: [Diff (Coord cs)]
+      -- ^ The steps, in the order they are taken.
+    }
+
+deriving instance Eq (Diff (Coord cs)) => Eq (Path cs)
+
+deriving instance Show (Diff (Coord cs)) => Show (Path cs)
+
+-- | Concatenating two paths is taking one after the other, and the empty path
+-- is standing still. No constraint is needed: appending steps does not look
+-- at what they are.
+instance Semigroup (Path cs) where
+    Path a <> Path b = Path (a <> b)
+
+instance Monoid (Path cs) where
+    mempty = Path []
+
+-- | Walk a 'Path' one step at a time through 'offsetCoord', stopping with
+-- 'Nothing' the moment a step would leave the grid.
+--
+-- This is the operation 'Path' exists for: it resolves each step against the
+-- coordinate the previous one landed on, rather than folding every step into
+-- one displacement first. Nothing here transforms the frame between steps yet
+-- (sized-grid-o1n), so today this only differs from
+-- @'offsetCoord' c ('pathOffset' p)@ on a route a wall interrupts --- and it is
+-- worth being precise that this is a different fact from the one 'Path' was
+-- filed for:
+--
+-- > walkPath (hwc 0 0) (Path [d2 (-1) 0, d2 1 0]) == Nothing
+-- > offsetCoord (hwc 0 0) (pathOffset (Path [d2 (-1) 0, d2 1 0])) == Just (hwc 0 0)
+--
+-- on a @'Data.Grid.Sized.Coord.Clamped.Clamped' 5@ axis: the first step alone
+-- already leaves the low edge, so the walk never gets to take the second, even
+-- though the two steps cancel and the combined displacement is zero. That is
+-- the same fact 'coordRay' and 'offsetCoordUpTo' already report --- a wall
+-- blocks a route even when it does not block a destination --- and it holds
+-- with no seam anywhere in sight. See 'pathOffset' for exactly when the two
+-- agree.
+walkPath ::
+       ( IsCoordList cs
+       , AllDiffSame Int cs
+       )
+    => Coord cs
+    -> Path cs
+    -> Maybe (Coord cs)
+walkPath c (Path ds) = foldM offsetCoord c ds
+
+-- | The single displacement a 'Path'\'s steps sum to, forgetting the order
+-- they were taken in.
+--
+-- This is the collapse 'Path' is checked against, and stating it precisely is
+-- what gives "this boundary policy is separable" an operational meaning
+-- rather than a descriptive one: on every policy in the library today,
+-- @'walkPath' c p@ and @'offsetCoord' c ('pathOffset' p)@ agree on any route no
+-- wall interrupts, because every per-axis step answers a displacement the
+-- same way no matter what came before it, so summing first cannot change the
+-- destination. A seam that transforms the frame would break exactly this: the
+-- sum would no longer know which frame each step was taken in, so it could not
+-- say where the walk ends even when 'walkPath' still can. That is why
+-- 'pathOffset' is well-defined as a single number at all --- there is no
+-- frame for the order to matter to --- and it is the reason a non-separable
+-- policy needs 'Path' itself, not a smarter 'Diff'.
+pathOffset :: All AdditiveGroup (MapDiff cs) => Path cs -> Diff (Coord cs)
+pathOffset (Path ds) = foldl' (^+^) zeroV ds
 
 -- | Every coordinate within @r@ steps on each axis, paired with the total
 -- number of steps taken across all axes.
