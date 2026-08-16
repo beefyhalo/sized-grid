@@ -16,6 +16,7 @@ import           Data.Grid.Sized
 
 import           Test.Arbitrary ()
 import           Test.Boundary
+import           Test.Focused
 import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
@@ -361,6 +362,7 @@ main =
        , boundaryTests
        , rayTests
        , pathTests
+       , focusedTests
        , invariantTests
        , ordinalTests
        ]

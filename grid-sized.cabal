@@ -161,6 +161,7 @@ test-suite tests
   other-modules:
     Test.Arbitrary
     Test.Boundary
+    Test.Focused
     Test.Invariant
     Test.Neighbours
     Test.Ordinal

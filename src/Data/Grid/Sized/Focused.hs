@@ -1,5 +1,8 @@
 module Data.Grid.Sized.Focused
   ( FocusedGrid(..)
+  , traceOffset
+  , tracePath
+  , walkEverywhere
   ) where
 
 import           Data.Grid.Sized.Coord
@@ -58,3 +61,54 @@ instance ( AllSizedKnown cs
     peeks func (FocusedGrid g p) = index g (func p)
     seek p (FocusedGrid g _) = FocusedGrid g p
     seeks func (FocusedGrid g p) = FocusedGrid g $ func p
+
+-- | The cell a single displacement away from the focus, or 'Nothing' if the
+-- step would leave the grid.
+--
+-- This is the relative counterpart to 'peek' that 'ComonadTraced' would have
+-- given us, without the class: sized-grid-yws found that 'ComonadTraced'
+-- cannot be added lawfully here, because its @Monoid m@ obligation does not
+-- fit a displacement (an 'AdditiveGroup', not a 'Monoid' -- 'Int' has no
+-- 'Semigroup' instance) and its fundep would commit 'FocusedGrid' to being
+-- traced by a displacement *or* a 'Path' but never both, foreclosing the
+-- order-dependent case sized-grid-ghj needs. A plain function has neither
+-- problem and fuses the same way under 'extend'.
+--
+-- 'Maybe', not @a@, for the same reason 'offsetCoord' returns 'Maybe': a
+-- displacement can name a point that is not on the grid, and this library
+-- does not clamp or crash silently.
+traceOffset ::
+       ( AllSizedKnown cs
+       , IsCoordList cs
+       , AllDiffSame Int cs
+       )
+    => Coord (MapDiff cs)
+    -> FocusedGrid cs a
+    -> Maybe a
+traceOffset d (FocusedGrid g p) = index g <$> offsetCoord p d
+
+-- | The cell a 'Path' away from the focus, walked one step at a time through
+-- 'walkPath' rather than summed first -- see 'Path' for the wall it walks
+-- into that a summed displacement would not.
+tracePath ::
+       ( AllSizedKnown cs
+       , IsCoordList cs
+       , AllDiffSame Int cs
+       )
+    => Path cs
+    -> FocusedGrid cs a
+    -> Maybe a
+tracePath p (FocusedGrid g focusPos) = index g <$> walkPath focusPos p
+
+-- | Start a walker at every cell and follow the same 'Path' from each,
+-- landing on the whole grid's worth of answers in one 'tabulate' instead of
+-- calling 'tracePath' from each position by hand.
+walkEverywhere ::
+       ( AllSizedKnown cs
+       , IsCoordList cs
+       , AllDiffSame Int cs
+       )
+    => Path cs
+    -> FocusedGrid cs a
+    -> FocusedGrid cs (Maybe a)
+walkEverywhere p = extend (tracePath p)
