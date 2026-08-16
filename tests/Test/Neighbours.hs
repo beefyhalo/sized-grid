@@ -423,6 +423,59 @@ stepsWithinTests =
               [n | (s, n) <- stepsWithin 2 c, s > 0] === mooreNeighbours 2 c
         ]
 
+-- | Tests for 'centreCoord' and the odd-extent precondition it carries
+-- (@sized-grid-hk6@).
+--
+-- The precondition itself is a compile error, not a runtime one, so it is
+-- demonstrated rather than tested here --- the same choice
+-- "Test.Invariant" makes for the cases 'takeGrid' and 'splitHigherDim' now
+-- reject at compile time (sized-grid-cti has the harness that would pin it
+-- down as a real test):
+--
+-- >  centreCoord :: Coord '[Clamped 4]
+-- >    error: Dimension '4' must be odd to have a centre coordinate
+centredTests :: TestTree
+centredTests =
+    testGroup
+        "centreCoord"
+        [ testCase "a single odd axis sits at (n - 1) / 2" $
+              assertEqual
+                  ""
+                  (singleCoord (hwOf 2 :: Clamped 5))
+                  (centreCoord :: Coord '[Clamped 5])
+        , testCase "every axis of the same size is centred independently" $
+              assertEqual "" (hwc 2 2) (centreCoord :: Coord '[Clamped 5, Clamped 5])
+        , testCase "axes of different odd sizes each get their own middle" $
+              assertEqual
+                  ""
+                  (hwOf 2 :| hwOf 1 :| EmptyCoord :: Coord '[Clamped 5, Clamped 3])
+                  centreCoord
+        , testCase "a torus axis is centred the same way as a bounded one" $
+              assertEqual
+                  ""
+                  (singleCoord (peOf 3 :: Periodic 7))
+                  (centreCoord :: Coord '[Periodic 7])
+        , testCase "mixed boundary policies each centre their own axis" $
+              assertEqual
+                  ""
+                  (hwOf 2 :| peOf 3 :| EmptyCoord :: Coord '[Clamped 5, Periodic 7])
+                  centreCoord
+        , testCase "the empty coord centres to itself" $
+              assertEqual "" EmptyCoord (centreCoord :: Coord '[])
+        , testCase "equidistant from both ends of a Clamped axis" $
+              let (c :| EmptyCoord) = centreCoord :: Coord '[Clamped 9]
+              in assertEqual
+                     ""
+                     (axisDistance c (hwOf 0 :: Clamped 9))
+                     (axisDistance c (hwOf 8 :: Clamped 9))
+        , testCase "equidistant from both ends of a Periodic axis" $
+              let (c :| EmptyCoord) = centreCoord :: Coord '[Periodic 9]
+              in assertEqual
+                     ""
+                     (axisDistance c (peOf 0 :: Periodic 9))
+                     (axisDistance c (peOf 8 :: Periodic 9))
+        ]
+
 -- | Seven axes: one past the ceiling the old @CoordDiff@ family imposed.
 --
 -- @CoordDiff@ was an open family with one hand-written @type instance@ per
@@ -503,4 +556,5 @@ neighbourTests =
         , mixedPolicyTests
         , metricLawTests
         , stepsWithinTests
+        , centredTests
         ]
