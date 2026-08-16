@@ -20,6 +20,7 @@ import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
 import           Test.Ray
+import           Test.Reflective
 import           Test.Shrink
 import           Test.Tiling
 import           Test.Utils
@@ -256,6 +257,17 @@ main =
            , aesonLaws p
            , isCoordLaws p
            ]
+      -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance:
+      -- unlike 'Clamped' and 'Periodic', neither type gives '<>' a meaning the
+      -- issue asked for, so none was invented. 'Test.Reflective' has the
+      -- bounce-specific properties; these are the same three law suites every
+      -- other axis type gets here.
+      reflective =
+        let p = Proxy @(Reflective 10)
+        in [affineSpaceLaws p, aesonLaws p, isCoordLaws p]
+      reflect101 =
+        let p = Proxy @(Reflect101 10)
+        in [affineSpaceLaws p, aesonLaws p, isCoordLaws p]
       coord =
         let p = Proxy @(Coord '[ Clamped 10, Periodic 20])
         in [ semigroupLaws p
@@ -289,6 +301,9 @@ main =
        [ testGroup "Ordinal 10" ordinal
        , testGroup "Periodic 10" periodic
        , testGroup "Clamped 10" clamped
+       , testGroup "Reflective 10" reflective
+       , testGroup "Reflect101 10" reflect101
+       , reflectiveTests
        , testGroup "Coord [Clamped 10, Periodic 20]" coord
        , testGroup "Coord [Periodic 10, Periodic 20]" coord2
        , testGroup "2D Coords" $

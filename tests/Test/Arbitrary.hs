@@ -53,6 +53,12 @@ instance (1 <= n, KnownNat n) => Arbitrary (Periodic n) where
 instance (1 <= n, KnownNat n) => Arbitrary (Clamped n) where
   arbitrary = Clamped <$> genOrdinal
 
+instance (1 <= n, KnownNat n) => Arbitrary (Reflective n) where
+  arbitrary = Reflective <$> genOrdinal
+
+instance (1 <= n, KnownNat n) => Arbitrary (Reflect101 n) where
+  arbitrary = Reflect101 <$> genOrdinal
+
 -- | The product a 'Coord' wraps. Split out from the 'Coord' instance below so
 -- that the '_WrappedCoord' iso can be quantified over from both ends.
 instance (All Arbitrary cs, SListI cs) => Arbitrary (NP I cs) where

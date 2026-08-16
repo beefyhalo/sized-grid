@@ -127,6 +127,8 @@ library
     Data.Grid.Sized.Coord.Clamped
     Data.Grid.Sized.Coord.Class
     Data.Grid.Sized.Coord.Periodic
+    Data.Grid.Sized.Coord.Reflect101
+    Data.Grid.Sized.Coord.Reflective
     Data.Grid.Sized.Focused
     Data.Grid.Sized.Ordinal
     Data.Grid.Sized.Unsafe
@@ -163,6 +165,7 @@ test-suite tests
     Test.Neighbours
     Test.Ordinal
     Test.Ray
+    Test.Reflective
     Test.Shrink
     Test.Tiling
     Test.Utils
