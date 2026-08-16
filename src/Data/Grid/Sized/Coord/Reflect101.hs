@@ -57,39 +57,71 @@ instance IsCoord Reflect101 where
   -- distance is measured straight and the two ends still report as edges.
   -- Pinned by property tests in @Test.Boundary@.
 
+  -- | The seam rule's frame half (sized-grid-o1n), for the same reason and by
+  -- the same sharing as
+  -- 'Data.Grid.Sized.Coord.Reflective.Reflective''s: a mirror bounce reverses
+  -- direction on an odd number of wall hits, which 'mirrorAt' already
+  -- computes for ('.+^').
+  axisFrameFlipsIsCoord :: forall n. KnownNat n => Reflect101 n -> Int -> Bool
+  axisFrameFlipsIsCoord (Reflect101 a) d =
+      snd (mirrorAt @n (ordinalToInt a) d)
+
 -- | Not mirrored, for the reason 'Data.Grid.Sized.Coord.Reflective.Reflective'
 -- gives at its own ('.-.'): mirroring the difference would break
 -- @b .+^ (a .-. b) == a@.
 instance (1 <= n, KnownNat n) => AffineSpace (Reflect101 n) where
   type Diff (Reflect101 n) = Int
   Reflect101 a .-. Reflect101 b = ordinalToInt a - ordinalToInt b
-  -- Mirroring around the edge /cell/ rather than the wall beyond it is a
-  -- billiard bounce on an axis stretched by one at each end: the two edge
-  -- cells, at @0@ and @m = size - 1@, are each their own mirror image, so the
-  -- period is @2 * m@ rather than the @2 * size@ of
-  -- 'Data.Grid.Sized.Coord.Reflective.Reflective'. The branch is the same
-  -- triangle wave with @m@ in place of @size@ and a strict @>@ in place of
-  -- @>=@, since @r == m@ is the fixed point of the mirror rather than a value
-  -- that still has a partner past it.
-  --
-  -- @m == 0@ is the axis of size 1, which has one value and no distinct
-  -- neighbour to mirror around: every displacement lands back on it, so the
-  -- general formula's @2 * m@ period is degenerate and is special-cased
-  -- directly rather than divided by.
-  --
-  -- The displacement is reduced modulo the period before it is added, for the
-  -- overflow reason given on
-  -- 'Data.Grid.Sized.Coord.Reflective.Reflective'\'s ('.+^').
-  Reflect101 a .+^ d
-      | m == 0 = Reflect101 (unsafeOrdinal 0)
-      | otherwise =
-          Reflect101 $
-          unsafeOrdinal $
-          if r > m
-              then period - r
-              else r
-    where
-      m = ordinalSize @n - 1
-      period = 2 * m
-      dx = d `mod` period
-      r = (ordinalToInt a + dx) `mod` period
+  Reflect101 a .+^ d = Reflect101 $ unsafeOrdinal $ fst (mirrorAt @n (ordinalToInt a) d)
+
+-- | Mirroring around the edge /cell/ rather than the wall beyond it is a
+-- billiard bounce on an axis stretched by one at each end: the two edge
+-- cells, at @0@ and @m = size - 1@, are each their own mirror image, so the
+-- period is @2 * m@ rather than the @2 * size@ of
+-- 'Data.Grid.Sized.Coord.Reflective.Reflective'. The branch is the same
+-- triangle wave with @m@ in place of @size@ and a strict @>@ in place of
+-- @>=@ for the /position/, since @r == m@ is the fixed point of the mirror
+-- rather than a value that still has a partner past it --- both branches
+-- agree at @r == m@ (@period - m == m@), so it makes no difference to the
+-- position which side of the boundary owns it.
+--
+-- @m == 0@ is the axis of size 1, which has one value and no distinct
+-- neighbour to mirror around: every displacement lands back on it, so the
+-- general formula's @2 * m@ period is degenerate and is special-cased
+-- directly rather than divided by. It never bounces, so it never flips.
+--
+-- The displacement is reduced modulo the period before it is added, for the
+-- overflow reason given on
+-- 'Data.Grid.Sized.Coord.Reflective.Reflective'\'s ('.+^').
+--
+-- == Why the flip half uses @>=@ where the position half uses @>@
+--
+-- Unlike 'Data.Grid.Sized.Coord.Reflective.Reflective', whose two walls sit
+-- at half-integers and so are never landed on exactly, @r == m@ here /is/ a
+-- real, reachable position --- the fixed point of the far mirror --- and it
+-- is genuinely ambiguous which orientation it carries: unfolding a raw
+-- displacement that lands there can equally be described as one reflection
+-- or as a translation composed with a different reflection, and those two
+-- descriptions disagree on parity even though they agree on where you land.
+-- 'Data.Grid.Sized.Coord.Reflective.Reflective' has no such point, which is
+-- why its own recursive bounce count is unambiguous everywhere and this
+-- one is not (see the note on @reflect101FlipRef@ in @Test.Reflective@,
+-- where the property test excludes exactly this case).
+--
+-- So @r == m@'s flip is a choice, not a derivation, and @>=@ records the one
+-- made here: the far wall's fixed point sides with the reflected copy.
+-- Pinned by an explicit example in @Test.Reflective@ rather than a property,
+-- since there is no independent law that example could report a
+-- disagreement with.
+mirrorAt :: forall n. KnownNat n => Int -> Int -> (Int, Bool)
+mirrorAt i d
+    | m == 0 = (0, False)
+    | otherwise =
+        if r >= m
+            then (period - r, True)
+            else (r, False)
+  where
+    m = ordinalSize @n - 1
+    period = 2 * m
+    dx = d `mod` period
+    r = (i + dx) `mod` period

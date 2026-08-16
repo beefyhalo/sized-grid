@@ -63,6 +63,16 @@ instance IsCoord Reflective where
   -- between them, and the wall a walker bounces off is still the wall. Pinned
   -- by property tests in @Test.Boundary@ rather than left to be rediscovered.
 
+  -- | The seam rule's frame half (sized-grid-o1n): a billiard bounce reverses
+  -- the walker's sense of direction on this axis exactly when it hit an odd
+  -- number of walls, which 'bounceAt' below already computes as a side
+  -- effect of the same triangle wave ('.+^') folds through. Sharing that
+  -- computation, rather than re-deriving the parity here, is what makes the
+  -- two methods provably consistent instead of merely both correct.
+  axisFrameFlipsIsCoord :: forall n. KnownNat n => Reflective n -> Int -> Bool
+  axisFrameFlipsIsCoord (Reflective a) d =
+      snd (bounceAt @n (ordinalToInt a) d)
+
 -- | The difference of two coords is a signed displacement, not a coord, so it
 -- is not bounced: bouncing it would break @b .+^ (a .-. b) == a@ the same way
 -- clamping it does on 'Data.Grid.Sized.Coord.Clamped.Clamped', for the reason
@@ -70,32 +80,42 @@ instance IsCoord Reflective where
 instance (1 <= n, KnownNat n) => AffineSpace (Reflective n) where
   type Diff (Reflective n) = Int
   Reflective a .-. Reflective b = ordinalToInt a - ordinalToInt b
-  -- The closed form of
-  --
-  -- > bounceAxis size x dx = go (x + dx) where
-  -- >   go i | i < 0     = go (negate i - 1)
-  -- >        | i >= size = go (2 * size - 1 - i)
-  -- >        | otherwise = i
-  --
-  -- A billiard bounce off two walls @size@ apart is periodic with period
-  -- @2 * size@: unfolding the reflections turns @go@ into a triangle wave over
-  -- one period, identity on the first half and mirrored on the second, which
-  -- is exactly what @r@ and the branch below compute without recursing.
-  --
-  -- The displacement is reduced modulo the period before it is added, which is
-  -- what keeps the addition from overflowing: @i@ is already in @[0, size)@
-  -- and @dx@ in @[0, period)@ after the first @mod@, so their sum is below
-  -- @3 * size@ and cannot wrap a bounded 'Int' whatever @d@ was. This is the
-  -- same trade 'Data.Grid.Sized.Coord.Periodic.Periodic' makes in its own
-  -- ('.+^'); see the note there.
-  Reflective a .+^ d =
-      Reflective $
-      unsafeOrdinal $
-      if r < size
-          then r
-          else period - 1 - r
-    where
-      size = ordinalSize @n
-      period = 2 * size
-      dx = d `mod` period
-      r = (ordinalToInt a + dx) `mod` period
+  Reflective a .+^ d = Reflective $ unsafeOrdinal $ fst (bounceAt @n (ordinalToInt a) d)
+
+-- | The closed form of
+--
+-- > bounceAxis size x dx = go (x + dx) where
+-- >   go i | i < 0     = go (negate i - 1)
+-- >        | i >= size = go (2 * size - 1 - i)
+-- >        | otherwise = i
+--
+-- A billiard bounce off two walls @size@ apart is periodic with period
+-- @2 * size@: unfolding the reflections turns @go@ into a triangle wave over
+-- one period, identity on the first half and mirrored on the second, which is
+-- exactly what @r@ and the branch below compute without recursing.
+--
+-- The displacement is reduced modulo the period before it is added, which is
+-- what keeps the addition from overflowing: @i@ is already in @[0, size)@ and
+-- @dx@ in @[0, period)@ after the first @mod@, so their sum is below
+-- @3 * size@ and cannot wrap a bounded 'Int' whatever @d@ was. This is the
+-- same trade 'Data.Grid.Sized.Coord.Periodic.Periodic' makes in its own
+-- ('.+^'); see the note there.
+--
+-- The second half of the result is the seam rule's frame flip
+-- (sized-grid-o1n): @go@ recurses once per wall it bounces off, each
+-- recursion reversing the walker's sense of direction, and a full period
+-- always bounces exactly twice --- once off each wall --- so the parity of
+-- the total bounce count equals the parity within the single reduced period
+-- @r@ falls in. @r >= size@ is exactly "this period's remainder needed the
+-- one bounce that lands in the mirrored half", which is why it doubles as
+-- both the branch condition and the flip.
+bounceAt :: forall n. KnownNat n => Int -> Int -> (Int, Bool)
+bounceAt i d =
+    if r < size
+        then (r, False)
+        else (period - 1 - r, True)
+  where
+    size = ordinalSize @n
+    period = 2 * size
+    dx = d `mod` period
+    r = (i + dx) `mod` period

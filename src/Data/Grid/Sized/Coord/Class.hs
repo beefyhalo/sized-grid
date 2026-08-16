@@ -175,6 +175,68 @@ class IsCoord (c :: Nat -> Type) where
   strengthenIsCoord :: (KnownNat m, (n <= m)) => c n -> c m
   strengthenIsCoord = review asOrdinal . strengthenOrdinal . view asOrdinal
 
+  -- | Whether the total step @('Data.AffineSpace..+^')@ takes by this
+  -- displacement reverses this axis's own sense of direction --- the frame
+  -- half of a seam rule (sized-grid-o1n), restricted to one axis.
+  --
+  -- == The shape this resolves
+  --
+  -- sized-grid-o1n's organising idea is that resolving an out-of-range
+  -- position is not just a coordinate but a coordinate /and/ a transform to
+  -- apply to the walker's own notion of direction:
+  --
+  -- > type Policy = Coord -> (Coord, Needle -> Needle)
+  --
+  -- A closure @Needle -> Needle@ is the general shape, and sized-grid-1bm's
+  -- space-group framing says what it is concretely: an element of a finite
+  -- group of unimodular integer matrices, a signed permutation of the axes.
+  -- At a /single/ axis that group has exactly two elements --- identity and
+  -- negate --- so the closure collapses to a value with no closure at all: a
+  -- 'Bool'. That is sized-grid-o1n's first open question, answered for the
+  -- one-axis case: the representation is a sign bit, not a function.
+  --
+  -- == Why this can be a method of 'IsCoord' at all
+  --
+  -- sized-grid-o1n's second open question is whether the seam rule belongs
+  -- on the coord type or only on a coordinate layer above it. The answer
+  -- splits along the same line sized-grid-3u1 already drew: a policy is
+  -- separable when axis @i@'s edge behaviour is a function of axis @i@
+  -- alone, and 'IsCoord' can express exactly the separable policies because
+  -- every method here is @c n -> ... -> c n@, one axis, unable to reach a
+  -- sibling.
+  --
+  -- A frame flip is separable exactly when it only ever flips /its own/
+  -- axis --- which is all a billiard bounce
+  -- ('Data.Grid.Sized.Coord.Reflective.Reflective',
+  -- 'Data.Grid.Sized.Coord.Reflect101.Reflect101') ever does, so this method
+  -- fits here with no new class. A Möbius seam does not fit: crossing axis
+  -- 0's edge flips axis 1, a fact about the /pair/ that no method of this
+  -- shape can state, exactly as sized-grid-3u1 argues for 'offsetIsCoord'.
+  -- That case still needs a coordinate layer above 'Data.Grid.Sized.Coord.Coord'
+  -- (sized-grid-fh2); this method only ever answers for the one axis it was
+  -- called on.
+  --
+  -- == Relationship to 'offsetIsCoord'
+  --
+  -- This is a fact about @('Data.AffineSpace..+^')@, the total operation,
+  -- not about 'offsetIsCoord', the checked one. The two disagree on purpose
+  -- for 'Data.Grid.Sized.Coord.Reflective.Reflective': its 'offsetIsCoord'
+  -- stays the bounds check and reports 'Nothing' rather than bouncing, so
+  -- there is no consistency law tying this method to 'offsetIsCoord',
+  -- 'axisDistanceIsCoord' or 'axisBoundaryIsCoord' the way those three tie
+  -- to each other.
+  --
+  -- The default is 'False' everywhere, which is the identity transform and
+  -- is correct for every axis type in the library except the two bounce
+  -- policies above: 'Data.Grid.Sized.Coord.Periodic.Periodic' wraps with no
+  -- wall to bounce off, so direction is never reversed
+  -- (@Torus -> (wrap c, id)@ in sized-grid-o1n's own accounting), and
+  -- 'Data.Grid.Sized.Coord.Clamped.Clamped' destroys the excess offset
+  -- rather than reflecting it, so there is no direction to reverse either
+  -- --- it is not a quotient of Z^n at all, per sized-grid-1bm's caveat.
+  axisFrameFlipsIsCoord :: (KnownNat n, 1 <= n) => c n -> Int -> Bool
+  axisFrameFlipsIsCoord _ _ = False
+
 -- | The bounds check that 'offsetIsCoord' takes as its default.
 --
 -- Two comparisons rather than the @'numToOrdinal' (i + d)@ this used to be, and

@@ -49,6 +49,8 @@ module Data.Grid.Sized.Coord
   , onBoundary
   , isCorner
   , interiorCoords
+    -- * Frame transform
+  , axisFrameFlips
     -- * Changing the size of a coord
   , WeakenCoord(..)
   , StrengthenCoord(..)
@@ -812,6 +814,22 @@ coordManhattan a b = sum (axisDistances a b)
 -- 'Data.Grid.Sized.Coord.Periodic.Periodic' one has none.
 axisBoundary :: forall x. IsCoordLifted x => x -> Maybe Extremum
 axisBoundary = axisBoundaryIsCoord @(CoordContainer x) @(CoordNat x)
+
+-- | Whether stepping a single axis by this displacement, through
+-- @('Data.AffineSpace..+^')@, reverses that axis's own sense of direction ---
+-- the frame half of a seam rule (sized-grid-o1n), lifted the same way
+-- 'axisDistance' and 'axisBoundary' are.
+--
+-- 'False' on every axis type in the library except
+-- 'Data.Grid.Sized.Coord.Reflective.Reflective' and
+-- 'Data.Grid.Sized.Coord.Reflect101.Reflect101': a billiard bounce reverses
+-- direction on an odd number of wall hits, and this reports exactly that
+-- parity. See 'Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord' for why the
+-- method fits on 'IsCoord' at all --- only ever answering for the one axis it
+-- is called on is what keeps it inside the separable ceiling
+-- (sized-grid-3u1) rather than requiring the atlas layer (sized-grid-fh2).
+axisFrameFlips :: forall x. IsCoordLifted x => x -> Int -> Bool
+axisFrameFlips = axisFrameFlipsIsCoord @(CoordContainer x) @(CoordNat x)
 
 -- | Where each axis of a coord sits relative to its own ends, first axis first.
 --
