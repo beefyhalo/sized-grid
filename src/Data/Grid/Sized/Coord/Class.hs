@@ -58,6 +58,62 @@ data Extremum
     deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Everything that can be uses as a Coordinate. The only required function is `asOrdinal` and the type instance of `CoordSized`: the rest can be derived automatically.
+--
+-- == Space-group framing (sized-grid-1bm)
+--
+-- Every instance is a choice of quotient
+--
+-- > grid space  =  Z^n / G
+--
+-- an infinite integer lattice, quotiented by a discrete group @G@ of rigid
+-- transformations of that lattice. A step is always the same two moves: add
+-- the displacement in @Z^n@, ignoring edges entirely, then reduce the result
+-- to its canonical representative under @G@. 'offsetIsCoord''s default --- the
+-- bounds check --- and every override of it (wrap, bounce) is that second
+-- move, specialised to one axis. An element of @G@ is an affine map
+-- @T(x) = Ax + b@ with @A@ a unimodular integer matrix, and @A@ is exactly
+-- what 'axisFrameFlipsIsCoord' reports at a single axis: there @G@ has only
+-- two elements, identity and negate, so @A@ collapses to a 'Bool'.
+--
+-- The finite catalogue this puts a shape on, at a single axis:
+--
+--     @G@ (rank 1)                   library instance
+--     -----------------------------  -----------------------------------------------
+--     pure translation (@x + w@)     'Data.Grid.Sized.Coord.Periodic.Periodic', a torus on this axis
+--     reflection (a rank-1 Coxeter   'Data.Grid.Sized.Coord.Reflective.Reflective',
+--     group)                         'Data.Grid.Sized.Coord.Reflect101.Reflect101', a billiard bounce
+--
+-- A product of one such @G_i@ per axis is exactly the separable policies
+-- sized-grid-3u1 describes, and it costs nothing new: @'[Periodic 10,
+-- Clamped 5]@ is a cylinder, @'[Periodic w, Periodic h]@ a torus, with the
+-- per-axis fold 'Data.Grid.Sized.Coord.Class.IsCoordList' already gives being
+-- precisely the block-diagonal @G = G_1 x ... x G_n@ that no-cross-terms
+-- structure amounts to. A Mobius strip's @G@ is not block-diagonal ---
+-- wrapping axis 0 also flips axis 1, an off-diagonal entry no per-axis method
+-- can hold --- and neither is a Klein bottle's, a projective plane's, or a
+-- cube map's: the same fact sized-grid-3u1 and 'axisFrameFlipsIsCoord' give
+-- from the separability side, restated as a claim about which @G@ a per-axis
+-- fold can represent. Those cases need a coordinate layer above 'Coord'
+-- (sized-grid-fh2), not a new instance here.
+--
+-- 'Data.Grid.Sized.Ordinal.Ordinal' and 'Data.Grid.Sized.Coord.Clamped.Clamped'
+-- are deliberately absent from the table, for a reason sharper than "the laws
+-- happen not to hold": quotienting is information-preserving up to the group
+-- action --- every point of @Z^n@ lands on exactly one coset, and the
+-- reduction is invertible up to @G@. Ordinal has no 'Data.AffineSpace.AffineSpace'
+-- instance at all; out-of-range is refused ('offsetIsCoord' returns
+-- 'Nothing'), never folded to a value. Clamped's ('Data.AffineSpace..+^') is
+-- total but not invertible: every out-of-range point collapses onto the same
+-- edge cell, a many-to-one destruction no group action performs. Both are a
+-- bounded fundamental domain with the outside either deleted (Ordinal) or
+-- destroyed (Clamped) rather than identified with an interior point --- not a
+-- quotient of @Z^n@ at all, which is why neither has anything for
+-- 'axisFrameFlipsIsCoord' to report beyond its trivial default.
+--
+-- This is a classification, not a plan: it says which policies exist and
+-- where each one's frame transform comes from. It is not a proposal to
+-- represent a coordinate as a group coset at run time --- the per-axis
+-- 'IsCoord' representation stays exactly as it is.
 class IsCoord (c :: Nat -> Type) where
   -- | As each coord represents a finite number of states, it must be isomorphic to an Ordinal
   asOrdinal :: Iso' (c n) (Ordinal n)
