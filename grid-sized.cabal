@@ -137,6 +137,7 @@ library
   -- than exposed so that "Data.Grid.Sized.Unsafe" can be the only public route
   -- to it; see the header of either module.
   other-modules:
+    Data.Grid.Sized.Internal.Error
     Data.Grid.Sized.Internal.Grid
     Data.Grid.Sized.Internal.Type
   build-depends:
