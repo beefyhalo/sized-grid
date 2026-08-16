@@ -23,6 +23,9 @@ module Data.Grid.Sized.Coord
   , coordPosition
   , coordFromPosition
   , coordSpaceSize
+    -- * Centred coordinates
+  , CentredAxis
+  , centreCoord
     -- * Neighbourhoods
   , offsetCoord
   , neighbours
@@ -924,6 +927,53 @@ tranposeCoord (Coord (a :* b :* Nil)) = Coord (b :* a :* Nil)
 -- | The zero position for a coord
 zeroCoord :: IsCoordList cs => Coord cs
 zeroCoord = Coord $ hcpure (Proxy :: Proxy IsCoordLifted) (I $ zeroPosition)
+
+-- | An axis contributing to 'centreCoord': lifted, and odd, via
+-- 'Data.Grid.Sized.Coord.Class.OddC'.
+--
+-- A separate class rather than writing @(IsCoordLifted x, OddC x)@ directly at
+-- 'centreCoord''s use of 'All': @generics-sop@'s 'All' takes one class per
+-- element, not a conjunction of two, so this is what lets the fold below use
+-- the same shape 'zeroCoord' does. It is also where 'centreCoord' keeps the
+-- precondition paired with the coordinate it guards --- there is no
+-- 'CentredAxis' instance for an even axis, so there is no @All CentredAxis cs@
+-- for a coord list containing one, and so no way to call 'centreCoord' on it
+-- at all.
+class (IsCoordLifted x, OddC x) => CentredAxis x
+
+instance (IsCoordLifted x, OddC x) => CentredAxis x
+
+-- | The middle value of a single axis: the index @(n - 1) \`div\` 2@, which is
+-- equidistant from both ends exactly when @n@ is odd.
+--
+-- Asks only 'IsCoordLifted', not 'OddC': the arithmetic is well-defined at any
+-- size, and it is 'centreCoord', not this, that refuses an even axis, by
+-- folding over 'CentredAxis' rather than 'IsCoordLifted' alone.
+centreAxis :: forall x. IsCoordLifted x => x
+centreAxis =
+    review asOrdinal $
+    unsafeOrdinal @(CoordNat x) ((ordinalSize @(CoordNat x) - 1) `div` 2)
+
+-- | The coordinate sitting at the middle of every axis at once, once every
+-- axis is known to have one: a window-shaped operation's focus.
+--
+-- Prior art: Chris Penner's 'grids' (Hackage 0.5.0.1,
+-- @Data.Grid.Internal.Shapes@) states this as
+--
+-- > class Centered (dims :: [Nat]) where
+-- >   centerCoord :: Coord dims
+--
+-- with two @OVERLAPPING@\/@OVERLAPPABLE@ instances distinguishing a
+-- one-element list of dimensions from a longer one, because computing the
+-- centre needed different code at each. That split is not needed here: this
+-- library already has a fold over an axis list that builds a 'Coord' the same
+-- way regardless of length --- 'zeroCoord', @hcpure@ over one class per axis
+-- --- and 'centreCoord' is that fold with 'CentredAxis' in place of
+-- 'IsCoordLifted'. An even axis is refused by 'OddC'\'s sentence at the
+-- 'CentredAxis' instance, before 'hcpure' is ever reached, rather than by a
+-- second instance written to reject it.
+centreCoord :: forall cs. All CentredAxis cs => Coord cs
+centreCoord = Coord $ hcpure (Proxy :: Proxy CentredAxis) (I centreAxis)
 
 class AllSizedKnown (cs :: [Type]) where
   sizeProof :: Dict (KnownNat (MaxCoordSize cs))

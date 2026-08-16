@@ -8,17 +8,23 @@ module Data.Grid.Sized.Coord.Class
   , MapDiff
   , AllDiffSame
   , Extremum(..)
+  , Even
+  , Odd
+  , OddC
   , maxCoordSize
   , allCoordLike
   , axisSteps
   ) where
 
+import           Data.Grid.Sized.Internal.Error (type (?!))
 import           Data.Grid.Sized.Ordinal
 
 import           Control.Lens
-import           Data.AffineSpace (Diff)
-import           Data.Kind        (Constraint, Type)
-import           Generics.SOP     (All, I (..), NP (..))
+import           Data.AffineSpace   (Diff)
+import           Data.Kind          (Constraint, Type)
+import           Data.Type.Bool     (Not)
+import           Data.Type.Equality (type (==))
+import           Generics.SOP       (All, I (..), NP (..))
 import           GHC.TypeLits
 
 -- | The largest value a coord of size @n@ can hold, which is @n - 1@.
@@ -363,6 +369,27 @@ class ( x ~ ((CoordContainer x) (CoordNat x))
 instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
   type CoordContainer (c n) = c
   type CoordNat (c n) = n
+
+-- | Whether a 'Nat' is even.
+type Even (n :: Nat) = Mod n 2 == 0
+
+-- | Whether a 'Nat' is odd: not 'Even'. A window-shaped operation wants this
+-- --- a window with an even side has no middle cell, so there is no
+-- coordinate for a focus to sit at. 'Data.Grid.Sized.Coord.centreCoord' is the
+-- first consumer.
+type Odd (n :: Nat) = Not (Even n)
+
+-- | 'Odd', turned into a readable compile error naming the offending axis
+-- size, so failing to centre a coord list with an even axis reads as a
+-- sentence rather than an unsolved 'Odd' goal.
+--
+-- The idea, not the code, is Chris Penner's 'grids' (Hackage 0.5.0.1,
+-- @Data.Grid.Internal.Shapes@); see the note on
+-- 'Data.Grid.Sized.Coord.CentredAxis'.
+type OddC (x :: Type) =
+    Odd (CoordNat x) ?!
+    ('Text "Dimension '" ':<>: 'ShowType (CoordNat x) ':<>:
+     'Text "' must be odd to have a centre coordinate")
 
 -- | The values one axis can reach within @r@ steps of @c@, paired with the
 -- number of steps it actually takes to get there.
