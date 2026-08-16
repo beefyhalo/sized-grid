@@ -14,6 +14,7 @@ import           Data.Grid.Sized
 import           Test.Arbitrary        ()
 
 import           Control.Comonad       (extract)
+import           Data.AffineSpace      ((.+^))
 import           Data.Functor.Rep      (index, tabulate)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -97,6 +98,50 @@ walkEverywhereTests =
                       tracePath p (FocusedGrid (focusedGrid fg) q)
         ]
 
+-- | The bounce policies, so 'stepWalkerTests' has an axis whose
+-- 'axisFrameFlips' is sometimes 'True' to exercise (sized-grid-448).
+type RG = FocusedGrid '[ Reflective 5, Reflective 5] Int
+
+rf :: Int -> Reflective 5
+rf = Reflective . maybe (error "in range") id . numToOrdinal
+
+stepWalkerTests :: TestTree
+stepWalkerTests =
+    testGroup
+        "stepWalker"
+        [ testProperty "agrees with transportCoord on a Clamped grid" $
+              \(fg :: FG) (a, b) ->
+                  let w = Walker fg (d2 a b)
+                      (p', h') = transportCoord (focusedGridPosition fg) (d2 a b)
+                   in stepWalker w === Walker (FocusedGrid (focusedGrid fg) p') h'
+        , testProperty "agrees with transportCoord on a bounce grid" $
+              \(fg :: RG) (a, b) ->
+                  let w = Walker fg (d2 a b)
+                      (p', h') = transportCoord (focusedGridPosition fg) (d2 a b)
+                   in stepWalker w === Walker (FocusedGrid (focusedGrid fg) p') h'
+        , -- 'Clamped' destroys the excess offset instead of reflecting it
+          -- (the note on 'axisFrameFlips'), so a walker's heading survives a
+          -- step into the wall even though its position does not move past it.
+          testProperty "a Clamped wall never turns the heading" $
+              \(fg :: FG) (a, b) -> walkerHeading (stepWalker (Walker fg (d2 a b))) === d2 a b
+        , -- The case sized-grid-448 opens with: on a bounce axis, hitting a
+          -- wall reverses that axis's component of the heading and leaves the
+          -- other axis alone, computed against the position through ('.+^')
+          -- rather than a hand-picked number.
+          testCase "a bounce wall reverses the heading on the axis it hit" $
+              let g = tabulate (const (0 :: Int))
+                  w = Walker (FocusedGrid g (rf 0 :| rf 2 :| EmptyCoord)) (d2 (-1) 1)
+                  w' = stepWalker w
+               in do
+                    assertEqual
+                        "position"
+                        ((rf 0 .+^ (-1)) :| (rf 2 .+^ 1) :| EmptyCoord)
+                        (focusedGridPosition (walkerGrid w'))
+                    assertEqual "heading" (d2 1 1) (walkerHeading w')
+        ]
+
 focusedTests :: TestTree
 focusedTests =
-    testGroup "Focused" [traceOffsetTests, tracePathTests, walkEverywhereTests]
+    testGroup
+        "Focused"
+        [traceOffsetTests, tracePathTests, walkEverywhereTests, stepWalkerTests]

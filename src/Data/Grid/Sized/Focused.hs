@@ -3,6 +3,8 @@ module Data.Grid.Sized.Focused
   , traceOffset
   , tracePath
   , walkEverywhere
+  , Walker(..)
+  , stepWalker
   ) where
 
 import           Data.Grid.Sized.Coord
@@ -15,6 +17,7 @@ import           Data.Grid.Sized.Internal.Grid (Grid)
 
 import           Control.Comonad
 import           Control.Comonad.Store
+import           Data.AffineSpace (Diff)
 import           Data.Functor.Rep
 import           Generics.SOP
 
@@ -112,3 +115,45 @@ walkEverywhere ::
     -> FocusedGrid cs a
     -> FocusedGrid cs (Maybe a)
 walkEverywhere p = extend (tracePath p)
+
+-- | A 'FocusedGrid' paired with a heading: the fibre bundle sized-grid-448
+-- was filed for, in the sense
+-- @Data.Manifold.FibreBundle.TangentBundle m = FibreBundle m (Needle m)@
+-- pairs a point with a direction at it. 'FocusedGrid' was already the point
+-- half --- a grid with a position, see the note on that type. The heading is
+-- a @'Diff' ('Coord' cs)@, the same needle 'offsetCoord' and 'transportCoord'
+-- already displace by (sized-grid-iet); the library does not restrict it to
+-- a unit step in the type, any more than it restricts a 'Path' step to one,
+-- so a heading several cells long is well-formed and just means a longer
+-- stride.
+data Walker cs a = Walker
+    { walkerGrid    :: FocusedGrid cs a
+    , walkerHeading :: Diff (Coord cs)
+    }
+    deriving (Functor)
+
+deriving instance (All Eq cs, Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
+
+deriving instance (All Show cs, Show a, Show (Diff (Coord cs))) =>
+                   Show (Walker cs a)
+
+-- | Take one step in the walker's own heading, transporting the heading
+-- through 'transportCoord' --- the 'ParallelTransporting' half of the fibre
+-- bundle sized-grid-448 asked for: as the walker crosses a seam, the
+-- boundary policy decides what its heading becomes on the far side, not the
+-- caller re-deriving it inline (the accident sized-grid-448 opens with,
+-- ../aoc/src/2016/02.hs relying on 'Data.Grid.Sized.Coord.Clamped.Clamped'\'s
+-- clamp to hold a walker's position at a wall).
+--
+-- Total, like 'transportCoord' and unlike 'traceOffset'\/'tracePath': a
+-- walker with a heading always lands somewhere, because every boundary
+-- policy's @('.+^')@ does.
+stepWalker ::
+       ( TransportCoordList cs
+       , AllDiffSame Int cs
+       )
+    => Walker cs a
+    -> Walker cs a
+stepWalker (Walker (FocusedGrid g p) h) =
+    case transportCoord p h of
+        (p', h') -> Walker (FocusedGrid g p') h'

@@ -51,6 +51,8 @@ module Data.Grid.Sized.Coord
   , interiorCoords
     -- * Frame transform
   , axisFrameFlips
+  , transportCoord
+  , TransportCoordList
     -- * Changing the size of a coord
   , WeakenCoord(..)
   , StrengthenCoord(..)
@@ -344,6 +346,55 @@ instance ( AffineCoordList cs
     type Diff (Coord cs) = Coord (MapDiff cs)
     Coord a .-. Coord b = Coord (npSub a b)
     Coord a .+^ Coord b = Coord (npAdd a b)
+
+-- | Same per-axis shape as 'IsCoordList' and 'AffineCoordList', and the same
+-- reason for existing as its own class rather than a method on either: the
+-- fold needs both of their obligations at once --- @('.+^')@ from
+-- 'AffineSpace' and 'Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord' from
+-- 'Data.Grid.Sized.Coord.Class.IsCoordLifted' --- and neither existing class
+-- states the other, so a method added to either would demand it of every
+-- axis type that never needs it.
+--
+-- This is sized-grid-o1n's seam rule, walked one axis at a time: a walker
+-- carrying a heading steps through @('.+^')@, the /total/ operation, exactly
+-- as sized-grid-o1n's own accounting has it (@Torus -> (wrap c, id)@,
+-- @Reflective -> (bounce c, negate)@) --- not the checked 'offsetCoord',
+-- whose 'Data.Grid.Sized.Coord.Class.offsetIsCoord' deliberately declines to
+-- bounce off a 'Data.Grid.Sized.Coord.Reflective.Reflective' wall and reports
+-- 'Nothing' instead (see the note on
+-- 'Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord'). A walker that only
+-- ever asked the checked question would never see a flip: every step
+-- 'axisFrameFlipsIsCoord' calls 'True' on is exactly a step 'offsetIsCoord'
+-- refuses.
+--
+-- @'AllDiffSame' Int cs@ is what lets the per-axis step negate the heading
+-- directly: 'axisFrameFlipsIsCoord' takes an 'Int', and without the equality
+-- the displacement here is only known as the opaque @'Diff' x@ the type
+-- family gives that axis.
+class (AffineCoordList cs, All IsCoordLifted cs) => TransportCoordList cs where
+    -- | Step every axis by its own component of the heading, and report back
+    -- what the heading becomes on the far side.
+    npTransport ::
+           AllDiffSame Int cs
+        => NP I cs
+        -> NP I (MapDiff cs)
+        -> (NP I cs, NP I (MapDiff cs))
+
+instance TransportCoordList '[] where
+    npTransport Nil Nil = (Nil, Nil)
+    {-# INLINE npTransport #-}
+
+instance (AffineSpace x, IsCoordLifted x, TransportCoordList xs) =>
+         TransportCoordList (x ': xs) where
+    -- The coord drives the match, as in 'npAdd' and 'npOffset': matching
+    -- ':*' on the first argument refines @xs@ far enough for @MapDiff@ to
+    -- reduce and the second to match.
+    npTransport (I x :* xs) (I d :* ds) =
+        (I (x .+^ d) :* ys, I d' :* ds')
+      where
+        (ys, ds') = npTransport xs ds
+        d' = if axisFrameFlipsIsCoord x d then negate d else d
+    {-# INLINE npTransport #-}
 
 -- | Generate all possible coords in order
 allCoord ::
@@ -830,6 +881,36 @@ axisBoundary = axisBoundaryIsCoord @(CoordContainer x) @(CoordNat x)
 -- (sized-grid-3u1) rather than requiring the atlas layer (sized-grid-fh2).
 axisFrameFlips :: forall x. IsCoordLifted x => x -> Int -> Bool
 axisFrameFlips = axisFrameFlipsIsCoord @(CoordContainer x) @(CoordNat x)
+
+-- | Move a coordinate by a heading, and report the heading a walker facing
+-- it would have after taking the step --- sized-grid-o1n's seam rule made
+-- concrete for something that carries a direction, rather than merely
+-- queried through 'axisFrameFlips' (sized-grid-448).
+--
+-- The step is @('.+^')@, so this is total: on every axis type in the library
+-- a walker always lands somewhere, and the boundary policy decides only
+-- whether the walker's own sense of direction survives the step. On
+-- 'Data.Grid.Sized.Coord.Periodic.Periodic' it always does (a torus has no
+-- wall to bounce off); on 'Data.Grid.Sized.Coord.Clamped.Clamped' it always
+-- does too, because the excess offset is destroyed rather than reflected, so
+-- there is nothing to reverse; on 'Data.Grid.Sized.Coord.Reflective.Reflective'
+-- and 'Data.Grid.Sized.Coord.Reflect101.Reflect101' it reverses on the axes
+-- an odd number of walls were hit on, one axis at a time.
+--
+-- Only the axis-local seam is expressible here, the same ceiling
+-- 'axisFrameFlips' has: a Möbius seam, where crossing axis 0's edge flips
+-- axis 1, is a fact about the /pair/ of axes that no per-axis fold can state.
+-- That case needs a coordinate layer above 'Coord' (sized-grid-fh2,
+-- sized-grid-1bm); this function only ever transports the heading on the one
+-- axis each step crosses.
+transportCoord ::
+       (TransportCoordList cs, AllDiffSame Int cs)
+    => Coord cs
+    -> Diff (Coord cs)
+    -> (Coord cs, Diff (Coord cs))
+transportCoord (Coord c) (Coord d) =
+    case npTransport c d of
+        (c', d') -> (Coord c', Coord d')
 
 -- | Where each axis of a coord sits relative to its own ends, first axis first.
 --
