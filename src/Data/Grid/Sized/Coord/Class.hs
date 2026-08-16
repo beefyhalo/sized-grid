@@ -468,6 +468,44 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- and the two instances below cover every type-level list, so there is no
 -- instance left for anyone to write. The same goes for 'npOffset'.
 -- "Data.Grid.Sized.Coord" therefore re-exports the class without its methods.
+--
+-- == Why this is exactly the separable boundary policies (sized-grid-3u1)
+--
+-- Every fold here is per-axis. 'npOffset' calls 'offsetIsCoord' one axis at a
+-- time and combines the results with @('Control.Applicative.<*>')@;
+-- 'npStepsWithin' takes a cartesian product of 'axisSteps' run independently
+-- per axis. Axis @i@ never sees axis @j@, in either direction, because nothing
+-- in the recursion passes one to the other --- 'offsetIsCoord' is
+-- @c n -> Int -> Maybe (c n)@, one axis, one displacement, and its type gives
+-- it nothing to reach a sibling axis with.
+--
+-- A boundary policy is /separable/ when axis @i@'s edge behaviour is a
+-- function of axis @i@ alone, and that per-axis shape is exactly what this
+-- class can express: every 'IsCoord' instance in the library ---
+-- 'Data.Grid.Sized.Ordinal.Ordinal', 'Data.Grid.Sized.Coord.Clamped.Clamped',
+-- 'Data.Grid.Sized.Coord.Periodic.Periodic',
+-- 'Data.Grid.Sized.Coord.Reflective.Reflective' and
+-- 'Data.Grid.Sized.Coord.Reflect101.Reflect101' --- is separable, and so is
+-- every product of them for free: @'[Periodic 10, Clamped 5]@ is a cylinder,
+-- @'[Periodic w, Periodic h]@ a torus, with no new instance and no new class.
+--
+-- A Möbius strip is not separable: wrapping axis 0 flips axis 1. Crossing that
+-- seam is a fact about the /pair/ of axes, and 'offsetIsCoord' cannot say it,
+-- because its signature never mentions a second axis. Klein bottle, projective
+-- plane, and a multi-chart atlas fail for the same reason.
+--
+-- This is a structural ceiling, not a gap waiting on an instance: no @c n@ can
+-- be written whose 'offsetIsCoord' reaches a neighbouring axis, because the
+-- method it would override does not have one to reach. Anything that wants a
+-- non-separable policy needs a coordinate layer /above/
+-- 'Data.Grid.Sized.Coord.Coord', not a fourth 'IsCoord' instance --- see
+-- sized-grid-o1n for the shape that layer would take (a boundary resolution
+-- returning a coordinate /and/ a frame transform), and sized-grid-ghj for why a
+-- displacement stops being the right thing to offset by once a seam can apply
+-- that transform.
+--
+-- 'Data.Grid.Sized.Coord.AffineCoordList''s @npAdd@\/@npSub@ have the identical
+-- per-axis shape, and so the identical ceiling; see the note there.
 class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- | The product of the axis sizes, and the row-major position of the given
     -- coordinate within them.

@@ -301,6 +301,14 @@ instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d '
 -- has to say 'AffineCoordList' instead; code at a concrete axis list --- which
 -- is most code, including all of ../aoc --- resolves it by instance
 -- resolution and never names it.
+-- | Same per-axis shape as 'Data.Grid.Sized.Coord.Class.IsCoordList', and so
+-- the same ceiling: 'npAdd' and 'npSub' fold one axis at a time and neither
+-- can see, let alone alter, a sibling axis. That is fine here for the reason
+-- it is fine there --- every 'AffineSpace' instance in the library is a
+-- separable boundary policy --- and it is why this class cannot express a
+-- Möbius strip or anything else where crossing one axis's edge transforms
+-- another. See the note on 'Data.Grid.Sized.Coord.Class.IsCoordList'
+-- (sized-grid-3u1) for the full argument.
 class All AffineSpace cs => AffineCoordList cs where
     -- | Add a displacement to a coordinate, one axis at a time.
     npAdd :: NP I cs -> NP I (MapDiff cs) -> NP I cs
