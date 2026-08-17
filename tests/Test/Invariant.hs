@@ -59,6 +59,17 @@ oneByThree = fromJust $ gridFromList [1, 2, 3]
 twoByThree :: Grid '[ Ordinal 2, Ordinal 3] Int
 twoByThree = fromJust $ gridFromList [[10, 11, 12], [13, 14, 15]]
 
+-- | A grid with three distinct axis sizes, so no two axes could be confused
+-- with each other by a transposition bug -- and three axes, so 'scanAxis' has
+-- a middle one to reach that 'mapLowerDim' composed with 'scanl1Grid' cannot.
+twoByThreeByTwo :: Grid '[ Ordinal 2, Ordinal 3, Ordinal 2] Int
+twoByThreeByTwo =
+  fromJust $
+  gridFromList
+    [ [[0, 1], [10, 11], [20, 21]]
+    , [[100, 101], [110, 111], [120, 121]]
+    ]
+
 -- | 'assertWellSized' over a list of grids, for the operations that return one
 -- grid per sub-grid rather than a single result.
 assertAllWellSized ::
@@ -166,6 +177,12 @@ invariantTests =
             (zipLowerDim gridTiles threeByThree :: [Grid '[ Ordinal 3, Ordinal 1] Int])
         , testCase "transposeGrid" $
           assertWellSized "transposeGrid" (transposeGrid twoByThree)
+        , testCase "mapAxis 0 on a 3D grid" $
+          assertWellSized "mapAxis 0" (mapAxis 0 id twoByThreeByTwo)
+        , testCase "mapAxis 1 on a 3D grid" $
+          assertWellSized "mapAxis 1" (mapAxis 1 id twoByThreeByTwo)
+        , testCase "mapAxis 2 on a 3D grid" $
+          assertWellSized "mapAxis 2" (mapAxis 2 id twoByThreeByTwo)
         , testCase "shrinkGrid" $
           let off :: Coord '[ Ordinal 2, Ordinal 2]
               off = fromJust $ (\x y -> x :| y :| EmptyCoord)
@@ -225,5 +242,47 @@ invariantTests =
             "each row scanned independently"
             (gridFromList [[1, 3, 6], [4, 9, 15], [7, 15, 24]] :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))
             (Just (runIdentity (mapLowerDim (Identity . scanl1Grid (+)) threeByThree)))
+        ]
+      -- sized-grid-e6h: 'mapAxis' and 'scanAxis' name any axis by position,
+      -- so the summed-area-table build-up no longer has to reach the second
+      -- axis of a 2D grid by physically rotating it with 'transposeGrid'.
+    , testGroup
+        "scanAxis names any axis, not just the outermost"
+        [ testCase "scanAxis 1 agrees with mapLowerDim . scanl1Grid on 2D" $
+          assertEqual
+            "scanning across each row"
+            (runIdentity (mapLowerDim (Identity . scanl1Grid (+)) threeByThree))
+            (scanAxis 1 (+) threeByThree)
+        , testCase "scanAxis 0 scans down each column" $
+          assertEqual
+            "cumulative sums down each column"
+            (gridFromList [[1, 2, 3], [5, 7, 9], [12, 15, 18]] :: Maybe (Grid '[ Ordinal 3, Ordinal 3] Int))
+            (Just (scanAxis 0 (+) threeByThree))
+        , testCase "scanAxis 1 reaches the middle axis of a 3D grid" $
+          -- The case 'transposeGrid' cannot: there is no 2-axis swap that
+          -- brings a middle axis of a 3-axis grid to the edge alone.
+          assertEqual
+            "scanning the middle axis, independently for every (outer, inner) pair"
+            (gridFromList
+               [ [[0, 1], [10, 12], [30, 33]]
+               , [[100, 101], [210, 212], [330, 333]]
+               ] :: Maybe (Grid '[ Ordinal 2, Ordinal 3, Ordinal 2] Int))
+            (Just (scanAxis 1 (+) twoByThreeByTwo))
+        , testCase "scanAxis 0 scans the outermost axis of a 3D grid" $
+          assertEqual
+            "scanning the outer axis, independently for every (middle, inner) pair"
+            (gridFromList
+               [ [[0, 1], [10, 11], [20, 21]]
+               , [[100, 102], [120, 122], [140, 142]]
+               ] :: Maybe (Grid '[ Ordinal 2, Ordinal 3, Ordinal 2] Int))
+            (Just (scanAxis 0 (+) twoByThreeByTwo))
+        , testCase "scanAxis 2 scans the innermost axis of a 3D grid" $
+          assertEqual
+            "scanning the inner axis, independently for every (outer, middle) pair"
+            (gridFromList
+               [ [[0, 1], [10, 21], [20, 41]]
+               , [[100, 201], [110, 221], [120, 241]]
+               ] :: Maybe (Grid '[ Ordinal 2, Ordinal 3, Ordinal 2] Int))
+            (Just (scanAxis 2 (+) twoByThreeByTwo))
         ]
     ]

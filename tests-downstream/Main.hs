@@ -55,6 +55,12 @@ roundTripJSON ::
   -> Maybe (Grid '[ Clamped n, Clamped n] Char)
 roundTripJSON = decode . encode
 
+-- | sized-grid-e6h. 'mapAxis' and 'scanAxis' resolve their axis-position
+-- class purely through concrete-literal instance selection -- no @KnownNat@
+-- product, so no plugin should be needed here either.
+columnSums :: Grid '[ Clamped 3, Clamped 3] Int -> Grid '[ Clamped 3, Clamped 3] Int
+columnSums = scanAxis 0 (+)
+
 -- | A ragged decode must still be rejected: dropping the constraint from the
 -- consumer must not have dropped the length check that constraint pays for.
 rejectsRagged :: Bool
@@ -69,10 +75,14 @@ main :: IO ()
 main = do
   let rows = ["abc", "def", "ghi"]
       grid = fromJust (parseSquare (unlines rows)) :: Grid '[ Clamped 3, Clamped 3] Char
+      numbers = fromJust (gridFromList [[1, 2, 3], [4, 5, 6], [7, 8, 9]]) ::
+                  Grid '[ Clamped 3, Clamped 3] Int
       checks =
         [ ("collapseGrid . gridFromList", renderSquare grid == rows)
         , ("decode . encode", fmap renderSquare (roundTripJSON grid) == Just rows)
         , ("ragged JSON rejected", rejectsRagged)
+        , ( "scanAxis 0 scans down each column"
+          , collapseGrid (columnSums numbers) == [[1, 2, 3], [5, 7, 9], [12, 15, 18]])
         ]
   case [name | (name, ok) <- checks, not ok] of
     [] -> putStrLn ("downstream: " ++ show (length checks) ++ " checks passed")

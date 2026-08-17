@@ -9,6 +9,30 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `mapAxis` and `scanAxis` name an axis by position and act along it,
+  independently of the others, on a grid of any dimension (sized-grid-e6h).
+
+  `scanl1Grid` composed with `mapLowerDim` gives per-row prefix sums, but
+  reaching the *other* axis needed `transposeGrid` first, and `transposeGrid`
+  only swaps a fixed pair of axes — there is no version of it for an
+  arbitrary pair, so the trick stopped working past two dimensions. `mapAxis
+  1 f`, and `scanAxis 1 (+)` built from it, reach the second axis of a grid
+  of any dimension the same way regardless, and the summed-area-table
+  build-up in `../aoc/src/2018/11.hs` is now `scanAxis 0 (+) . scanAxis 1
+  (+)` rather than a double `transposeGrid`.
+
+  The axis position is a `Nat`, resolved through an internal `MapAxis`
+  class whose recursion peels outer axes one at a time (as `mapLowerDim`
+  does) until the target axis is outermost, then transposes it against
+  everything else taken as a single block and chunks the result — the same
+  layout `transposeGrid` swaps for a fixed pair, generalised to swapping one
+  axis against the rest. Measured on the 300x300 summed-area build: the
+  inner axis, already contiguous, costs nothing extra over the hand-written
+  `mapLowerDim . scanl1Grid`; the outer axis, which genuinely transposes,
+  measured ~25% slower on the boxed grid (the generic path allocates a whole
+  extra transposed copy that the specialised pipeline does not) and is
+  unaffected on the unboxed one.
+
 * `Grid` gains an unboxed sibling, and the two share one implementation
   (sized-grid-up6).
 

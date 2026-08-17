@@ -70,6 +70,9 @@ module Data.Grid.Sized
     , mapLowerDim
     , zipLowerDim
     , scanl1Grid
+    , MapAxis(..)
+    , mapAxis
+    , scanAxis
       -- * Windows and tiles
     , ShrinkableGrid(..)
     , gridTiles

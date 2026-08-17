@@ -191,8 +191,8 @@ axisOffsets k =
 -- Each pair below differs in the vector type and in nothing else. That is only
 -- possible because the two representations share one implementation: 'GridOf'
 -- takes its vector as a parameter, so 'tabulateGrid', 'mapGrid', 'foldlGrid'',
--- 'scanl1Grid', 'mapLowerDim' and 'transposeGrid' below are literally the same
--- code at @v ~ V.Vector@ and @v ~ U.Vector@.
+-- 'scanl1Grid', 'mapLowerDim', 'transposeGrid' and 'scanAxis' below are
+-- literally the same code at @v ~ V.Vector@ and @v ~ U.Vector@.
 --
 -- Both sides go through 'coordPosition' and 'allCoord', so the coordinate
 -- machinery cancels and what is left is the representation.
@@ -227,6 +227,25 @@ satBuild :: VG.Vector v Int => Int -> GridOf v Big Int
 satBuild serial =
     transposeGrid . rowPrefix . transposeGrid . rowPrefix . tabulateGrid $
     power serial
+
+-- | The same table, named by axis instead of built from the transpose trick
+-- (sized-grid-e6h). Kept alongside 'satBuild' so the two are measured against
+-- each other rather than assumed equal.
+--
+-- @scanAxis 1@ (the inner axis, already contiguous) is exactly as cheap as
+-- 'rowPrefix' -- 'mapAxisHere' recognises that no transpose is needed there.
+-- @scanAxis 0@ genuinely transposes, and on the boxed grid that measured
+-- ~25% slower than the hand-fused @'transposeGrid' . rowPrefix .
+-- 'transposeGrid'@: 'mapAxisHere' pays for a whole extra vector (the
+-- transposed copy) that the specialised three-function pipeline does not
+-- allocate. Unboxed is unaffected, and slightly faster here, since that
+-- representation was never paying for boxed thunks at each transposed
+-- position in the first place. The trade is a function that reaches any
+-- axis of a grid of any dimension for a boxed-only cost on the position
+-- that used to be hand-optimised for exactly two.
+satBuildAxis :: VG.Vector v Int => Int -> GridOf v Big Int
+satBuildAxis serial =
+    scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid $ power serial
 
 -- Note on why there is no standalone @allCoord@ benchmark.
 --
@@ -356,6 +375,10 @@ main = do
                 whnf (\s -> totalG (satBuild s :: Grid Big Int)) 18
               , bench "summed-area build 300x300 unboxed" $
                 whnf (\s -> totalG (satBuild s :: UGrid Big Int)) 18
+              , bench "summed-area build (scanAxis) 300x300  boxed" $
+                whnf (\s -> totalG (satBuildAxis s :: Grid Big Int)) 18
+              , bench "summed-area build (scanAxis) 300x300 unboxed" $
+                whnf (\s -> totalG (satBuildAxis s :: UGrid Big Int)) 18
                 -- The pair that reports no difference, deliberately kept.
               , bench "indexGrid x90000           boxed" $
                 whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid

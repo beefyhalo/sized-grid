@@ -118,6 +118,9 @@ module Data.Grid.Sized.Internal.Grid
   , sliceGrid
   , mapLowerDim
   , zipLowerDim
+  , MapAxis(..)
+  , mapAxis
+  , scanAxis
     -- * Windows and tiles
   , ShrinkableGrid(..)
   , gridTiles
@@ -808,6 +811,132 @@ zipLowerDim ::
     -> [GridOf v (c ': bs) y]
 zipLowerDim f = getZipList . mapLowerDim (ZipList . f)
 {-# INLINABLE zipLowerDim #-}
+
+-- | Transpose a flat, row-major vector holding an @rows × cols@ matrix into
+-- its @cols × rows@ transpose. Pure index arithmetic -- unlike 'transposeGrid'
+-- this needs no coordinate machinery, because by the time 'mapAxis' reaches
+-- for it the axis being moved has already been reduced to a size, not a
+-- coordinate type.
+--
+-- 'VG.unsafeIndex': @i@ ranges over @[0, rows * cols)@ and @(c, r)@ is its
+-- @'divMod' rows@, so @r < rows@ and @c < cols@, and @r * cols + c@ is
+-- therefore always in @[0, rows * cols)@ too. The bounds check 'VG.!' would
+-- do can never fire.
+transposeFlat :: VG.Vector v a => Int -> Int -> v a -> v a
+transposeFlat rows cols v =
+    VG.generate (rows * cols) $ \i ->
+        let (c, r) = i `divMod` rows
+         in VG.unsafeIndex v (r * cols + c)
+{-# INLINABLE transposeFlat #-}
+
+-- | The recursion behind 'mapAxis' and 'scanAxis': peel outer axes one at a
+-- time, exactly as 'mapLowerDim' does, until the target axis @n@ is
+-- outermost, then hand off to 'mapAxisHere'.
+--
+-- @c@, the axis type 'mapAxis' hands its function, is a plain (fundep-determined)
+-- class parameter rather than an associated type family. An associated type
+-- was tried first and does not work: at the abstract @n@ inside the recursive
+-- instance below, GHC has to check the two instances' @AxisAt@ equations for
+-- confluence the same way it would for any other open family, and @c@ against
+-- @AxisAt (n - 1) as@ do not look equal to that check even though the
+-- 'OVERLAPPING'\/'OVERLAPPABLE' pragmas make the /instances/ unambiguous.
+-- Plain unification through nested instance resolution has no such check --
+-- the base instance ties @c@ to the head axis by construction, and every
+-- recursive instance forwards the very same @c@ -- so it is what determines
+-- @c@ here instead.
+class MapAxis (n :: Nat) (cs :: [Type]) (c :: Type) | n cs -> c where
+  -- | Apply a length-preserving function to every fibre along axis @n@,
+  -- independently for each combination of the other axes. See 'mapAxis'.
+  mapAxisImpl ::
+       (VG.Vector v x, VG.Vector v y)
+    => (GridOf v '[c] x -> GridOf v '[c] y)
+    -> GridOf v cs x
+    -> GridOf v cs y
+
+instance {-# OVERLAPPING #-} AllSizedKnown as => MapAxis 0 (c ': as) c where
+  mapAxisImpl = mapAxisHere
+
+instance {-# OVERLAPPABLE #-}
+         (MapAxis (n - 1) as c, AllSizedKnown as) =>
+         MapAxis n (c0 ': as) c where
+  mapAxisImpl f = runIdentity . mapLowerDim (Identity . mapAxisImpl @(n - 1) @as @c f)
+
+-- | The base case 'MapAxis' recurses down to: the target axis @c@ is
+-- outermost, so every other axis, @as@, forms one contiguous block per @c@
+-- value -- the same layout 'transposeGrid' swaps for a fixed pair of axes,
+-- generalised here to swapping @c@ against @as@ taken as a single unit.
+--
+-- Transposing brings @c@ contiguous, turning each of the @'MaxCoordSize' as@
+-- fibres into one chunk of @'splitVectorBySize'@; @f@ runs on each in turn,
+-- and a second transpose undoes the first.
+--
+-- @as ~ '[]@ (@c@ is already the sole axis, the case every call this
+-- recursion bottoms out at eventually gets to) skips the transpose rather
+-- than pay for two no-op copies of the whole fibre: measured on the
+-- 300x300 summed-area build, going through the general path regardless
+-- cost 62.7 ms against 29 ms for the equivalent @'mapLowerDim' .
+-- 'scanl1Grid'@, entirely in the two @'transposeFlat'@ copies and the
+-- one-chunk @'splitVectorBySize'@\/@'VG.concat'@ around them, all three
+-- provably no-ops whenever @'MaxCoordSize' as@ is @1@.
+mapAxisHere ::
+     forall v c as x y. (VG.Vector v x, VG.Vector v y, AllSizedKnown as)
+  => (GridOf v '[c] x -> GridOf v '[c] y)
+  -> GridOf v (c ': as) x
+  -> GridOf v (c ': as) y
+mapAxisHere f (Grid v) =
+    withDict
+        (sizeProof @as)
+        (let restSize = fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))
+          in if restSize == 1
+               then Grid (unGrid (f (Grid v)))
+               else let axisSize = VG.length v `div` restSize
+                     in Grid $
+                        transposeFlat restSize axisSize $
+                        VG.concat $
+                        map (unGrid . f . Grid) $
+                        splitVectorBySize axisSize $
+                        transposeFlat axisSize restSize v)
+{-# INLINABLE mapAxisHere #-}
+
+-- | Apply a length-preserving function to one named axis of a grid,
+-- independently for every combination of the others -- 'mapLowerDim'
+-- generalised from the outermost axis to any of them by position.
+--
+-- > mapAxis 1 f g   -- rather than mapAxis (Proxy @1) f g
+--
+-- sized-grid-e6h. This is the piece the summed-area-table build-up in
+-- @aoc\/src\/2018\/11.hs@ got by without: @'transposeGrid' . rowPrefix .
+-- 'transposeGrid' . rowPrefix@ reaches the second axis by physically rotating
+-- the whole 2D grid, because there was no way to name it instead. That trick
+-- stops working past two dimensions, since there is no 'transposeGrid' for an
+-- arbitrary pair of axes, while @mapAxis 1@ reaches the second axis of a grid
+-- of any dimension the same way regardless.
+mapAxis ::
+     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
+  => (GridOf v '[c] x -> GridOf v '[c] y)
+  -> GridOf v cs x
+  -> GridOf v cs y
+mapAxis n = mapAxisImpl @n
+{-# INLINABLE mapAxis #-}
+
+-- | Prefix-scan one named axis of a grid, independently for every
+-- combination of the others.
+--
+-- > scanAxis 1 (+) g   -- rather than scanAxis (Proxy @1) (+) g
+--
+-- The summed-area-table build-up that motivated this, restated without the
+-- transpose trick 'mapAxis' retires:
+--
+-- > sat = scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid power
+--
+-- sized-grid-e6h.
+scanAxis ::
+     forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
+  => (a -> a -> a)
+  -> GridOf v cs a
+  -> GridOf v cs a
+scanAxis n f = mapAxis n (scanl1Grid f)
+{-# INLINABLE scanAxis #-}
 
 -- | Taking a window out of a grid, one axis at a time.
 --
