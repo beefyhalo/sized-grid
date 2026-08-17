@@ -172,6 +172,7 @@ test-suite tests
     Test.Shrink
     Test.Tiling
     Test.Utils
+    Test.Windows
 
   build-depends:
     , adjunctions

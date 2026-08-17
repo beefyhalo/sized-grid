@@ -16,6 +16,7 @@ import           Test.Reflective
 import           Test.Shrink
 import           Test.Tiling
 import           Test.Utils
+import           Test.Windows
 
 import           Control.Lens          hiding (index)
 import           Control.Monad         (replicateM)
@@ -338,6 +339,7 @@ main =
            ]
        , shrinkTests
        , tilingTests
+       , windowTests
        , neighbourTests
        , boundaryTests
        , rayTests
