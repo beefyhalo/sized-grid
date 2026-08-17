@@ -1,0 +1,85 @@
+cabal-version:       3.0
+name:                grid-atlas
+version:             0.1.0.0
+synopsis:            Multiple grid-sized charts glued along typed seams
+description:
+  The first slice of sized-grid-fh2: `gridTiles` restored as one addressable
+  `(ChartId, Coord cs)` structure instead of a disjoint list, with the
+  identity-transition seam that tiling already implies. A separate package
+  from `grid-sized` on purpose -- `grid-sized`'s thesis is that the
+  coordinate type IS the boundary policy, and an atlas is explicitly the
+  layer for the policies that thesis cannot express (non-separable
+  topologies: a Mobius seam, a cube map). Keeping them apart keeps both
+  statements true.
+license:             MIT
+license-file:        LICENSE
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
+category:            Data
+build-type:          Simple
+
+-- Same split as grid-sized.cabal: 'lang-base' is language/warnings only,
+-- 'lang' adds the type-checker plugins. Common stanzas are not shared across
+-- .cabal files, so this repeats grid-sized.cabal's rather than importing it --
+-- needed here for the same reason it is needed there: atlasFromTiles states
+-- a 'Mod ~ 0' and a 'Div' goal the same way gridTiles does, and the plugins
+-- are what let a caller leave the arithmetic to the solver instead of
+-- proving it by hand. Plugins are not transitive, so nothing here obliges a
+-- consumer of grid-atlas to enable them in turn.
+common lang-base
+  default-language:   GHC2024
+  default-extensions:
+    RequiredTypeArguments
+    TypeAbstractions
+    TypeFamilies
+    UndecidableInstances
+
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints
+
+common lang
+  import: lang-base
+  build-depends:
+    , ghc-typelits-knownnat     >=0.7 && <0.9
+    , ghc-typelits-natnormalise >=0.7 && <0.10
+
+  ghc-options:
+    -fplugin=GHC.TypeLits.Normalise
+    -fplugin=GHC.TypeLits.KnownNat.Solver
+
+library
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules:
+    Data.Grid.Atlas
+
+  build-depends:
+    , adjunctions  >=4.4  && <4.5
+    , base         >=4.20 && <4.23
+    , constraints  >=0.13 && <0.15
+    , generics-sop >=0.5  && <0.6
+    , grid-sized
+    , lens         >=5.2  && <5.4
+    , vector       >=0.13 && <0.14
+
+test-suite tests
+  import:         lang-base
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is:        Main.hs
+  other-modules:
+    Test.Tiles
+
+  build-depends:
+    , adjunctions       >=4.4  && <4.5
+    , base
+    , grid-atlas
+    , grid-sized
+    , HUnit             >=1.6  && <1.7
+    , QuickCheck        >=2.14 && <2.16
+    , tasty             >=1.4  && <1.6
+    , tasty-hunit       >=0.10 && <0.11
+    , tasty-quickcheck  >=0.10 && <0.12
+    , vector
