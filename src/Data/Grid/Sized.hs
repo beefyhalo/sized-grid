@@ -57,8 +57,6 @@ module Data.Grid.Sized
     , Head
     , Tail
     , CollapseGrid
-    , AllGridSizeKnown(..)
-    , GridSizeProof(..)
       -- * Rearranging
     , transposeGrid
     , splitGrid

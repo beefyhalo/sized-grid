@@ -73,6 +73,7 @@ module Data.Grid.Sized.Coord
   , AffineCoordList
   , AllDiffSame
   , AllSizedKnown(..)
+  , SizeProof(..)
     -- | 'IsCoordList' is re-exported without its methods: they are folds over
     -- the axis list, and its two instances already cover every type-level
     -- list, so there is none left to write. Import "Data.Grid.Sized.Coord.Class" if
@@ -1144,16 +1145,14 @@ puncturedToCoord (PuncturedCoord o) =
 -- so nothing outside it needs the proof that there is room for one.
 coordSpaceNonEmpty :: forall cs. AllSizedKnown cs => Dict (1 <= MaxCoordSize cs)
 coordSpaceNonEmpty =
-    case sizeProof @cs of
-        Dict ->
-            case cmpNat (Proxy @1) (Proxy @(MaxCoordSize cs)) of
-                LTI -> Dict
-                EQI -> Dict
-                GTI ->
-                    error
-                        "Data.Grid.Sized.Coord.coordSpaceNonEmpty: impossible: \
-                        \MaxCoordSize came out below one, though every axis \
-                        \contributes at least one value"
+    case cmpNat (Proxy @1) (Proxy @(MaxCoordSize cs)) of
+        LTI -> Dict
+        EQI -> Dict
+        GTI ->
+            error
+                "Data.Grid.Sized.Coord.coordSpaceNonEmpty: impossible: \
+                \MaxCoordSize came out below one, though every axis \
+                \contributes at least one value"
 
 -- | Every 'PuncturedCoord', in the same row-major order 'allCoord' visits ---
 -- 'allCoord' with 'centreCoord' left out, without ever comparing two
@@ -1162,19 +1161,46 @@ allPunctured ::
        forall cs. (IsCoordList cs, AllSizedKnown cs)
     => [PuncturedCoord cs]
 allPunctured =
-    case (sizeProof @cs, coordSpaceNonEmpty @cs) of
-        (Dict, Dict) ->
+    case coordSpaceNonEmpty @cs of
+        Dict ->
             [PuncturedCoord (unsafeOrdinal i) | i <- [0 .. coordSpaceSize @cs - 2]]
 
-class AllSizedKnown (cs :: [Type]) where
-  sizeProof :: Dict (KnownNat (MaxCoordSize cs))
+-- | Evidence that every axis of @cs@ has a statically known size, and so does
+-- every suffix of @cs@ --- which is what a function recursing down the axis
+-- list needs.
+--
+-- @'GHC.KnownNat' ('MaxCoordSize' cs)@ is a superclass, so any context that
+-- already holds @AllSizedKnown cs@ has that fact in scope without unwrapping
+-- anything. 'sizeProof' is for the sites that recurse: matching its
+-- 'SizeProof' witness refines @cs@ to nil-or-cons and brings the tail's own
+-- @AllSizedKnown@ instance into scope at the same time, which a plain 'Dict'
+-- could not do.
+--
+-- Until sized-grid-4xh this class returned only a @Dict (KnownNat
+-- (MaxCoordSize cs))@, and 'Data.Grid.Sized.Internal.Grid' kept a second,
+-- near-identical class of its own --- @AllGridSizeKnown@, with this same
+-- superclass-plus-witness shape --- because the structural recursions there
+-- (@nestByShape@, the 'Data.Aeson.ToJSON'\/'Data.Aeson.FromJSON' instances)
+-- needed to recover the tail's instance and a bare 'Dict' could not give
+-- that back. Both classes proved the same fact by the same induction; this
+-- one now does what both used to.
+class GHC.KnownNat (MaxCoordSize cs) => AllSizedKnown (cs :: [Type]) where
+  sizeProof :: SizeProof cs
+
+-- | What 'AllSizedKnown' carries: matching this refines @cs@ to nil or cons
+-- and brings the evidence for that shape into scope at the same time.
+data SizeProof (cs :: [Type]) where
+  SizeNil :: SizeProof '[]
+  SizeCons ::
+       forall c n cs. (GHC.KnownNat n, AllSizedKnown cs)
+    => SizeProof (c n ': cs)
 
 instance AllSizedKnown '[] where
-    sizeProof = Dict
+    sizeProof = SizeNil
 
-instance (KnownNat n, AllSizedKnown as) =>
+instance (GHC.KnownNat n, AllSizedKnown as) =>
          AllSizedKnown (c n ': as) where
-    sizeProof = withDict (sizeProof @as) Dict
+    sizeProof = SizeCons
 
 class WeakenCoord as bs where
   weakenCoord :: Coord as -> Maybe (Coord bs)

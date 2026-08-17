@@ -84,9 +84,8 @@ module Data.Grid.Sized.Unboxed
   ) where
 
 import           Data.Grid.Sized.Coord         (AllSizedKnown)
-import           Data.Grid.Sized.Internal.Grid (AllGridSizeKnown, CollapseGrid,
-                                                GridOf, gridFromList,
-                                                gridFromVector)
+import           Data.Grid.Sized.Internal.Grid (CollapseGrid, GridOf,
+                                                gridFromList, gridFromVector)
 
 import qualified Data.Vector.Unboxed           as U
 
@@ -111,7 +110,7 @@ ugridFromVector = gridFromVector
 -- says which vector to build; without an annotation on the result @v@ is
 -- ambiguous. Naming the representation here is tidier than annotating the call.
 ugridFromList ::
-     forall cs a. (U.Unbox a, AllGridSizeKnown cs)
+     forall cs a. (U.Unbox a, AllSizedKnown cs)
   => CollapseGrid cs a
   -> Maybe (UGrid cs a)
 ugridFromList = gridFromList

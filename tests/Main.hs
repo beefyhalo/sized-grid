@@ -84,7 +84,6 @@ gridTests ::
        , Eq (Coord cs)
        , IsCoordList cs
        , AllSizedKnown cs
-       , AllGridSizeKnown [f x, g y]
        , Show a
        , Eq a
        , cs ~ '[ f x, g y]

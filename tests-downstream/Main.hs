@@ -10,10 +10,13 @@
 -- all. The assertions in 'main' are almost beside the point; the type checker
 -- is the test.
 --
--- sized-grid-k6n. Until 'AllGridSizeKnown' became a class it was a type family,
--- which does no solving: the @KnownNat (MaxCoordSize cs)@ in its expansion
--- landed unsolved in the caller's context, and at @'[Clamped n, Clamped n]@
--- that reads @KnownNat (n * (n * 1))@. GHC cannot derive that from @KnownNat n@
+-- sized-grid-k6n. The class responsible, 'AllSizedKnown', was called
+-- @AllGridSizeKnown@ until sized-grid-4xh merged it with the class of the
+-- same name and shape that already lived in "Data.Grid.Sized.Coord". Before
+-- sized-grid-k6n it was a type family, which does no solving: the
+-- @KnownNat (MaxCoordSize cs)@ in its expansion landed unsolved in the
+-- caller's context, and at @'[Clamped n, Clamped n]@ that reads
+-- @KnownNat (n * (n * 1))@. GHC cannot derive that from @KnownNat n@
 -- unaided, so five signatures in the one downstream package spelled it out:
 --
 -- > parse :: (KnownNat n, KnownNat (n * n)) => String -> Maybe (Grid '[Clamped n, Clamped n] Cell)

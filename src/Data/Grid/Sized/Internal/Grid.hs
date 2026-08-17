@@ -105,8 +105,6 @@ module Data.Grid.Sized.Internal.Grid
   , Head
   , Tail
   , CollapseGrid
-  , AllGridSizeKnown(..)
-  , GridSizeProof(..)
     -- * Rearranging
   , transposeGrid
   , splitGrid
@@ -232,12 +230,9 @@ gridFromVector ::
     => v a
     -> Maybe (GridOf v cs a)
 gridFromVector v =
-    withDict
-        (sizeProof @cs)
-        (if VG.length v ==
-            fromIntegral (GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
-             then Just (Grid v)
-             else Nothing)
+    if VG.length v == fromIntegral (GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
+        then Just (Grid v)
+        else Nothing
 {-# INLINABLE gridFromVector #-}
 
 -- $bulk
@@ -340,11 +335,7 @@ scanl1Grid f (Grid v) = Grid (VG.scanl1' f v)
 -- counterpart for the cases that have a concrete element type in hand.
 instance AllSizedKnown cs => Applicative (Grid cs) where
     pure =
-        withDict
-            (sizeProof @cs)
-            (Grid .
-             V.replicate
-                 (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs))))
+        Grid . V.replicate (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
     Grid fs <*> Grid as = Grid $ V.zipWith ($) fs as
 
 instance (AllSizedKnown cs, IsCoordList cs) =>
@@ -409,60 +400,6 @@ type family Tail xs where
 type family CollapseGrid cs a where
   CollapseGrid '[] a = a
   CollapseGrid (c ': cs) a = [CollapseGrid cs a]
-
--- | Evidence that every axis of @cs@ has a statically known size, and so does
--- every suffix of @cs@ -- which is what a function recursing down the axis list
--- needs.
---
--- This was a type family until sized-grid-k6n, and the difference is entirely
--- about who does the work. A family does no solving: it expanded to a
--- conjunction containing @KnownNat (MaxCoordSize cs)@ and that raw goal landed
--- in the caller's context, where at @cs ~ '[Clamped n, Clamped n]@ it reads
--- @KnownNat (n * (n * 1))@. GHC cannot get that from @KnownNat n@, so the
--- caller wrote it out by hand:
---
--- > parse :: (KnownNat n, KnownNat (n * n)) => String -> Maybe (Grid '[Clamped n, Clamped n] Cell)
---
--- As a class the same obligation is discharged during instance resolution,
--- inductively, from the per-axis 'GHC.KnownNat's -- so @KnownNat n@ alone now
--- suffices at the call site. 'Data.Grid.Sized.Coord.AllSizedKnown' has always been a
--- class for exactly this reason; this is the same treatment applied to the
--- structural recursions.
---
--- A type-checker plugin cannot substitute for this. @-fplugin@ is not
--- transitive: @ghc-typelits-knownnat@ being enabled for this library says
--- nothing about the consumer, which solves its own constraints. That is why
--- sized-grid-h56 could not fix this and an API change had to.
-class GHC.KnownNat (MaxCoordSize cs) => AllGridSizeKnown (cs :: [Type]) where
-  -- | The size of the head axis and the tail's own instance.
-  --
-  -- The tail's dictionary has to be carried in the value: a class dictionary
-  -- cannot be run backwards through its own instance context, so there is
-  -- otherwise no way to recover @AllGridSizeKnown xs@ from
-  -- @AllGridSizeKnown (x ': xs)@.
-  gridSizeProof :: GridSizeProof cs
-
--- | What 'AllGridSizeKnown' carries, and the reason the recursions below no
--- longer ask for @SListI cs@: matching on this refines @cs@ to nil or cons just
--- as @Generics.SOP.Shape cs@ did, and brings the evidence for that shape into
--- scope at the same time, which a @Shape@ could not do.
-data GridSizeProof (cs :: [Type]) where
-  GridSizeNil :: GridSizeProof '[]
-  GridSizeCons ::
-       forall c n cs. (GHC.KnownNat n, AllGridSizeKnown cs)
-    => GridSizeProof (c n ': cs)
-
-instance AllGridSizeKnown '[] where
-  gridSizeProof = GridSizeNil
-
--- | @KnownNat (MaxCoordSize (c n ': as))@ is @KnownNat (n * MaxCoordSize as)@,
--- which @ghc-typelits-knownnat@ derives from the @KnownNat n@ here and the
--- @KnownNat (MaxCoordSize as)@ that is this class's own superclass on the tail.
--- That plugin step is the induction, and it happens here rather than at the
--- call site.
-instance (GHC.KnownNat n, AllGridSizeKnown as) =>
-         AllGridSizeKnown (c n ': as) where
-  gridSizeProof = GridSizeCons
 
 -- | Convert a vector into a list of `Data.Vector.Generic.Vector`s, where all the
 -- elements of the list have the given size.
@@ -538,31 +475,31 @@ splitBoxedBySize n v
     len = V.length v
 
 -- | The axis-list recursion of 'collapseGrid', at a concrete boxed vector.
-nestByShape :: forall cs a. AllGridSizeKnown cs => V.Vector a -> CollapseGrid cs a
+nestByShape :: forall cs a. AllSizedKnown cs => V.Vector a -> CollapseGrid cs a
 nestByShape v =
-  case gridSizeProof @cs of
-    GridSizeNil -> v V.! 0
-    GridSizeCons @_ @_ @rest ->
+  case sizeProof @cs of
+    SizeNil -> v V.! 0
+    SizeCons @_ @_ @rest ->
       map (nestByShape @rest) $
       splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
 
 -- | The axis-list recursion of 'gridFromList', flattening to row-major order
 -- and checking the length at every dimension on the way.
 flattenByShape ::
-     forall cs a. AllGridSizeKnown cs
+     forall cs a. AllSizedKnown cs
   => CollapseGrid cs a
   -> Maybe (V.Vector a)
 flattenByShape cg =
-  case gridSizeProof @cs of
-    GridSizeNil -> Just $ V.singleton cg
-    GridSizeCons @_ @n @rest ->
+  case sizeProof @cs of
+    SizeNil -> Just $ V.singleton cg
+    SizeCons @_ @n @rest ->
       if length cg == fromIntegral (GHC.natVal (Proxy @n))
         then V.concat <$> traverse (flattenByShape @rest) cg
         else Nothing
 
 -- | Convert a grid to a series of nested lists. This removes type level information, but it is sometimes easier to work with lists
 collapseGrid ::
-     forall v cs a. (VG.Vector v a, AllGridSizeKnown cs)
+     forall v cs a. (VG.Vector v a, AllSizedKnown cs)
   => GridOf v cs a
   -> CollapseGrid cs a
 collapseGrid (Grid v) = nestByShape @cs (VG.convert v)
@@ -570,13 +507,13 @@ collapseGrid (Grid v) = nestByShape @cs (VG.convert v)
 
 -- | Convert a series of nested lists to a grid. If the size of the grid does not match the size of lists this will be `Nothing`
 gridFromList ::
-     forall v cs a. (VG.Vector v a, AllGridSizeKnown cs)
+     forall v cs a. (VG.Vector v a, AllSizedKnown cs)
   => CollapseGrid cs a
   -> Maybe (GridOf v cs a)
 gridFromList cg = Grid . VG.convert <$> flattenByShape @cs cg
 {-# INLINABLE gridFromList #-}
 
-instance (VG.Vector v a, AllGridSizeKnown cs, ToJSON a) =>
+instance (VG.Vector v a, AllSizedKnown cs, ToJSON a) =>
          ToJSON (GridOf v cs a) where
   toJSON (Grid v) = nestedToJSON @cs (VG.convert v)
 
@@ -584,13 +521,13 @@ instance (VG.Vector v a, AllGridSizeKnown cs, ToJSON a) =>
 -- for the reason given under \"Recursing down the axis list\": the recursion
 -- must not carry the vector parameter.
 nestedToJSON ::
-     forall cs a. (AllGridSizeKnown cs, ToJSON a)
+     forall cs a. (AllSizedKnown cs, ToJSON a)
   => V.Vector a
   -> Value
 nestedToJSON v =
-  case gridSizeProof @cs of
-    GridSizeNil -> toJSON (v V.! 0)
-    GridSizeCons @_ @_ @rest ->
+  case sizeProof @cs of
+    SizeNil -> toJSON (v V.! 0)
+    SizeCons @_ @_ @rest ->
       toJSON $
       map (nestedToJSON @rest) $
       splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
@@ -603,7 +540,7 @@ nestedToJSON v =
 --
 -- The constraints match `ToJSON`\'s: the `KnownNat` evidence is what makes the
 -- check possible.
-instance (VG.Vector v a, AllGridSizeKnown cs, FromJSON a) =>
+instance (VG.Vector v a, AllSizedKnown cs, FromJSON a) =>
          FromJSON (GridOf v cs a) where
   parseJSON val = Grid . VG.convert <$> nestedParseJSON @cs val
 
@@ -611,13 +548,13 @@ instance (VG.Vector v a, AllGridSizeKnown cs, FromJSON a) =>
 -- the instance so the recursion does not carry the vector parameter; see
 -- \"Recursing down the axis list\".
 nestedParseJSON ::
-     forall cs a. (AllGridSizeKnown cs, FromJSON a)
+     forall cs a. (AllSizedKnown cs, FromJSON a)
   => Value
   -> Parser (V.Vector a)
 nestedParseJSON val =
-  case gridSizeProof @cs of
-    GridSizeNil -> V.singleton <$> parseJSON val
-    GridSizeCons @_ @n @rest -> do
+  case sizeProof @cs of
+    SizeNil -> V.singleton <$> parseJSON val
+    SizeCons @_ @n @rest -> do
       vals :: [Value] <- parseJSON val
       let expected = fromIntegral $ GHC.natVal (Proxy @n) :: Int
       if length vals == expected
@@ -649,15 +586,13 @@ splitGrid ::
     => GridOf v (c ': cs) a
     -> Grid '[ c] (GridOf v cs a)
 splitGrid (Grid v) =
-    withDict
-        (sizeProof @cs)
-        (Grid $
-         V.fromList $
-         map
-             Grid
-             (splitVectorBySize
-                  (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
-                  v))
+    Grid $
+    V.fromList $
+    map
+        Grid
+        (splitVectorBySize
+             (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
+             v)
 {-# INLINABLE splitGrid #-}
 
 combineGrid ::
@@ -754,13 +689,10 @@ splitHigherDim ::
 splitHigherDim (Grid v) =
     requiring @(y <= x) $
     let (a, b) =
-            withDict
-                (sizeProof @as)
-                (VG.splitAt
-                     (fromIntegral $
-                      GHC.natVal (Proxy @y) *
-                      GHC.natVal (Proxy @(MaxCoordSize as)))
-                     v)
+            VG.splitAt
+                (fromIntegral $
+                 GHC.natVal (Proxy @y) * GHC.natVal (Proxy @(MaxCoordSize as)))
+                v
      in (Grid a, Grid b)
 {-# INLINABLE splitHigherDim #-}
 
@@ -784,13 +716,9 @@ mapLowerDim ::
     -> GridOf v (c ': as) x
     -> f (GridOf v (c ': bs) y)
 mapLowerDim f (Grid v) =
-    withDict
-        (sizeProof @as)
-        (fmap (Grid . VG.concat) $
-         traverse (fmap unGrid . f . Grid) $
-         splitVectorBySize
-             (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as))))
-             v)
+    fmap (Grid . VG.concat) $
+    traverse (fmap unGrid . f . Grid) $
+    splitVectorBySize (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))) v
 {-# INLINABLE mapLowerDim #-}
 
 -- | 'mapLowerDim' where @f@ returns many results per sub-grid and they should
@@ -884,18 +812,16 @@ mapAxisHere ::
   -> GridOf v (c ': as) x
   -> GridOf v (c ': as) y
 mapAxisHere f (Grid v) =
-    withDict
-        (sizeProof @as)
-        (let restSize = fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))
-          in if restSize == 1
-               then Grid (unGrid (f (Grid v)))
-               else let axisSize = VG.length v `div` restSize
-                     in Grid $
-                        transposeFlat restSize axisSize $
-                        VG.concat $
-                        map (unGrid . f . Grid) $
-                        splitVectorBySize axisSize $
-                        transposeFlat axisSize restSize v)
+    let restSize = fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))
+     in if restSize == 1
+          then Grid (unGrid (f (Grid v)))
+          else let axisSize = VG.length v `div` restSize
+                in Grid $
+                   transposeFlat restSize axisSize $
+                   VG.concat $
+                   map (unGrid . f . Grid) $
+                   splitVectorBySize axisSize $
+                   transposeFlat axisSize restSize v
 {-# INLINABLE mapAxisHere #-}
 
 -- | Apply a length-preserving function to one named axis of a grid,
@@ -1061,7 +987,6 @@ gridWindows :: forall small v big rest a.
             -> [GridOf v (small ': rest) a]
 gridWindows (Grid v) =
     requiring @(CoordNat small <= CoordNat big) $
-    withDict (sizeProof @rest) $
     let restSize = fromIntegral $ natVal (Proxy @(MaxCoordSize rest))
         smallSize = fromIntegral $ natVal (Proxy @(CoordNat small))
         windowSize = smallSize * restSize

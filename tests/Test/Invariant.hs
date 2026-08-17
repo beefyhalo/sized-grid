@@ -41,7 +41,7 @@ assertWellSized what g =
 
 -- | A grid decoded from JSON must either be well sized or not exist.
 assertRejects ::
-     forall (cs :: [Type]). AllGridSizeKnown cs
+     forall (cs :: [Type]). AllSizedKnown cs
   => String
   -> ByteString
   -> Assertion
