@@ -26,6 +26,9 @@ import           Data.Proxy
 import           GHC.TypeLits
 import           Test.QuickCheck       (Arbitrary (..), Property, property,
                                         (.&&.), (===))
+import           Test.QuickCheck.Classes (applicativeLaws, foldableLaws,
+                                          functorLaws, monadLaws,
+                                          traversableLaws)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
@@ -301,10 +304,21 @@ main =
            (gridTests
                (Proxy @(Coord '[ Periodic 10, Periodic 11]))
                (Proxy @Int) ++
-             [ applicativeLaws
-                 (Proxy @(Grid '[ Periodic 10, Periodic 11]))
-                 (Proxy @Int)
-             , aesonLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
+             -- The base-class laws (sized-grid-05b): 'Grid' has Functor,
+             -- Applicative, Monad, Foldable and Traversable instances, and
+             -- before this only Applicative was tested, by hand. These come
+             -- from @quickcheck-classes@ rather than 'Test.Utils' because
+             -- upstream already ships exactly these five bundles; nothing here
+             -- needed reinventing.
+             map
+               lawsToTest
+               [ functorLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , applicativeLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , monadLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , foldableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , traversableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               ] ++
+             [ aesonLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
              ])
        , testGroup
@@ -320,22 +334,28 @@ main =
          -- permutation of the right one on square grids.
        , testGroup
            "Representable"
-           [ representableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
-           , representableLaws
-               (Proxy @(Grid '[ Clamped 3, Periodic 4, Clamped 5] Int))
+           [ lawsToTest $
+             representableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+           , lawsToTest $
+             representableLaws
+               (Proxy @(Grid '[ Clamped 3, Periodic 4, Clamped 5]))
            ]
        , testGroup
            "Distributive"
-           [ distributiveLaws (Proxy @(Grid '[ Periodic 3, Periodic 4] Int))
-           , distributiveLaws
-               (Proxy @(Grid '[ Clamped 2, Periodic 3, Clamped 2] Int))
+           [ lawsToTest $
+             distributiveLaws (Proxy @(Grid '[ Periodic 3, Periodic 4]))
+           , lawsToTest $
+             distributiveLaws
+               (Proxy @(Grid '[ Clamped 2, Periodic 3, Clamped 2]))
            ]
          -- Small on purpose: coassociativity builds a grid of grids of grids,
          -- so the cell count is cubed. See 'comonadLaws'.
        , testGroup
            "FocusedGrid"
-           [ comonadLaws (Proxy @(FocusedGrid '[ Periodic 3, Periodic 3] Int))
-           , comonadLaws (Proxy @(FocusedGrid '[ Clamped 2, Periodic 3] Int))
+           [ lawsToTest $
+             comonadLaws (Proxy @(FocusedGrid '[ Periodic 3, Periodic 3]))
+           , lawsToTest $
+             comonadLaws (Proxy @(FocusedGrid '[ Clamped 2, Periodic 3]))
            ]
        , shrinkTests
        , tilingTests

@@ -178,17 +178,18 @@ test-suite tests
     , adjunctions
     , aeson
     , base
-    , bytestring        >=0.11 && <0.13
+    , bytestring          >=0.11 && <0.13
     , comonad
     , distributive
     , generics-sop
-    , HUnit             >=1.6  && <1.7
+    , HUnit               >=1.6  && <1.7
     , lens
-    , QuickCheck        >=2.14 && <2.16
+    , QuickCheck          >=2.14 && <2.16
+    , quickcheck-classes  >=0.6  && <0.7
     , grid-sized
-    , tasty             >=1.4  && <1.6
-    , tasty-hunit       >=0.10 && <0.11
-    , tasty-quickcheck  >=0.10 && <0.12
+    , tasty               >=1.4  && <1.6
+    , tasty-hunit         >=0.10 && <0.11
+    , tasty-quickcheck    >=0.10 && <0.12
     , vector
     , vector-space
 
