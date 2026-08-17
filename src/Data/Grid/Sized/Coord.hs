@@ -446,13 +446,15 @@ coordPosition (Coord a) = snd (sizeAndPosition a)
 -- rather than @KnownNat (MaxCoordSize cs)@, so it is available wherever a
 -- coordinate can be taken apart at all --- in particular in the indexed
 -- traversals, which do not carry the @KnownNat@.
+--
+-- 'coordListSize' rather than the @sList@ fold this used to be
+-- (sized-grid-92z): that fold was self-recursive over the axis list, the
+-- same defect 'coordPosition' had before it became 'sizeAndPosition', and
+-- it did not constant-fold for the same reason. As an 'IsCoordList' method
+-- it does.
 coordSpaceSize :: forall cs. IsCoordList cs => Int
-coordSpaceSize =
-    -- 'SList' carries no fields, so the head and tail of the list are named
-    -- with a type abstraction. 'SCons' quantifies the tail before the head.
-    case sList :: SList cs of
-        SNil          -> 1
-        SCons @xs @x  -> ordinalSize @(CoordNat x) * coordSpaceSize @xs
+coordSpaceSize = coordListSize @cs
+{-# INLINE coordSpaceSize #-}
 
 -- | The inverse of 'coordPosition': the coordinate stored at the given position
 -- of a grid's vector, or 'Nothing' if there is no such position.
