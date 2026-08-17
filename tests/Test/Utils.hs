@@ -1,10 +1,11 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Test.Utils
   ( eq1Laws
@@ -13,13 +14,13 @@ module Test.Utils
   , monoidLaws
   , additiveGroupLaws
   , affineSpaceLaws
-  , applicativeLaws
   , traversalLaws
   , isoLaws
   , isCoordLaws
   , comonadLaws
   , representableLaws
   , distributiveLaws
+  , lawsToTest
   ) where
 
 import           Data.Grid.Sized.Coord.Class
@@ -48,6 +49,7 @@ import           Test.Tasty.HUnit
 -- prints; the ones wanted here are the `Representable` and
 -- `Data.Distributive.Distributive` methods of the same names.
 import           Test.Tasty.QuickCheck hiding (collect, tabulate)
+import           Test.QuickCheck.Classes (Laws (..))
 
 eq1Laws ::
        forall f. (Eq1 f, Applicative f)
@@ -137,54 +139,13 @@ affineSpaceLaws _ =
        , testProperty "b .+^ (a .-. b) == a" subtractThenAdd
        ]
 
-applicativeLaws ::
-     forall f a.
-     ( Applicative f
-     , Show (f a)
-     , Eq (f a)
-     , Arbitrary a
-     , Arbitrary1 f
-     , Function a
-     , CoArbitrary a
-     )
-  => Proxy f
-  -> Proxy a
-  -> TestTree
-applicativeLaws _ _ =
-  let identiy :: Gen Property
-      identiy = do
-        v :: f a <- liftArbitrary arbitrary
-        return (v === (pure id <*> v))
-      homomorphism = do
-        x :: a <- arbitrary
-        f :: (a -> a) <- applyFun <$> arbitrary
-        return ((pure f <*> pure x) === pure @f (f x))
-      interchange :: Gen Property
-      interchange = do
-        u :: f (a -> a) <- liftArbitrary (applyFun <$> arbitrary)
-        y :: a <- arbitrary
-        let lhs :: f a = u <*> pure y
-            rhs :: f a = pure ($ y) <*> u
-        return (lhs === rhs)
-      fmapLaw = do
-        f :: (a -> a) <- applyFun <$> arbitrary
-        x :: f a <- liftArbitrary arbitrary
-        return ((f <$> x) === (pure f <*> x))
-      composition = do
-        u :: f (a -> a) <- liftArbitrary (applyFun <$> arbitrary)
-        v :: f (a -> a) <- liftArbitrary (applyFun <$> arbitrary)
-        w :: f a <- liftArbitrary arbitrary
-        let lhs = u <*> (v <*> w)
-            rhs = pure (.) <*> u <*> v <*> w
-        return (lhs === rhs)
-  in testGroup
-       "Applicative Laws"
-       [ testProperty "Identity" (property identiy)
-       , testProperty "Homomorphism" (property homomorphism)
-       , testProperty "Interchange" (property interchange)
-       , testProperty "Fmap Law" (property fmapLaw)
-       , testProperty "Composiiton" (property composition)
-       ]
+-- | Renders a @quickcheck-classes@ 'Laws' bundle as a 'TestTree', the same
+-- way 'testGroup' renders any other named list of properties. This is what
+-- lets our own law bundles below sit in the same list as upstream's
+-- 'Test.QuickCheck.Classes.functorLaws' and friends and come out
+-- indistinguishable in the test-tree output.
+lawsToTest :: Laws -> TestTree
+lawsToTest (Laws name props) = testGroup name (map (uncurry testProperty) props)
 
 traversalLaws ::
      forall a f b.
@@ -229,32 +190,42 @@ traversalLaws t =
 -- @w@ wants to be small. On a 3x3 that is 729 cells per sample; on the
 -- @Periodic 10, Periodic 11@ used elsewhere in this suite it would be 1.3
 -- million.
+--
+-- Shaped as a @quickcheck-classes@ 'Laws' bundle (sized-grid-05b), the same
+-- shape 'Test.QuickCheck.Classes.functorLaws' and friends use: a 'Proxy w'
+-- with the element type fixed internally, rather than a 'Proxy (w a)'. That
+-- drops a type argument callers no longer need to supply, and it is what lets
+-- 'lawsToTest' render this alongside upstream's bundles with nothing in the
+-- output to tell them apart. The element type is fixed to 'Int', matching the
+-- 'Int' payload used at every other call site in this suite (upstream fixes
+-- it to 'Integer'). The quantified constraints below discharge from the
+-- concrete instances at a fixed @cs@ with no new machinery -- even
+-- @Show (w (w (w a)))@, three levels deep for coassociativity, resolves
+-- because each nesting is the same quantified constraint applied one level
+-- further in.
 comonadLaws ::
-     forall w a proxy.
+     forall w.
      ( Comonad w
-     , Arbitrary (w a)
-     , Show (w a)
-     , Eq (w a)
-     , Show (w (w (w a)))
-     , Eq (w (w (w a)))
+     , forall a. Arbitrary a => Arbitrary (w a)
+     , forall a. Show a => Show (w a)
+     , forall a. Eq a => Eq (w a)
      )
-  => proxy (w a)
-  -> TestTree
+  => Proxy w
+  -> Laws
 comonadLaws _ =
-  let leftId :: w a -> Property
+  let leftId :: w Int -> Property
       leftId w = extract (duplicate w) === w
-      rightId :: w a -> Property
+      rightId :: w Int -> Property
       rightId w = fmap extract (duplicate w) === w
-      coassociativity :: w a -> Property
+      coassociativity :: w Int -> Property
       coassociativity w =
         duplicate (duplicate w) === fmap duplicate (duplicate w)
-   in testGroup
-        "Comonad Laws"
-        [ testProperty "extract . duplicate == id" leftId
-        , testProperty "fmap extract . duplicate == id" rightId
-        , testProperty
-            "duplicate . duplicate == fmap duplicate . duplicate"
-            coassociativity
+   in Laws
+        "Comonad"
+        [ ("extract . duplicate == id", property leftId)
+        , ("fmap extract . duplicate == id", property rightId)
+        , ( "duplicate . duplicate == fmap duplicate . duplicate"
+          , property coassociativity)
         ]
 
 -- | @tabulate@ and @index@ are inverse, in both directions.
@@ -271,37 +242,32 @@ comonadLaws _ =
 -- @g@ here is arbitrary. Quantifying over grids rather than over functions also
 -- avoids needing `Function` for `Data.Grid.Sized.Coord.Coord`.
 representableLaws ::
-     forall f a proxy.
+     forall f.
      ( Representable f
-     , Arbitrary (f a)
-     , Show (f a)
-     , Eq (f a)
+     , forall a. Arbitrary a => Arbitrary (f a)
+     , forall a. Show a => Show (f a)
+     , forall a. Eq a => Eq (f a)
      , Arbitrary (Rep f)
      , Show (Rep f)
-     , Arbitrary a
-     , Show a
-     , Eq a
-     , Function a
-     , CoArbitrary a
      )
-  => proxy (f a)
-  -> TestTree
+  => Proxy f
+  -> Laws
 representableLaws _ =
-  let tabulateIndex :: f a -> Property
+  let tabulateIndex :: f Int -> Property
       tabulateIndex g = tabulate (index g) === g
-      indexTabulate :: f a -> Rep f -> Property
-      indexTabulate g r = index (tabulate (index g) :: f a) r === index g r
+      indexTabulate :: f Int -> Rep f -> Property
+      indexTabulate g r = index (tabulate (index g) :: f Int) r === index g r
       -- fmap has to agree with the representation: mapping the cells and
       -- rebuilding from the mapped lookup must give the same grid. A `fmap`
       -- that reordered or dropped cells passes both laws above.
-      fmapIsTabulate :: Fun a a -> f a -> Property
+      fmapIsTabulate :: Fun Int Int -> f Int -> Property
       fmapIsTabulate h g =
         fmap (applyFun h) g === tabulate (applyFun h . index g)
-   in testGroup
-        "Representable Laws"
-        [ testProperty "tabulate . index == id" tabulateIndex
-        , testProperty "index . tabulate == id" indexTabulate
-        , testProperty "fmap h == tabulate . (h .) . index" fmapIsTabulate
+   in Laws
+        "Representable"
+        [ ("tabulate . index == id", property tabulateIndex)
+        , ("index . tabulate == id", property indexTabulate)
+        , ("fmap h == tabulate . (h .) . index", property fmapIsTabulate)
         ]
 
 -- | The `Data.Distributive.Distributive` laws.
@@ -312,41 +278,32 @@ representableLaws _ =
 -- is the one with real content for a grid: distributing a grid of grids is a
 -- transpose, and doing it twice must land back where it started.
 distributiveLaws ::
-     forall f a proxy.
+     forall f.
      ( Distributive f
-     , Arbitrary (f a)
-     , Show (f a)
-     , Eq (f a)
-     , Arbitrary (f (f a))
-     , Show (f (f a))
-     , Eq (f (f a))
-     , Show (f [a])
-     , Eq (f [a])
-     , Arbitrary a
-     , Show a
-     , Function a
-     , CoArbitrary a
+     , forall a. Arbitrary a => Arbitrary (f a)
+     , forall a. Show a => Show (f a)
+     , forall a. Eq a => Eq (f a)
      )
-  => proxy (f a)
-  -> TestTree
+  => Proxy f
+  -> Laws
 distributiveLaws _ =
-  let doubleDistribute :: f (f a) -> Property
+  let doubleDistribute :: f (f Int) -> Property
       doubleDistribute g = distribute (distribute g) === g
-      distributeIsCollectId :: [f a] -> Property
+      distributeIsCollectId :: [f Int] -> Property
       distributeIsCollectId gs = distribute gs === collect id gs
-      collectIsDistributeFmap :: Fun a (f a) -> [a] -> Property
+      collectIsDistributeFmap :: Fun Int (f Int) -> [Int] -> Property
       collectIsDistributeFmap h xs =
         collect (applyFun h) xs === distribute (fmap (applyFun h) xs)
       -- Distributing over 'Identity' can only be 'fmap Identity': there is one
       -- outer position, so nothing is being combined.
-      identityLaw :: f a -> Property
+      identityLaw :: f Int -> Property
       identityLaw g = fmap runIdentity (distribute (Identity g)) === g
-   in testGroup
-        "Distributive Laws"
-        [ testProperty "distribute . distribute == id" doubleDistribute
-        , testProperty "distribute == collect id" distributeIsCollectId
-        , testProperty "collect f == distribute . fmap f" collectIsDistributeFmap
-        , testProperty "distribute . Identity == fmap Identity" identityLaw
+   in Laws
+        "Distributive"
+        [ ("distribute . distribute == id", property doubleDistribute)
+        , ("distribute == collect id", property distributeIsCollectId)
+        , ("collect f == distribute . fmap f", property collectIsDistributeFmap)
+        , ("distribute . Identity == fmap Identity", property identityLaw)
         ]
 
 -- | The two round trips of an 'Control.Lens.Iso''.

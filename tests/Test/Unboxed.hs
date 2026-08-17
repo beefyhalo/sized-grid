@@ -101,6 +101,17 @@ unboxedTests =
                          (gridTiles boxed :: [Grid '[ Ordinal 1, Ordinal 4] Int]))
                     (map (U.toList . gridVector)
                          (gridTiles unboxed :: [UGrid '[ Ordinal 1, Ordinal 4] Int]))
+                -- gridWindows landed on master while this work was on a
+                -- branch, and was generalised to GridOf in the merge rather
+                -- than written a second time. This is the check that the
+                -- generalisation was faithful.
+              , testCase "gridWindows slides the same windows" $
+                assertEqual
+                    "windows"
+                    (map (V.toList . gridVector)
+                         (gridWindows @(Ordinal 2) boxed))
+                    (map (U.toList . gridVector)
+                         (gridWindows @(Ordinal 2) unboxed))
               , testCase "zipLowerDim gridTiles cuts the same columns" $
                 assertEqual
                     "columns"

@@ -65,11 +65,18 @@
 --
 -- The shape algebra -- 'Data.Grid.Sized.takeGrid', 'Data.Grid.Sized.dropGrid',
 -- 'Data.Grid.Sized.splitGrid', 'Data.Grid.Sized.mapLowerDim',
--- 'Data.Grid.Sized.gridTiles', 'Data.Grid.Sized.shrinkGrid' and the rest -- is
--- not duplicated here and needs no unboxed variant. Those functions are
--- polymorphic in the vector, so importing "Data.Grid.Sized" alongside this
--- module gets you all of them at @UGrid@, with the same size proofs. This
--- module adds the type synonym and nothing else of substance.
+-- 'Data.Grid.Sized.gridTiles', 'Data.Grid.Sized.gridWindows',
+-- 'Data.Grid.Sized.shrinkGrid' and the rest -- is not duplicated here and needs
+-- no unboxed variant. Those functions are polymorphic in the vector, so
+-- importing "Data.Grid.Sized" alongside this module gets you all of them at
+-- @UGrid@, with the same size proofs. This module adds the type synonym and
+-- nothing else of substance.
+--
+-- 'Data.Grid.Sized.gridWindows' is the worked example of what that is worth. It
+-- was added to the boxed grid while this module was being written, and reached
+-- @UGrid@ by changing @V.@ to @VG.@ in one signature and one body -- no second
+-- implementation, no second set of size proofs, and "Test.Unboxed" checks the
+-- two agree.
 module Data.Grid.Sized.Unboxed
   ( UGrid
   , ugridFromVector

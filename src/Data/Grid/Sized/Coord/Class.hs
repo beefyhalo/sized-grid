@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Data.Grid.Sized.Coord.Class
   ( IsCoord(..)
   , IsCoordLifted(..)
@@ -748,6 +750,22 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- anything the instance can fix.
     npStepsWithin :: Int -> NP I cs -> [(Int, NP I cs)]
 
+    -- | The product of the axis sizes alone, with no coordinate to fold
+    -- over. The fold behind 'Data.Grid.Sized.Coord.coordSpaceSize'
+    -- (sized-grid-92z), and the same defect as 'sizeAndPosition' met a second
+    -- time: written as a self-recursive function over @'SList' cs@ this does
+    -- not unroll, for the reason given at length above, and it does not
+    -- constant-fold. As a method it does.
+    --
+    -- This duplicates the size half of 'sizeAndPosition' rather than being
+    -- built from it. That is deliberate: 'sizeAndPosition' needs a value
+    -- (@NP I cs@) to fold over and this has none, so there is nothing to
+    -- call it with, and deriving this from a 'sizeAndPosition' on a
+    -- manufactured dummy coordinate would only reintroduce the per-axis
+    -- value traffic this method exists to avoid paying for at 'tabulate'
+    -- time.
+    coordListSize :: Int
+
 instance IsCoordList '[] where
     sizeAndPosition Nil = (1, 0)
     npOffset Nil Nil = Just Nil
@@ -755,9 +773,11 @@ instance IsCoordList '[] where
     -- makes the centre the only entry whose total is zero, which is how both
     -- neighbourhood functions exclude it without comparing coordinates.
     npStepsWithin _ Nil = [(0, Nil)]
+    coordListSize = 1
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
     {-# INLINE npStepsWithin #-}
+    {-# INLINE coordListSize #-}
 
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     sizeAndPosition (I c :* cs) =
@@ -777,9 +797,11 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
         | (d, v) <- axisSteps r x
         , (s, vs) <- npStepsWithin r xs
         ]
+    coordListSize = ordinalSize @(CoordNat x) * coordListSize @xs
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
     {-# INLINE npStepsWithin #-}
+    {-# INLINE coordListSize #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id

@@ -471,6 +471,40 @@ centredTests =
                      (axisDistance c (peOf 8 :: Periodic 9))
         ]
 
+-- | Tests for 'PuncturedCoord', 'puncturedToCoord' and 'allPunctured'
+-- (sized-grid-meg), the type-precise index 'partitionFocus' hands its
+-- neighbours out through in place of Chris Penner's @Grid window (Maybe a)@.
+puncturedTests :: TestTree
+puncturedTests =
+    testGroup
+        "PuncturedCoord"
+        [ testCase "as many as MaxCoordSize minus one, on a square window" $
+              assertEqual
+                  ""
+                  (coordSpaceSize @'[Clamped 5, Clamped 5] - 1)
+                  (length (allPunctured @'[Clamped 5, Clamped 5]))
+        , testCase "a single-cell window has none" $
+              assertEqual "" [] (allPunctured @'[Clamped 1])
+        , testCase "never names the centre" $
+              assertBool
+                  ""
+                  (centreCoord `notElem`
+                   map puncturedToCoord (allPunctured @'[Clamped 5, Clamped 5]))
+        , testCase "names every coordinate distinctly" $
+              let cs = map puncturedToCoord (allPunctured @'[Clamped 5, Clamped 5])
+              in assertEqual "" (length cs) (length (nub cs))
+        , testCase "is allCoord with the centre left out, in the same order" $
+              assertEqual
+                  ""
+                  (filter (/= centreCoord) (allCoord @'[Clamped 5, Clamped 5]))
+                  (map puncturedToCoord (allPunctured @'[Clamped 5, Clamped 5]))
+        , testCase "agrees on a mixed-axis, non-square window too" $
+              assertEqual
+                  ""
+                  (filter (/= centreCoord) (allCoord @'[Clamped 3, Periodic 5]))
+                  (map puncturedToCoord (allPunctured @'[Clamped 3, Periodic 5]))
+        ]
+
 -- | Seven axes: one past the ceiling the old @CoordDiff@ family imposed.
 --
 -- @CoordDiff@ was an open family with one hand-written @type instance@ per
@@ -552,4 +586,5 @@ neighbourTests =
         , metricLawTests
         , stepsWithinTests
         , centredTests
+        , puncturedTests
         ]

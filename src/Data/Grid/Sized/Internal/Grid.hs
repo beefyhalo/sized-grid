@@ -121,6 +121,7 @@ module Data.Grid.Sized.Internal.Grid
     -- * Windows and tiles
   , ShrinkableGrid(..)
   , gridTiles
+  , gridWindows
     -- * Vector helpers
   , splitVectorBySize
   ) where
@@ -869,7 +870,7 @@ instance ( KnownNat x
 --
 -- This was called @gridWindows@, which said the opposite of what it does. A
 -- sliding window and a disjoint tiling are different operations; this is the
--- tiling. Sliding windows are 'shrinkGrid' at each offset (sized-grid-3t6).
+-- tiling. Sliding windows are 'gridWindows'.
 --
 -- @CoordNat big \`Mod\` CoordNat small ~ 0@ makes a tiling that does not divide
 -- evenly a type error, so the result is always exactly
@@ -880,7 +881,8 @@ instance ( KnownNat x
 --
 -- > rows    = gridTiles                :: Board -> [Grid '[Ordinal 1, Ordinal 9] a]
 -- > columns = zipLowerDim gridTiles    :: Board -> [Grid '[Ordinal 9, Ordinal 1] a]
-gridTiles :: forall v small big rest a.
+-- @small@ before @v@, for the reason given on 'gridWindows'.
+gridTiles :: forall small v big rest a.
                ( VG.Vector v a,
                  KnownNat (MaxCoordSize (small ': rest)),
                  CoordNat big `Mod` CoordNat small ~ 0
@@ -892,3 +894,50 @@ gridTiles (Grid v) =
     let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))
     in map Grid $ splitVectorBySize size v
 {-# INLINABLE gridTiles #-}
+
+-- | Every overlapping window of size @CoordNat small@ along a grid's outermost
+-- axis, stride 1: an @Ordinal 9@ axis windowed by @Ordinal 3@ gives seven
+-- overlapping windows -- @0..2@, @1..3@, ..., @6..8@ -- not the three disjoint
+-- tiles 'gridTiles' would.
+--
+-- This is 'shrinkGrid' at every valid offset along the outermost axis, with the
+-- other axes left untouched at each one, stated at the vector level for the
+-- same reason 'gridTiles' is: 'shrinkGrid' walks its whole @Coord@ list one
+-- axis at a time, which would need an identity offset invented for every axis
+-- in @rest@ (an axis of size 1 in the same family, so its window equals its
+-- source) purely to state "leave this alone". Nothing here needs that: a window
+-- of the outer axis is a contiguous run of whole @rest@-blocks, so it is one
+-- 'VG.slice', and 'gridTiles'\'s own trick of reading the block size off the
+-- vector rather than the type carries over unchanged. The property that ties
+-- the two readings together -- this agrees with 'shrinkGrid' at every offset --
+-- is checked in "Test.Windows" rather than assumed here.
+--
+-- @CoordNat small <= CoordNat big@ makes a window larger than its source a type
+-- error, mirroring 'gridTiles'\'s own @Mod ~ 0@: both are preconditions the
+-- vector-level implementation cannot check for itself, so the type states them
+-- instead.
+-- @small@ is quantified before @v@, and both of these deliberately break the
+-- \"vector first\" order the rest of the module uses. Nothing determines @small@
+-- -- it appears only in the element type of the result list -- so the caller
+-- always supplies it by type application, whereas @v@ is read off the argument.
+-- The parameter that must be written comes first, so @gridWindows \@(Ordinal 3)@
+-- keeps working rather than becoming @gridWindows \@_ \@(Ordinal 3)@.
+gridWindows :: forall small v big rest a.
+               ( VG.Vector v a
+               , AllSizedKnown rest
+               , KnownNat (CoordNat small)
+               , CoordNat small <= CoordNat big
+               )
+            => GridOf v (big ': rest) a
+            -> [GridOf v (small ': rest) a]
+gridWindows (Grid v) =
+    requiring @(CoordNat small <= CoordNat big) $
+    withDict (sizeProof @rest) $
+    let restSize = fromIntegral $ natVal (Proxy @(MaxCoordSize rest))
+        smallSize = fromIntegral $ natVal (Proxy @(CoordNat small))
+        windowSize = smallSize * restSize
+        bigSize = VG.length v `div` restSize
+    in [ Grid (VG.slice (off * restSize) windowSize v)
+       | off <- [0 .. bigSize - smallSize]
+       ]
+{-# INLINABLE gridWindows #-}
