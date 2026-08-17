@@ -21,6 +21,7 @@ module Data.Grid.Atlas
   ( Atlas
   , AtlasCoord
   , atlasFromTiles
+  , atlasFromVector
   , atlasIndex
   , atlasOffsetHead
   ) where
@@ -30,6 +31,7 @@ import           Data.Grid.Sized
 import           Control.Lens    (review, view)
 import           Data.Functor.Rep (index)
 import           Data.Kind       (Type)
+import           Data.Proxy      (Proxy (..))
 import qualified Data.Vector     as V
 import           GHC.TypeLits
 
@@ -59,6 +61,21 @@ atlasFromTiles ::
     => Grid (big ': rest) a
     -> Atlas (small ': rest) (Div (CoordNat big) (CoordNat small)) a
 atlasFromTiles = Atlas . V.fromList . gridTiles @small
+
+-- | Build an atlas directly from its charts, checking only that there are
+-- exactly @k@ of them. The counterpart to 'atlasFromTiles' for an atlas that
+-- is not a subdivision of one larger grid --- 'Data.Grid.Atlas.CubeMap's six
+-- faces, glued by an explicit transition table rather than cut from a single
+-- bigger 'Grid', need this instead. 'Nothing' if the vector's length does not
+-- match @k@, the same shape 'Data.Grid.Sized.gridFromVector' checks for a
+-- 'Grid'.
+atlasFromVector ::
+       forall cs k a. KnownNat k
+    => V.Vector (Grid cs a)
+    -> Maybe (Atlas cs k a)
+atlasFromVector v
+    | V.length v == fromIntegral (natVal (Proxy @k)) = Just (Atlas v)
+    | otherwise = Nothing
 
 -- | Read a single cell. Total: every 'AtlasCoord' names a chart in range (an
 -- 'Ordinal k' has no other kind of value) and a coordinate valid within it
