@@ -7,3 +7,4 @@ packages:
   sudoko
   gameOfLife
   ising-example
+  grid-atlas
