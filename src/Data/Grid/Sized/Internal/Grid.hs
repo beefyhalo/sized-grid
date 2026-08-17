@@ -1,11 +1,16 @@
--- GHC2024 plus the default-extensions in grid-sized.cabal cover everything this
--- module used to list.
+-- AllowAmbiguousTypes is for the axis-list recursion helpers below
+-- ('nestByShape', 'flattenByShape', 'nestedToJSON', 'nestedParseJSON'). They
+-- mention @cs@ only under the non-injective 'CollapseGrid' family, or not at
+-- all, so nothing in an argument pins it down; every call site supplies it with
+-- @\@cs@. GHC2024 plus the default-extensions in grid-sized.cabal cover
+-- everything else this module used to list.
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- |
 -- Module      :  Data.Grid.Sized.Internal.Grid
 -- License     :  MIT -style (see the file LICENSE)
 --
--- The `Grid` representation and everything defined over it.
+-- The `GridOf` representation and everything defined over it.
 --
 -- This module is hidden. It exists so that the `Grid` constructor can be shared
 -- with "Data.Grid.Sized.Unsafe" without also being shared with the world: the
@@ -16,15 +21,86 @@
 -- Everything below is free to use the constructor directly. The obligation that
 -- comes with that is on each function in turn: it must not change the length of
 -- the vector except in step with the type.
+--
+-- == Why the vector is a parameter (sized-grid-up6)
+--
+-- The grid used to be a @newtype Grid cs a = Grid (V.Vector a)@ -- boxed, and
+-- only boxed. For the numeric workloads this library is aimed at that is the
+-- wrong representation: an unboxed grid measures 2-3.5x faster on every
+-- operation that touches the whole vector, and identical on indexed reads. See
+-- "Data.Grid.Sized.Unboxed" for the table.
+--
+-- The obvious way to get that was a second, separate module with its own
+-- monomorphic unboxed API. What killed it is what such a module would have had
+-- to contain: 'dropGrid', 'takeGrid', 'sliceGrid', 'splitGrid', 'combineGrid',
+-- 'splitHigherDim', 'mapLowerDim', 'gridTiles', 'ShrinkableGrid' -- the whole
+-- shape algebra, including the 'Data.Grid.Sized.Internal.Type.windowFits' proof
+-- and the @off + len <= m@ restatement that took all of sized-grid-wrc to get
+-- right. Two copies of this library's hardest and most safety-critical code,
+-- certain to drift apart.
+--
+-- Parameterising over the vector writes that code once. The shape algebra turns
+-- out to be almost entirely /element-agnostic/ -- it moves whole sub-vectors
+-- about and never looks inside one -- so most of it needs no element constraint
+-- at all, and the rest needs only @'VG.Vector' v a@.
+--
+-- Three things do not generalise, and all three are element-polymorphic by
+-- nature rather than by accident:
+--
+--   * `Functor`, `Foldable` and `Traversable` need @v@ itself to have them, so
+--     they hold for the boxed grid and not the unboxed one. They are stated
+--     that way -- @Functor v => Functor (GridOf v cs)@ -- rather than pinned to
+--     "Data.Vector", so any boxed-like vector gets them.
+--
+--   * `Applicative`, `Monad`, `Distributive` and `Representable` must work at
+--     /every/ element type, which no unboxed vector can. They are given at
+--     @'GridOf' V.Vector@ concretely.
+--
+--   * The bulk operations an unboxed grid actually wants -- 'mapGrid',
+--     'zipWithGrid', 'foldlGrid'' and friends -- cannot be class methods,
+--     because a class method may not carry a constraint on the element. They
+--     are plain functions taking @'VG.Vector' v a@, and they work for both
+--     representations.
+--
+-- == The pragmas are load-bearing
+--
+-- Every generic function below carries an @INLINE@ or @INLINABLE@ pragma, and
+-- they are not decoration. Without them each one is compiled once,
+-- polymorphically, and reached across a module boundary through a
+-- @'VG.Vector' v a@ dictionary that GHC has no licence to specialise away. The
+-- element operations then stay behind a dictionary call, nothing fuses, and the
+-- unboxed representation gives most of its advantage back: measured on the
+-- 300x300 summed-area build, 53.6 ms without the pragmas against 13.1 ms with
+-- them.
+--
+-- The boxed path gains at least as much, because it is the same code -- that
+-- build was 93.3 ms unspecialised and is 28.1 ms now, and @mapGrid@ followed by
+-- a fold went from 7.74 ms and 15 MB to 318 us and 27 bytes once the two could
+-- fuse. So the pragmas are not a tax the vector parameter imposes; they are
+-- what any @Data.Vector.Generic@-style API needs, and this one was leaving the
+-- same speedup on the table before it had a parameter at all.
+--
+-- If a function is added here, give it a pragma.
 module Data.Grid.Sized.Internal.Grid
   ( -- * Representation
-    Grid(..)
+    GridOf(..)
+  , Grid
   , unsafeGridFromVector
     -- * Construction and access
   , gridVector
   , gridFromVector
   , gridFromList
   , collapseGrid
+    -- * Bulk operations
+    --
+    -- $bulk
+  , tabulateGrid
+  , indexGrid
+  , mapGrid
+  , imapGrid
+  , zipWithGrid
+  , foldlGrid'
+  , scanl1Grid
     -- * Type-level machinery
   , Head
   , Tail
@@ -42,7 +118,6 @@ module Data.Grid.Sized.Internal.Grid
   , sliceGrid
   , mapLowerDim
   , zipLowerDim
-  , scanl1Grid
     -- * Windows and tiles
   , ShrinkableGrid(..)
   , gridTiles
@@ -54,31 +129,66 @@ import           Data.Grid.Sized.Coord
 import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Internal.Type (requiring, windowFits)
 
-import           Control.Applicative   (ZipList (..))
-import           Control.Lens          hiding (index)
+import           Control.Applicative           (ZipList (..))
+import           Control.Lens                  hiding (index)
 import           Data.Aeson
+import           Data.Aeson.Types              (Parser)
 import           Data.Constraint
 import           Data.Distributive
-import           Data.Foldable (fold)
+import           Data.Foldable                 (fold)
 import           Data.Functor.Classes
 import           Data.Functor.Rep
-import           Data.Proxy            (Proxy (..))
-import qualified Data.Vector           as V
-import qualified GHC.Generics          as GHC
+import           Data.Kind                     (Type)
+import           Data.Proxy                    (Proxy (..))
+import qualified Data.Vector                   as V
+import qualified Data.Vector.Generic           as VG
+import qualified GHC.Generics                  as GHC
 import           GHC.TypeLits
-import qualified GHC.TypeLits          as GHC
-import Data.Kind (Type)
+import qualified GHC.TypeLits                  as GHC
 
--- | A multi dimensional sized grid.
+-- | A multi dimensional sized grid over the vector type @v@.
 --
--- The field is called @unGrid@ rather than @gridVector@ so that the derived
--- `Show` output is unchanged from earlier versions. It is not exported as a
--- field anywhere: a record field in scope permits record update syntax, and
--- @g { unGrid = V.empty }@ is exactly the unsound construction the constructor
--- is being hidden to prevent. Use `gridVector` to read it.
-newtype Grid (cs :: [Type]) a = Grid
-  { unGrid :: V.Vector a
-  } deriving (Eq, Show, Functor, Foldable, Traversable, Eq1, Show1, GHC.Generic)
+-- The constructor is called @Grid@ rather than @GridOf@ so that a pattern match
+-- in this module reads as it always did, and so that the derived `Show` output
+-- is unchanged. That it collides with the `Grid` type synonym below is not a
+-- problem: one lives in the data namespace and the other in the type namespace,
+-- exactly as they did when @Grid@ was a single type with a single constructor.
+--
+-- The field is called @unGrid@ rather than @gridVector@ for the same reason. It
+-- is not exported as a field anywhere: a record field in scope permits record
+-- update syntax, and @g { unGrid = V.empty }@ is exactly the unsound
+-- construction the constructor is being hidden to prevent. Use `gridVector` to
+-- read it.
+newtype GridOf v (cs :: [Type]) a = Grid
+  { unGrid :: v a
+  } deriving stock (GHC.Generic)
+
+-- | The boxed grid: what @Grid@ meant before the vector became a parameter, and
+-- what it still means everywhere it appears unqualified.
+--
+-- Declared with no parameters of its own so that it stays saturated. @Grid cs@
+-- is therefore still partially applicable -- @'Functor' ('Grid' cs)@,
+-- @'Representable' ('Grid' cs)@ -- which a synonym written @type Grid cs a =
+-- GridOf V.Vector cs a@ would not be.
+type Grid = GridOf V.Vector
+
+deriving stock instance Eq (v a) => Eq (GridOf v cs a)
+
+deriving stock instance Show (v a) => Show (GridOf v cs a)
+
+deriving newtype instance Eq1 v => Eq1 (GridOf v cs)
+
+deriving newtype instance Show1 v => Show1 (GridOf v cs)
+
+deriving newtype instance Functor v => Functor (GridOf v cs)
+
+deriving newtype instance Foldable v => Foldable (GridOf v cs)
+
+-- | Written out rather than derived. @GeneralizedNewtypeDeriving@ coerces under
+-- the applicative @f@, whose role it must assume is nominal, so it cannot do
+-- this one. The body is the coercion it would have written.
+instance Traversable v => Traversable (GridOf v cs) where
+  traverse f (Grid v) = Grid <$> traverse f v
 
 -- | The escape hatch, re-exported from "Data.Grid.Sized.Unsafe".
 --
@@ -96,32 +206,113 @@ newtype Grid (cs :: [Type]) a = Grid
 -- The name is deliberately alarming. The constructor it stands for is spelled
 -- @Grid@, which reads as ordinary code at a use site and gives no hint that the
 -- library's central invariant is being asserted rather than established.
-unsafeGridFromVector :: V.Vector a -> Grid cs a
+unsafeGridFromVector :: v a -> GridOf v cs a
 unsafeGridFromVector = Grid
+{-# INLINE unsafeGridFromVector #-}
 
 -- | Read a grid's elements in row-major order.
 --
 -- Safe in the direction that matters: reading a vector out cannot invalidate
 -- anything. The result always has @MaxCoordSize cs@ elements.
-gridVector :: Grid cs a -> V.Vector a
+gridVector :: GridOf v cs a -> v a
 gridVector = unGrid
+{-# INLINE gridVector #-}
 
 -- | Build a grid from a vector, checking that its length is the one the type
 -- claims. `Nothing` if it is not.
 --
--- This is the safe counterpart to `UnsafeGrid`, and the reason the constructor
--- no longer needs to be public.
+-- This is the safe counterpart to `unsafeGridFromVector`, and the reason the
+-- constructor no longer needs to be public.
 gridFromVector ::
-       forall cs a. AllSizedKnown cs
-    => V.Vector a
-    -> Maybe (Grid cs a)
+       forall v cs a. (VG.Vector v a, AllSizedKnown cs)
+    => v a
+    -> Maybe (GridOf v cs a)
 gridFromVector v =
     withDict
         (sizeProof @cs)
-        (if V.length v ==
+        (if VG.length v ==
             fromIntegral (GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
              then Just (Grid v)
              else Nothing)
+{-# INLINABLE gridFromVector #-}
+
+-- $bulk
+--
+-- The operations that carry an element constraint, and so cannot be the class
+-- methods their boxed counterparts are. On a boxed grid each is the obvious
+-- thing -- 'mapGrid' is `fmap`, 'tabulateGrid' is `Data.Functor.Rep.tabulate` --
+-- and on an unboxed grid they are the entire point, because the classes are out
+-- of reach there.
+--
+-- These are also where the representation actually pays. A measured spike found
+-- the win to be wholly in operations that touch the vector wholesale; a single
+-- indexed read is the same to within noise either way, because its cost is the
+-- coordinate arithmetic rather than the vector access.
+
+-- | Build a grid from a function of the coordinate. `Data.Functor.Rep.tabulate`
+-- for grids whose element type cannot support `Representable`.
+--
+-- 'VG.fromListN' rather than 'VG.fromList': a list of statically unknown length
+-- makes the vector grow by doubling, so it is allocated and copied several
+-- times over, and the length is known --- it is 'coordSpaceSize'.
+tabulateGrid ::
+       forall v cs a. (VG.Vector v a, IsCoordList cs)
+    => (Coord cs -> a)
+    -> GridOf v cs a
+tabulateGrid func = Grid $ VG.fromListN (coordSpaceSize @cs) $ map func allCoord
+{-# INLINABLE tabulateGrid #-}
+
+-- | Read the element at a coordinate. `Data.Functor.Rep.index` for grids whose
+-- element type cannot support `Representable`.
+indexGrid ::
+       forall v cs a. (VG.Vector v a, IsCoordList cs)
+    => GridOf v cs a
+    -> Coord cs
+    -> a
+indexGrid (Grid v) c = v VG.! coordPosition c
+{-# INLINE indexGrid #-}
+
+-- | `fmap` for grids whose element type cannot support `Functor`.
+mapGrid ::
+       (VG.Vector v a, VG.Vector v b)
+    => (a -> b)
+    -> GridOf v cs a
+    -> GridOf v cs b
+mapGrid f (Grid v) = Grid (VG.map f v)
+{-# INLINE mapGrid #-}
+
+-- | `Control.Lens.Indexed.imap` for grids whose element type cannot support
+-- `FunctorWithIndex`.
+--
+-- The coordinate list is walked alongside the vector rather than materialised;
+-- see the note on the `FunctorWithIndex` instance below, which is the same
+-- trick and the same reason.
+imapGrid ::
+       forall v cs a b. (VG.Vector v a, VG.Vector v b, IsCoordList cs)
+    => (Coord cs -> a -> b)
+    -> GridOf v cs a
+    -> GridOf v cs b
+imapGrid f (Grid v) = Grid (VG.imap (\i x -> f (allCoordVector VG.! i) x) v)
+  where
+    allCoordVector :: V.Vector (Coord cs)
+    allCoordVector = V.fromListN (coordSpaceSize @cs) allCoord
+{-# INLINABLE imapGrid #-}
+
+-- | Pointwise combination of two grids of the same shape.
+zipWithGrid ::
+       (VG.Vector v a, VG.Vector v b, VG.Vector v c)
+    => (a -> b -> c)
+    -> GridOf v cs a
+    -> GridOf v cs b
+    -> GridOf v cs c
+zipWithGrid f (Grid a) (Grid b) = Grid (VG.zipWith f a b)
+{-# INLINE zipWithGrid #-}
+
+-- | Strict left fold in row-major order. `Data.Foldable.foldl'` for grids whose
+-- element type cannot support `Foldable`.
+foldlGrid' :: VG.Vector v a => (b -> a -> b) -> b -> GridOf v cs a -> b
+foldlGrid' f z (Grid v) = VG.foldl' f z v
+{-# INLINE foldlGrid' #-}
 
 -- | Left-to-right scan over the whole grid in row-major order, keeping the
 -- shape. Accumulates strictly, as a running total over a boxed vector otherwise
@@ -135,10 +326,14 @@ gridFromVector v =
 --
 -- This exists so that prefix sums -- the summed-area-table build-up being the
 -- common case -- do not need the escape hatch. Length preservation is
--- guaranteed by 'V.scanl1'', so no size constraint is needed.
-scanl1Grid :: (a -> a -> a) -> Grid cs a -> Grid cs a
-scanl1Grid f (Grid v) = Grid (V.scanl1' f v)
+-- guaranteed by 'VG.scanl1'', so no size constraint is needed.
+scanl1Grid :: VG.Vector v a => (a -> a -> a) -> GridOf v cs a -> GridOf v cs a
+scanl1Grid f (Grid v) = Grid (VG.scanl1' f v)
+{-# INLINE scanl1Grid #-}
 
+-- | Boxed only, and necessarily so: `pure` must produce a grid of /any/ element
+-- type, which no unboxed vector can hold. 'tabulateGrid' is the unboxed
+-- counterpart for the cases that have a concrete element type in hand.
 instance AllSizedKnown cs => Applicative (Grid cs) where
     pure =
         withDict
@@ -159,15 +354,14 @@ instance (AllSizedKnown cs, IsCoordList cs) =>
 instance (IsCoordList cs, AllSizedKnown cs) =>
          Representable (Grid cs) where
   type Rep (Grid cs) = Coord cs
-  -- 'V.fromListN' rather than 'V.fromList': a list of statically unknown length
-  -- makes the vector grow by doubling, so it is allocated and copied several
-  -- times over, and the length is known --- it is 'coordSpaceSize'.
+  -- The bodies are 'tabulateGrid' and 'indexGrid' at @v ~ V.Vector@, where the
+  -- 'VG.Vector' constraint is discharged for every element type.
   --
-  -- The traversals below deliberately do not do this, and the difference is
-  -- that 'tabulate' ends in a vector whatever happens. They do not: they hand
-  -- their list straight to a 'V.zipWith' that fuses with it.
-  tabulate func = Grid $ V.fromListN (coordSpaceSize @cs) $ map func allCoord
-  index (Grid v) c = v V.! coordPosition c
+  -- The traversals below deliberately do not use 'V.fromListN', and the
+  -- difference is that 'tabulate' ends in a vector whatever happens. They do
+  -- not: they hand their list straight to a 'V.zipWith' that fuses with it.
+  tabulate = tabulateGrid
+  index = indexGrid
 
 -- | @V.fromList allCoord@ looks like it materialises the whole coordinate list
 -- on every traversal, and that is what @sized-grid-uvd@ was raised about, but
@@ -266,98 +460,190 @@ instance (GHC.KnownNat n, AllGridSizeKnown as) =>
          AllGridSizeKnown (c n ': as) where
   gridSizeProof = GridSizeCons
 
--- | Convert a vector into a list of `Vector`s, where all the elements of the
--- list have the given size.
+-- | Convert a vector into a list of `Data.Vector.Generic.Vector`s, where all the
+-- elements of the list have the given size.
 --
 -- If @n@ does not divide the length, the final chunk is short. Every caller in
--- this module is protected from that by the size invariant on 'Grid', so the
+-- this module is protected from that by the size invariant on 'GridOf', so the
 -- short chunk is unreachable for them -- but it is a silent malformation rather
 -- than a failure, so do not rely on it.
 --
 -- A size of zero would otherwise loop forever taking empty prefixes.
-splitVectorBySize :: Int -> V.Vector a -> [V.Vector a]
+splitVectorBySize :: VG.Vector v a => Int -> v a -> [v a]
 splitVectorBySize n v
   | n <= 0    = error $ "splitVectorBySize: chunk size must be positive, got " ++ show n
+  | otherwise = [ VG.slice i (min n (len - i)) v | i <- [0, n .. len - 1] ]
+  where
+    len = VG.length v
+{-# INLINABLE splitVectorBySize #-}
+
+-- $recursion
+--
+-- The four operations below -- 'collapseGrid', 'gridFromList' and the two JSON
+-- instances -- are the only ones here that recurse /down the axis list/, and
+-- that makes them the one place where the vector parameter costs something if
+-- it is handled naively.
+--
+-- The naive version keeps the grid in the recursion: chunk the vector, wrap
+-- each chunk back up, recurse at the tail of @cs@. Every level then needs the
+-- @'VG.Vector' v a@ dictionary, and because the recursive call is at a
+-- /different/ @cs@ each time, GHC will not specialise through it -- an
+-- @INLINABLE@ pragma does not help, measured. Every 'VG.take', 'VG.drop' and
+-- 'VG.concat' inside stays an indirect call that cannot reach its fast path,
+-- and the whole group ran 60-300% slower than the monomorphic original.
+--
+-- The fix is to make the recursion /monomorphic/: it works on a boxed
+-- "Data.Vector" through 'splitBoxedBySize', and the generic function converts
+-- at the boundary with 'VG.convert'. The helpers carry no @'VG.Vector'@
+-- constraint, so they compile to exactly the code they did when the grid was
+-- boxed.
+--
+-- Two other shapes were measured and are worse. Recursing on plain lists loses
+-- the O(1) chunk -- 'V.take' and 'V.drop' share one array where @splitAt@
+-- copies cells -- and left 'collapseGrid' 83% and 'toJSON' 68% above baseline.
+-- Passing the vector operations in as arguments, so the recursion carries
+-- closures instead of a dictionary, fixes the two plain functions but not the
+-- two class methods: an @INLINABLE@ function specialises at its call site and
+-- an instance method does not, so JSON went to 74% and 56% above baseline.
+--
+-- What remains is one 'VG.convert' per call. For a boxed grid that is a copy
+-- between a type and itself, and it costs 'toJSON' about 19% and 'collapseGrid'
+-- about 9%; 'gridFromList' and 'parseJSON' come out level with the boxed-only
+-- original. An unboxed grid pays the same copy. That is the right place to
+-- leave it: JSON and nested-list conversion are boundary operations, not what
+-- anyone reaches for either representation to speed up, and both alternative
+-- shapes above cost more elsewhere.
+--
+-- Keep it this way. If one of these grows a @'VG.Vector' v a@ constraint on the
+-- recursive helper, or reaches for the exported generic 'splitVectorBySize',
+-- the regression comes straight back.
+
+-- | 'splitVectorBySize' at a boxed vector, for the recursions below.
+--
+-- Written out rather than calling the exported generic one, and this is the
+-- single change that mattered: inside a function that is itself
+-- polymorphically recursive, the generic version is reached through a
+-- @'VG.Vector' V.Vector a@ dictionary and its 'VG.take' and 'VG.drop' never
+-- reduce to the O(1) slice they are. Here they do. Restoring this one helper
+-- took 'collapseGrid' from 83% above baseline back to level.
+splitBoxedBySize :: Int -> V.Vector a -> [V.Vector a]
+splitBoxedBySize n v
+  | n <= 0    = error $ "splitBoxedBySize: chunk size must be positive, got " ++ show n
   | otherwise = [ V.slice i (min n (len - i)) v | i <- [0, n .. len - 1] ]
   where
     len = V.length v
 
--- | Convert a grid to a series of nested lists. This removes type level information, but it is sometimes easier to work with lists
-collapseGrid ::
-     forall cs a. AllGridSizeKnown cs
-  => Grid cs a
-  -> CollapseGrid cs a
-collapseGrid (Grid v) =
+-- | The axis-list recursion of 'collapseGrid', at a concrete boxed vector.
+nestByShape :: forall cs a. AllGridSizeKnown cs => V.Vector a -> CollapseGrid cs a
+nestByShape v =
   case gridSizeProof @cs of
     GridSizeNil -> v V.! 0
-    GridSizeCons @_ @_ @xs ->
-      map (collapseGrid . Grid @xs) $
-      splitVectorBySize
-        (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize xs)))
-        v
+    GridSizeCons @_ @_ @rest ->
+      map (nestByShape @rest) $
+      splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
+
+-- | The axis-list recursion of 'gridFromList', flattening to row-major order
+-- and checking the length at every dimension on the way.
+flattenByShape ::
+     forall cs a. AllGridSizeKnown cs
+  => CollapseGrid cs a
+  -> Maybe (V.Vector a)
+flattenByShape cg =
+  case gridSizeProof @cs of
+    GridSizeNil -> Just $ V.singleton cg
+    GridSizeCons @_ @n @rest ->
+      if length cg == fromIntegral (GHC.natVal (Proxy @n))
+        then V.concat <$> traverse (flattenByShape @rest) cg
+        else Nothing
+
+-- | Convert a grid to a series of nested lists. This removes type level information, but it is sometimes easier to work with lists
+collapseGrid ::
+     forall v cs a. (VG.Vector v a, AllGridSizeKnown cs)
+  => GridOf v cs a
+  -> CollapseGrid cs a
+collapseGrid (Grid v) = nestByShape @cs (VG.convert v)
+{-# INLINABLE collapseGrid #-}
 
 -- | Convert a series of nested lists to a grid. If the size of the grid does not match the size of lists this will be `Nothing`
 gridFromList ::
-     forall cs a. AllGridSizeKnown cs
+     forall v cs a. (VG.Vector v a, AllGridSizeKnown cs)
   => CollapseGrid cs a
-  -> Maybe (Grid cs a)
-gridFromList cg =
-  case gridSizeProof @cs of
-    GridSizeNil -> Just $ Grid $ V.singleton cg
-    GridSizeCons @_ @n @xs ->
-      if length cg == fromIntegral (GHC.natVal (Proxy @n))
-        then Grid . mconcat <$>
-             traverse (fmap unGrid . gridFromList @xs) cg
-        else Nothing
+  -> Maybe (GridOf v cs a)
+gridFromList cg = Grid . VG.convert <$> flattenByShape @cs cg
+{-# INLINABLE gridFromList #-}
 
-instance (AllGridSizeKnown cs, ToJSON a) => ToJSON (Grid cs a) where
-  toJSON (Grid v) =
-    case gridSizeProof @cs of
-      GridSizeNil -> toJSON (v V.! 0)
-      GridSizeCons @_ @_ @xs ->
-        toJSON $
-        map (toJSON . Grid @xs) $
-        splitVectorBySize
-          (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize xs)))
-          v
+instance (VG.Vector v a, AllGridSizeKnown cs, ToJSON a) =>
+         ToJSON (GridOf v cs a) where
+  toJSON (Grid v) = nestedToJSON @cs (VG.convert v)
+
+-- | 'toJSON' for a grid, at a concrete boxed vector. Separate from the instance
+-- for the reason given under \"Recursing down the axis list\": the recursion
+-- must not carry the vector parameter.
+nestedToJSON ::
+     forall cs a. (AllGridSizeKnown cs, ToJSON a)
+  => V.Vector a
+  -> Value
+nestedToJSON v =
+  case gridSizeProof @cs of
+    GridSizeNil -> toJSON (v V.! 0)
+    GridSizeCons @_ @_ @rest ->
+      toJSON $
+      map (nestedToJSON @rest) $
+      splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
 
 -- | Decoding validates the length at every dimension, so a successfully decoded
--- grid always satisfies @V.length (unGrid g) == MaxCoordSize cs@. Without the
--- check a short or ragged array decoded to a `Grid` whose vector disagreed with
--- its type, which then made `index` throw and ('<*>') silently truncate.
+-- grid always satisfies @VG.length (gridVector g) == MaxCoordSize cs@. Without
+-- the check a short or ragged array decoded to a `GridOf` whose vector
+-- disagreed with its type, which then made `index` throw and ('<*>') silently
+-- truncate.
 --
 -- The constraints match `ToJSON`\'s: the `KnownNat` evidence is what makes the
 -- check possible.
-instance (AllGridSizeKnown cs, FromJSON a) =>
-         FromJSON (Grid cs a) where
-  parseJSON v =
-    case gridSizeProof @cs of
-      GridSizeNil -> Grid . V.singleton <$> parseJSON v
-      GridSizeCons @_ @n @xs -> do
-        a :: [Grid xs a] <- parseJSON v
-        let expected = fromIntegral $ GHC.natVal (Proxy @n) :: Int
-        if length a == expected
-          then return $ Grid $ foldMap unGrid a
-          else fail $
-               "Grid: expected " ++
-               show expected ++ " elements, got " ++ show (length a)
+instance (VG.Vector v a, AllGridSizeKnown cs, FromJSON a) =>
+         FromJSON (GridOf v cs a) where
+  parseJSON val = Grid . VG.convert <$> nestedParseJSON @cs val
+
+-- | 'parseJSON' for a grid, producing the flat row-major vector. Separate from
+-- the instance so the recursion does not carry the vector parameter; see
+-- \"Recursing down the axis list\".
+nestedParseJSON ::
+     forall cs a. (AllGridSizeKnown cs, FromJSON a)
+  => Value
+  -> Parser (V.Vector a)
+nestedParseJSON val =
+  case gridSizeProof @cs of
+    GridSizeNil -> V.singleton <$> parseJSON val
+    GridSizeCons @_ @n @rest -> do
+      vals :: [Value] <- parseJSON val
+      let expected = fromIntegral $ GHC.natVal (Proxy @n) :: Int
+      if length vals == expected
+        then V.concat <$> traverse (nestedParseJSON @rest) vals
+        else fail $
+             "Grid: expected " ++
+             show expected ++ " elements, got " ++ show (length vals)
 
 transposeGrid ::
-     ( IsCoord h
+     ( VG.Vector v a
+     , IsCoord h
      , IsCoord w
      , GHC.KnownNat x
      , GHC.KnownNat y
      , 1 <= y
      , 1 <= x
      )
-  => Grid '[ w x, h y] a
-  -> Grid '[ h y, w x] a
-transposeGrid g = tabulate (index g . tranposeCoord)
+  => GridOf v '[ w x, h y] a
+  -> GridOf v '[ h y, w x] a
+transposeGrid g = tabulateGrid (indexGrid g . tranposeCoord)
+{-# INLINABLE transposeGrid #-}
 
+-- | The outer grid holds grids, and a grid is never an unboxed element, so the
+-- outer vector is boxed whatever @v@ is. That asymmetry is what makes the whole
+-- shape algebra shareable: only the /inner/ representation follows @v@, and
+-- 'combineGrid' puts it back.
 splitGrid ::
-       forall c cs a. (AllSizedKnown cs)
-    => Grid (c ': cs) a
-    -> Grid '[ c] (Grid cs a)
+       forall v c cs a. (VG.Vector v a, AllSizedKnown cs)
+    => GridOf v (c ': cs) a
+    -> Grid '[ c] (GridOf v cs a)
 splitGrid (Grid v) =
     withDict
         (sizeProof @cs)
@@ -368,19 +654,26 @@ splitGrid (Grid v) =
              (splitVectorBySize
                   (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
                   v))
+{-# INLINABLE splitGrid #-}
 
-combineGrid :: Grid '[c] (Grid cs a) -> Grid (c ': cs) a
-combineGrid (Grid v) = Grid (v >>= unGrid)
+combineGrid ::
+       forall v c cs a. VG.Vector v a
+    => Grid '[ c] (GridOf v cs a)
+    -> GridOf v (c ': cs) a
+combineGrid (Grid v) = Grid $ VG.concat $ map unGrid $ V.toList v
+{-# INLINE combineGrid #-}
 
 -- | @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
 -- comes from @CoordNat@ on the `Data.Grid.Sized.Coord.Class.IsCoordLifted` instance,
 -- not from `IsCoord`, so the class could not have justified the @n + m@ in the
 -- result even in principle.
 combineHigherDim ::
-       Grid (c n ': as) x
-    -> Grid (c m ': as) x
-    -> Grid (c (n + m) ': as) x
-combineHigherDim (Grid v1) (Grid v2) = Grid (v1 <> v2)
+       VG.Vector v x
+    => GridOf v (c n ': as) x
+    -> GridOf v (c m ': as) x
+    -> GridOf v (c (n + m) ': as) x
+combineHigherDim (Grid v1) (Grid v2) = Grid (v1 VG.++ v2)
+{-# INLINE combineHigherDim #-}
 
 -- | Drop the first @n@ elements of a one-dimensional grid:
 --
@@ -389,25 +682,27 @@ combineHigherDim (Grid v1) (Grid v2) = Grid (v1 <> v2)
 -- @n <= m@ is required: without it @dropGrid 9@ of a 3-grid typechecked and
 -- produced a grid whose vector was empty while its type claimed @3 - 9@.
 dropGrid ::
-       forall m c x. forall n -> (KnownNat n, n <= m)
-    => Grid '[ c m] x
-    -> Grid '[ c (m - n)] x
+       forall v m c x. forall n -> (VG.Vector v x, KnownNat n, n <= m)
+    => GridOf v '[ c m] x
+    -> GridOf v '[ c (m - n)] x
 dropGrid n (Grid v) =
-    requiring @(n <= m) $ Grid $ V.drop (fromIntegral $ natVal (Proxy @n)) v
+    requiring @(n <= m) $ Grid $ VG.drop (fromIntegral $ natVal (Proxy @n)) v
+{-# INLINABLE dropGrid #-}
 
 -- | Keep the first @n@ elements of a one-dimensional grid:
 --
 -- > takeGrid 2 g   -- rather than takeGrid (Proxy @2) g
 --
--- @n <= m@ is required: 'V.take' cannot conjure elements, so without the
+-- @n <= m@ is required: 'VG.take' cannot conjure elements, so without the
 -- constraint @takeGrid 9@ of a 3-grid returned 3 elements under a type that
 -- promised 9.
 takeGrid ::
-       forall m c x. forall n -> (KnownNat n, n <= m)
-    => Grid '[ c m] x
-    -> Grid '[ c n] x
+       forall v m c x. forall n -> (VG.Vector v x, KnownNat n, n <= m)
+    => GridOf v '[ c m] x
+    -> GridOf v '[ c n] x
 takeGrid n (Grid v) =
-    requiring @(n <= m) $ Grid $ V.take (fromIntegral $ natVal (Proxy @n)) v
+    requiring @(n <= m) $ Grid $ VG.take (fromIntegral $ natVal (Proxy @n)) v
+{-# INLINABLE takeGrid #-}
 
 -- | Keep @len@ elements of a one-dimensional grid starting at offset @off@:
 --
@@ -422,44 +717,48 @@ takeGrid n (Grid v) =
 -- the same fact is ordinary linear arithmetic, the solver discharges it, and
 -- the axiom is gone without taking on another type-checker plugin.
 --
--- @off + len <= m@ is also precisely 'V.slice'\'s own precondition, so the
+-- @off + len <= m@ is also precisely 'VG.slice'\'s own precondition, so the
 -- bounds check it performs can never fire here.
 sliceGrid ::
-       forall m c x. forall off len -> ( KnownNat off
-                                       , KnownNat len
-                                       , off + len <= m)
-    => Grid '[ c m] x
-    -> Grid '[ c len] x
+       forall v m c x. forall off len -> ( VG.Vector v x
+                                         , KnownNat off
+                                         , KnownNat len
+                                         , off + len <= m)
+    => GridOf v '[ c m] x
+    -> GridOf v '[ c len] x
 sliceGrid off len (Grid v) =
     requiring @(off + len <= m) $
     Grid $
-    V.slice
+    VG.slice
         (fromIntegral $ natVal (Proxy @off))
         (fromIntegral $ natVal (Proxy @len))
         v
+{-# INLINABLE sliceGrid #-}
 
 -- | The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and
 -- get a grid whose vector did not match.
 splitHigherDim ::
-       forall c as x y a.
-       ( KnownNat y
+       forall v c as x y a.
+       ( VG.Vector v a
+       , KnownNat y
        , y <= x
        , AllSizedKnown as
        )
-    => Grid (c x ': as) a
-    -> (Grid (c y ': as) a, Grid (c (x - y) ': as) a)
+    => GridOf v (c x ': as) a
+    -> (GridOf v (c y ': as) a, GridOf v (c (x - y) ': as) a)
 splitHigherDim (Grid v) =
     requiring @(y <= x) $
     let (a, b) =
             withDict
                 (sizeProof @as)
-                (V.splitAt
+                (VG.splitAt
                      (fromIntegral $
                       GHC.natVal (Proxy @y) *
                       GHC.natVal (Proxy @(MaxCoordSize as)))
                      v)
      in (Grid a, Grid b)
+{-# INLINABLE splitHigherDim #-}
 
 -- | Split a grid into its @CoordNat c@ sub-grids along the outermost axis,
 -- apply @f@ to each, and glue the results back together.
@@ -472,19 +771,23 @@ splitHigherDim (Grid v) =
 -- taking slices means; use 'zipLowerDim' for that. @f ~ Identity@ (a
 -- length-preserving map over each sub-grid) and @f ~ Maybe@ (a fallible one)
 -- behave as expected.
+--
+-- The element type may change, so both @v x@ and @v y@ have to be vectors.
 mapLowerDim ::
-       forall as bs x y c f. (AllSizedKnown as, Applicative f)
-    => (Grid as x -> f (Grid bs y))
-    -> Grid (c ': as) x
-    -> f (Grid (c ': bs) y)
+       forall v as bs x y c f.
+       (VG.Vector v x, VG.Vector v y, AllSizedKnown as, Applicative f)
+    => (GridOf v as x -> f (GridOf v bs y))
+    -> GridOf v (c ': as) x
+    -> f (GridOf v (c ': bs) y)
 mapLowerDim f (Grid v) =
     withDict
         (sizeProof @as)
-        (fmap (Grid . V.concat) $
+        (fmap (Grid . VG.concat) $
          traverse (fmap unGrid . f . Grid) $
          splitVectorBySize
              (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as))))
              v)
+{-# INLINABLE mapLowerDim #-}
 
 -- | 'mapLowerDim' where @f@ returns many results per sub-grid and they should
 -- be zipped positionally rather than multiplied: the @k@th result is built from
@@ -498,14 +801,29 @@ mapLowerDim f (Grid v) =
 -- expected length when @f@ returns the same number of results for every
 -- sub-grid -- which 'gridTiles' does, since its count is fixed by the types.
 zipLowerDim ::
-       forall as bs x y c. AllSizedKnown as
-    => (Grid as x -> [Grid bs y])
-    -> Grid (c ': as) x
-    -> [Grid (c ': bs) y]
+       forall v as bs x y c. (VG.Vector v x, VG.Vector v y, AllSizedKnown as)
+    => (GridOf v as x -> [GridOf v bs y])
+    -> GridOf v (c ': as) x
+    -> [GridOf v (c ': bs) y]
 zipLowerDim f = getZipList . mapLowerDim (ZipList . f)
+{-# INLINABLE zipLowerDim #-}
 
+-- | Taking a window out of a grid, one axis at a time.
+--
+-- The /window arithmetic/ here is element-agnostic: it slices whole sub-grids
+-- and never looks inside one. The constraint is nevertheless @'VG.Vector' v x@,
+-- because the recursion goes through 'splitGrid' and 'combineGrid', which take
+-- the underlying vector apart and concatenate it back.
+--
+-- @v@ and @x@ are kind-annotated because nothing in the signature forces them
+-- to be: left implicit, GHC generalises @v@ to @k -> Type@ and the instance
+-- below cannot then match it against a @Type -> Type@ vector.
 class ShrinkableGrid (cs :: [Type]) (as :: [Type]) (bs :: [Type]) where
-  shrinkGrid :: Coord cs -> Grid as x -> Grid bs x
+  shrinkGrid ::
+       forall (v :: Type -> Type) (x :: Type). VG.Vector v x
+    => Coord cs
+    -> GridOf v as x
+    -> GridOf v bs x
 
 instance ShrinkableGrid '[] '[] '[] where
   shrinkGrid _ (Grid v) = Grid v
@@ -523,6 +841,9 @@ instance ShrinkableGrid '[] '[] '[] where
 -- @KnownNat x@ is new: 'reifyCoord' recovers the offset's type-level value by
 -- comparing against the coord's size at runtime, now that an
 -- 'Data.Grid.Sized.Ordinal.Ordinal' no longer carries that dictionary in every value.
+--
+-- The split is boxed, so the slice that picks the window is a boxed one
+-- whatever @v@ the grid being shrunk uses. See 'splitGrid'.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as
@@ -534,7 +855,9 @@ instance ( KnownNat x
     shrinkGrid (c :| cs) =
         combineGrid . fmap (shrinkGrid cs) . helper . splitGrid
       where
-        helper :: Grid '[ c y] a -> Grid '[ c z] a
+        helper ::
+             Grid '[ c y] (GridOf v as a)
+          -> Grid '[ c z] (GridOf v as a)
         helper g =
             reifyCoord c $ \n ->
                 withDict (windowFits @n @x @y @z) $ sliceGrid n z g
@@ -557,13 +880,15 @@ instance ( KnownNat x
 --
 -- > rows    = gridTiles                :: Board -> [Grid '[Ordinal 1, Ordinal 9] a]
 -- > columns = zipLowerDim gridTiles    :: Board -> [Grid '[Ordinal 9, Ordinal 1] a]
-gridTiles :: forall small big rest a.
-               ( KnownNat (MaxCoordSize (small ': rest)),
+gridTiles :: forall v small big rest a.
+               ( VG.Vector v a,
+                 KnownNat (MaxCoordSize (small ': rest)),
                  CoordNat big `Mod` CoordNat small ~ 0
                )
-            => Grid (big ': rest) a
-            -> [Grid (small ': rest) a]
+            => GridOf v (big ': rest) a
+            -> [GridOf v (small ': rest) a]
 gridTiles (Grid v) =
     requiring @(CoordNat big `Mod` CoordNat small ~ 0) $
     let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))
     in map Grid $ splitVectorBySize size v
+{-# INLINABLE gridTiles #-}

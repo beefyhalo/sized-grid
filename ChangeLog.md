@@ -9,6 +9,48 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Grid` gains an unboxed sibling, and the two share one implementation
+  (sized-grid-up6).
+
+  The grid type is now `GridOf v cs a`, parameterised over its vector, with
+  `type Grid = GridOf V.Vector` and a new `Data.Grid.Sized.Unboxed` supplying
+  `type UGrid = GridOf U.Vector`. Existing signatures are unaffected: the
+  synonym takes no parameters of its own, so `Grid cs` is still partially
+  applicable and `Functor (Grid cs)`, `Representable (Grid cs)` and the rest
+  read exactly as before.
+
+  The alternative was a second module with its own monomorphic unboxed API.
+  That was rejected because of what it would have had to duplicate — the whole
+  shape algebra (`takeGrid`, `sliceGrid`, `splitGrid`, `mapLowerDim`,
+  `gridTiles`, `ShrinkableGrid`), including the `windowFits` proof and the
+  `off + len <= m` restatement that took all of sized-grid-wrc to get right.
+  Under one parameterised type that code exists once and both representations
+  get all of it.
+
+  What an unboxed grid gives up is everything that must work at every element
+  type: `Functor`, `Foldable`, `Traversable`, `Applicative`, `Monad` and
+  `Representable`, and with them `FocusedGrid` and the `Comonad` interface. In
+  their place are `tabulateGrid`, `indexGrid`, `mapGrid`, `imapGrid`,
+  `zipWithGrid` and `foldlGrid'` — plain functions carrying an element
+  constraint, exported from `Data.Grid.Sized` and usable at either
+  representation.
+
+  Measured on a 300x300 `Int` grid, unboxed against boxed: 3.3x on
+  `tabulateGrid`, 3.5x on map-then-sum and on `foldlGrid'`, 2.4x on
+  `transposeGrid`, 2.1x on a summed-area-table build, and no change at all on a
+  single indexed read. The last figure is the important one — the win is wholly
+  in operations that touch the vector wholesale, and a coordinate-walking read
+  loop gains nothing, because its cost is the coordinate arithmetic.
+
+  Every generic function carries an `INLINE` or `INLINABLE` pragma, without
+  which nothing specialises through the `Vector v a` dictionary and most of the
+  advantage is lost. That also sped the *boxed* path up substantially: against
+  the previous release `tabulate` is 60% faster and `fmap` 78% faster, the
+  latter because `mapGrid` and a following fold can now fuse. `collapseGrid`
+  and `toJSON` are 9% and 19% slower, the cost of one vector conversion at the
+  boundary of the axis-list recursion; see the note in
+  `Data.Grid.Sized.Internal.Grid` for why that is where it was left.
+
 * The package is renamed from `sized-grid` to `grid-sized`, and the module
   prefix from `SizedGrid.*` to `Data.Grid.Sized.*`.
 

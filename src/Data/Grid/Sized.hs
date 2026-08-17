@@ -20,15 +20,39 @@
 -- the compiler cannot see -- the usual case is applying a length-preserving
 -- vector function the library does not wrap -- "Data.Grid.Sized.Unsafe" has the
 -- escape hatch, and it is the one public module this one does not re-export.
+--
+-- == Boxed and unboxed
+--
+-- @Grid@ is the boxed grid, and it is a synonym: the type underneath is
+-- `GridOf`, which takes the vector as a parameter. Everything here that does not
+-- need an unconstrained element type -- which is all of the shape algebra --
+-- works at any vector, so "Data.Grid.Sized.Unboxed" gets it for free rather
+-- than by duplication. See that module for when the unboxed representation is
+-- worth reaching for, and 'Data.Grid.Sized.Internal.Grid' for why it is a
+-- parameter rather than a second implementation.
+--
+-- The functions grouped under \"Bulk operations\" are the ones an unboxed grid
+-- needs, because their unconstrained counterparts (`fmap`,
+-- `Data.Functor.Rep.tabulate`, and the rest) are class methods and a class
+-- method may not constrain its element type. On a boxed grid they are just
+-- those methods under another name.
 module Data.Grid.Sized
     ( -- * The grid type
       Grid
+    , GridOf
       -- * Construction
     , gridFromVector
     , gridFromList
       -- * Access
     , gridVector
     , collapseGrid
+      -- * Bulk operations
+    , tabulateGrid
+    , indexGrid
+    , mapGrid
+    , imapGrid
+    , zipWithGrid
+    , foldlGrid'
       -- * Type-level machinery
     , Head
     , Tail

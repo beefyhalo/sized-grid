@@ -40,16 +40,19 @@
 module Main (main) where
 
 import           Data.Grid.Sized
+import           Data.Grid.Sized.Unboxed (UGrid)
 
 import           Control.Comonad
-import           Control.Comonad.Store  (peek, pos)
-import           Control.DeepSeq        (NFData (..))
-import           Control.Exception      (evaluate)
-import           Control.Lens           (ifoldl', imap, itraverse, view)
-import           Data.Aeson             (Result (..), fromJSON, toJSON)
-import           Data.AffineSpace       ((.+^), (.-.))
-import           Data.Functor.Rep       (index, tabulate)
-import           Data.Maybe             (isJust)
+import           Control.Comonad.Store   (peek, pos)
+import           Control.DeepSeq         (NFData (..))
+import           Control.Exception       (evaluate)
+import           Control.Lens            (ifoldl', imap, itraverse, view)
+import           Data.Aeson              (Result (..), fromJSON, toJSON)
+import           Data.AffineSpace        ((.+^), (.-.))
+import           Data.Functor.Identity   (Identity (..))
+import           Data.Functor.Rep        (index, tabulate)
+import           Data.Maybe              (isJust)
+import qualified Data.Vector.Generic     as VG
 import           Test.Tasty.Bench
 
 -- | ../aoc/src/2018/11.hs works at this size: 90,000 cells.
@@ -66,6 +69,10 @@ type Walk = '[Periodic 300, Periodic 300]
 
 bigGrid :: Grid Big Int
 bigGrid = tabulate coordPosition
+
+-- | 'bigGrid' in the other representation, for the boxed/unboxed pairs.
+ubigGrid :: UGrid Big Int
+ubigGrid = tabulateGrid coordPosition
 
 midGrid :: Grid Mid Int
 midGrid = tabulate coordPosition
@@ -178,6 +185,49 @@ axisOffsets k =
         , d <- [1 .. k]
         ]
 
+--------------------------------------------------------------------------------
+-- Boxed against unboxed (sized-grid-up6).
+--
+-- Each pair below differs in the vector type and in nothing else. That is only
+-- possible because the two representations share one implementation: 'GridOf'
+-- takes its vector as a parameter, so 'tabulateGrid', 'mapGrid', 'foldlGrid'',
+-- 'scanl1Grid', 'mapLowerDim' and 'transposeGrid' below are literally the same
+-- code at @v ~ V.Vector@ and @v ~ U.Vector@.
+--
+-- Both sides go through 'coordPosition' and 'allCoord', so the coordinate
+-- machinery cancels and what is left is the representation.
+--
+-- Keep the 'indexGrid' pair even though it reports no difference. It is the row
+-- that says where the win is /not/, and the module haddock on
+-- "Data.Grid.Sized.Unboxed" tells callers not to reach for unboxing to speed up
+-- indexed reads. Delete the benchmark and that claim stops being checked.
+--------------------------------------------------------------------------------
+
+-- | Total, without going through 'Foldable' --- which the unboxed grid does not
+-- have.
+totalG :: VG.Vector v Int => GridOf v cs Int -> Int
+totalG = foldlGrid' (+) 0
+
+-- | Prefix-sum each row independently: @scanl1Grid@ lifted through the
+-- outermost axis, which is how the consumer builds a summed-area table.
+rowPrefix :: VG.Vector v Int => GridOf v Big Int -> GridOf v Big Int
+rowPrefix = runIdentity . mapLowerDim (Identity . scanl1Grid (+))
+
+-- | The cell values of ../aoc/src/2018/11.hs, so the summed-area benchmark
+-- below builds the table the consumer actually builds.
+power :: Int -> Coord Big -> Int
+power serial ((fromEnum -> y) :| (fromEnum -> x) :| _) =
+    ((rack * y + serial) * rack `div` 100) `mod` 10 - 5
+  where
+    rack = x + 10
+
+-- | Summed-area table: prefix along the rows, transpose, prefix again,
+-- transpose back. Four whole-grid passes, which is the shape unboxing helps.
+satBuild :: VG.Vector v Int => Int -> GridOf v Big Int
+satBuild serial =
+    transposeGrid . rowPrefix . transposeGrid . rowPrefix . tabulateGrid $
+    power serial
+
 -- Note on why there is no standalone @allCoord@ benchmark.
 --
 -- 'allCoord' takes no value arguments, so at a fixed type it is a CAF: the
@@ -285,6 +335,32 @@ main = do
                 whnf
                     (\g -> maybe 0 total (gridFromList (collapseGrid g) :: Maybe (Grid Mid Int)))
                     midGrid
+              ]
+        , bgroup
+              "boxed vs unboxed (same code, different vector)"
+              [ bench "tabulateGrid 300x300      boxed" $
+                whnf (\f -> totalG (tabulateGrid f :: Grid Big Int)) coordPosition
+              , bench "tabulateGrid 300x300    unboxed" $
+                whnf (\f -> totalG (tabulateGrid f :: UGrid Big Int)) coordPosition
+              , bench "mapGrid then sum 300x300   boxed" $
+                whnf (totalG . mapGrid (+ 1)) bigGrid
+              , bench "mapGrid then sum 300x300 unboxed" $
+                whnf (totalG . mapGrid (+ 1)) ubigGrid
+              , bench "foldlGrid' 300x300         boxed" $ whnf totalG bigGrid
+              , bench "foldlGrid' 300x300       unboxed" $ whnf totalG ubigGrid
+              , bench "transposeGrid 300x300      boxed" $
+                whnf (totalG . transposeGrid) bigGrid
+              , bench "transposeGrid 300x300    unboxed" $
+                whnf (totalG . transposeGrid) ubigGrid
+              , bench "summed-area build 300x300  boxed" $
+                whnf (\s -> totalG (satBuild s :: Grid Big Int)) 18
+              , bench "summed-area build 300x300 unboxed" $
+                whnf (\s -> totalG (satBuild s :: UGrid Big Int)) 18
+                -- The pair that reports no difference, deliberately kept.
+              , bench "indexGrid x90000           boxed" $
+                whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid
+              , bench "indexGrid x90000         unboxed" $
+                whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) ubigGrid
               ]
         , bgroup
               "json"

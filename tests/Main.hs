@@ -15,6 +15,7 @@ import           Test.Ray
 import           Test.Reflective
 import           Test.Shrink
 import           Test.Tiling
+import           Test.Unboxed
 import           Test.Utils
 
 import           Control.Lens          hiding (index)
@@ -102,7 +103,13 @@ gridTests _genC _genA =
           cg :: [[a]] <-
             replicateM (fromIntegral $ natVal (Proxy @x)) $
             replicateM (fromIntegral $ natVal (Proxy @y)) arbitrary
-          return (Just cg === (collapseGrid <$> gridFromList @cs cg))
+          -- The annotation is load-bearing. 'gridFromList' is polymorphic in
+          -- the vector, and a grid built only to be collapsed straight back
+          -- leaves nothing to infer it from -- this round trip is the one shape
+          -- of call where the representation has to be named.
+          return
+            (Just cg ===
+             (collapseGrid <$> (gridFromList cg :: Maybe (Grid cs a))))
       doubleTranspose =
         property $ do
           g :: Grid cs a <- sequenceA $ pure arbitrary
@@ -338,6 +345,7 @@ main =
            ]
        , shrinkTests
        , tilingTests
+       , unboxedTests
        , neighbourTests
        , boundaryTests
        , rayTests
