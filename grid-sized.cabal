@@ -28,10 +28,14 @@ description:
   Consult the readme for a short tutorial and explanation.
 
 -- README.lhs is a symlink to README.md and is the readme test-suite's main-is,
--- so it is build input rather than documentation.
+-- so it is build input rather than documentation. The compile-fail snippets
+-- are build input the same way: Test.CompileFail shells out to GHC to compile
+-- them directly rather than through this .cabal file, so they need listing
+-- here for them to travel with an sdist.
 extra-source-files:
   bench/baseline-ghc9.12.3-aarch64-darwin.csv
   README.lhs
+  tests/compile-fail/*.hs
 extra-doc-files:
   ChangeLog.md
   README.md
@@ -163,6 +167,7 @@ test-suite tests
   other-modules:
     Test.Arbitrary
     Test.Boundary
+    Test.CompileFail
     Test.Focused
     Test.Invariant
     Test.Neighbours
@@ -186,6 +191,7 @@ test-suite tests
     , generics-sop
     , HUnit               >=1.6  && <1.7
     , lens
+    , process             >=1.6  && <1.7
     , QuickCheck          >=2.14 && <2.16
     , quickcheck-classes  >=0.6  && <0.7
     , grid-sized

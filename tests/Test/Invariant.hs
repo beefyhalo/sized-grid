@@ -120,9 +120,10 @@ invariantTests =
       -- >   in b :: Grid '[Ordinal 7, Ordinal 3] Int
       -- >    error: Cannot match 'Ordinal 7' with 'Ordinal (3 - 1)'
       --
-      -- Pinning that down properly needs a compile-fail harness; see
-      -- sized-grid-cti. What is left below is the positive half: the sizes the
-      -- signatures now force are the sizes the vectors actually have.
+      -- Those cases, plus the ShrinkableGrid window bound, are now pinned down
+      -- by the compile-fail harness in Test.CompileFail (sized-grid-cti). What
+      -- is left below is the positive half: the sizes the signatures now force
+      -- are the sizes the vectors actually have.
     , testGroup
         "take/split hold the invariant they now promise"
         [ testCase "takeGrid within the source length" $

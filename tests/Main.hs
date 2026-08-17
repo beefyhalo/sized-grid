@@ -6,6 +6,7 @@ import           Data.Grid.Sized
 
 import           Test.Arbitrary ()
 import           Test.Boundary
+import           Test.CompileFail
 import           Test.Focused
 import           Test.Invariant
 import           Test.Neighbours
@@ -375,4 +376,5 @@ main =
        , focusedTests
        , invariantTests
        , ordinalTests
+       , compileFailTests
        ]
