@@ -202,6 +202,7 @@ class IsCoord (c :: Nat -> Type) where
   -- 'Data.Grid.Sized.Coord.axisSteps' computes by enumeration, and the two agreeing
   -- is a property test rather than something the types can enforce.
   axisDistanceIsCoord :: (KnownNat n, 1 <= n) => c n -> c n -> Int
+  {-# INLINE axisDistanceIsCoord #-}
   axisDistanceIsCoord a b =
       abs (ordinalToInt (a ^. asOrdinal) - ordinalToInt (b ^. asOrdinal))
 
@@ -402,6 +403,7 @@ axisBoundaryByPosition ::
        forall c n. (IsCoord c, KnownNat n)
     => c n
     -> Maybe Extremum
+{-# INLINE axisBoundaryByPosition #-}
 axisBoundaryByPosition c
     -- Order matters only on a one-cell axis, where the single value is both
     -- ends at once and this reports 'AtMin'. What downstream depends on is that
@@ -766,6 +768,42 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- time.
     coordListSize :: Int
 
+    -- | Where each axis sits relative to its own ends, first axis first. The
+    -- fold behind 'Data.Grid.Sized.Coord.axisBoundaries', and so behind
+    -- 'Data.Grid.Sized.Coord.onBoundary' and 'Data.Grid.Sized.Coord.isCorner'.
+    --
+    -- == Why this is a method (sized-grid-xv4)
+    --
+    -- Before this method existed, the fold behind 'axisBoundaries' went
+    -- through @generics-sop@'s 'Generics.SOP.hcmap' instead: dispatched off
+    -- the same @All IsCoordLifted cs@ dictionary this class already builds,
+    -- so it looked like free reuse. It is not, for exactly the reason
+    -- 'sizeAndPosition' is a method and not a @where@ helper: @hcmap@ (via
+    -- @cpure_NP@\/@ap_NP@\/@collapse_NP@) is itself a self-recursive fold
+    -- over @NP@, polymorphic in the axis list, and no amount of 'INLINE' on
+    -- what it calls unrolls a recursion sized-grid-bw8's fix already ruled
+    -- out for a different reason. Confirmed rather than assumed: marking
+    -- 'Data.Grid.Sized.Coord.axisBoundary', 'Data.Grid.Sized.Coord.Class.axisBoundaryIsCoord'
+    -- and its default implementation all 'INLINE' left a benchmark's Core
+    -- calling @ap_NP@\/@collapse_NP@\/@$wcpure_NP@ byte-for-byte unchanged,
+    -- against 'Data.Grid.Sized.Coord.checkedCornerReads' (the 'npOffset'-driven
+    -- benchmark next to it) whose Core has no function calls left at all,
+    -- only unboxed comparisons against literals. A method written directly
+    -- against the constructors, the same shape as 'npOffset', has nothing
+    -- generic left to peel: matching ':*' at a concrete axis list resolves
+    -- 'axisBoundaryIsCoord' the same way it resolves 'offsetIsCoord' there.
+    npBoundaries :: NP I cs -> [Maybe Extremum]
+
+    -- | The per-axis distances between two coords, first axis first. The
+    -- fold behind 'Data.Grid.Sized.Coord.axisDistances', and so behind
+    -- 'Data.Grid.Sized.Coord.coordDistance' and
+    -- 'Data.Grid.Sized.Coord.coordManhattan'. Exists for the same reason as
+    -- 'npBoundaries', which see: 'Data.Grid.Sized.Coord.axisDistances' was the
+    -- other @hcmap@-shaped (there, @hczipWith@) fold sized-grid-xv4 found
+    -- still paying for a run-time 'GHC.TypeLits.KnownNat' dictionary it
+    -- could not fold away.
+    npDistances :: NP I cs -> NP I cs -> [Int]
+
 instance IsCoordList '[] where
     sizeAndPosition Nil = (1, 0)
     npOffset Nil Nil = Just Nil
@@ -774,10 +812,14 @@ instance IsCoordList '[] where
     -- neighbourhood functions exclude it without comparing coordinates.
     npStepsWithin _ Nil = [(0, Nil)]
     coordListSize = 1
+    npBoundaries Nil = []
+    npDistances Nil Nil = []
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
     {-# INLINE npStepsWithin #-}
     {-# INLINE coordListSize #-}
+    {-# INLINE npBoundaries #-}
+    {-# INLINE npDistances #-}
 
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     sizeAndPosition (I c :* cs) =
@@ -798,10 +840,20 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
         , (s, vs) <- npStepsWithin r xs
         ]
     coordListSize = ordinalSize @(CoordNat x) * coordListSize @xs
+    -- 'x' unifies with @CoordContainer x (CoordNat x)@ via 'IsCoordLifted's
+    -- superclass equality, so 'axisBoundaryIsCoord' and 'axisDistanceIsCoord'
+    -- apply to it directly, at the per-axis 'IsCoord' instance 'IsCoordLifted
+    -- x' resolves to --- no 'Data.Grid.Sized.Coord.axisBoundary'\/'Data.Grid.Sized.Coord.axisDistance'
+    -- indirection needed here, the same way 'npOffset' calls 'offsetIsCoord'
+    -- directly rather than through a lifted wrapper.
+    npBoundaries (I x :* xs) = axisBoundaryIsCoord x : npBoundaries xs
+    npDistances (I x :* xs) (I y :* ys) = axisDistanceIsCoord x y : npDistances xs ys
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
     {-# INLINE npStepsWithin #-}
     {-# INLINE coordListSize #-}
+    {-# INLINE npBoundaries #-}
+    {-# INLINE npDistances #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id

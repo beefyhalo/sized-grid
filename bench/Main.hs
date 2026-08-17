@@ -67,6 +67,11 @@ type Step = '[Clamped 50, Clamped 50]
 -- | Periodic, so walking never saturates the way Clamped's clamp would.
 type Walk = '[Periodic 300, Periodic 300]
 
+-- | 'Step', but 'Periodic': for measuring the boundary policy whose
+-- 'offsetIsCoord' override (sized-grid-xv4) is not the bounds-check default
+-- 'Clamped' now folds to a literal comparison.
+type StepPeriodic = '[Periodic 50, Periodic 50]
+
 bigGrid :: Grid Big Int
 bigGrid = tabulate coordPosition
 
@@ -80,6 +85,11 @@ midGrid = tabulate coordPosition
 stepGrid :: FocusedGrid Step Int
 stepGrid = FocusedGrid (tabulate coordPosition) zeroCoord
 
+-- | 'stepGrid' over 'StepPeriodic', so 'neighbourSum' walks Periodic's
+-- 'offsetIsCoord' override instead of Clamped's bounds check.
+stepGridPeriodic :: FocusedGrid StepPeriodic Int
+stepGridPeriodic = FocusedGrid (tabulate coordPosition) zeroCoord
+
 -- | Total a grid, forcing every element on the way.
 total :: (Foldable f) => f Int -> Int
 total = sum
@@ -89,7 +99,12 @@ total = sum
 --
 -- This reads eight cells rather than the nine 'moorePoints' used to return:
 -- that one included the centre, and every caller filtered it back out.
-neighbourSum :: FocusedGrid Step Int -> Int
+--
+-- Polymorphic in the axis list (rather than fixed at 'Step') so the same
+-- function drives both 'stepGrid' and 'stepGridPeriodic': the point of the
+-- Periodic benchmark is to exercise the same neighbourhood fold over a
+-- different boundary policy, not a different function.
+neighbourSum :: (IsCoordList cs, AllSizedKnown cs) => FocusedGrid cs Int -> Int
 neighbourSum fg = total [peek p fg | p <- neighbours (pos fg)]
 
 -- | Repeated coordinate offset. Recursive rather than a fold so the
@@ -152,6 +167,44 @@ checkedCornerReads k =
         [ if isJust (offsetCoord c d)
               then 1
               else 0
+        | c <- allCoord @Big
+        , d <- [ 0 :| 0 :| EmptyCoord
+               , k :| k :| EmptyCoord
+               , 0 :| k :| EmptyCoord
+               , k :| 0 :| EmptyCoord
+               ]
+        ]
+
+-- | 'onBoundary' at the same four displacements as 'checkedCornerReads',
+-- over 'Big'. It exists because nothing else here reaches 'onBoundary' (and
+-- so 'axisBoundaryIsCoord''s default, 'axisBoundaryByPosition'), which
+-- sized-grid-xv4 found still reading its axis size out of a run-time
+-- 'GHC.Natural.Natural' the way 'offsetByPosition' did before sized-grid-bw8.
+--
+-- The displacement is an argument for the reason given on 'checkedCornerReads':
+-- written as literals, full laziness floats the whole comprehension out as a
+-- CAF and the benchmark measures nothing.
+onBoundarySweep :: Int -> Int
+onBoundarySweep k =
+    total
+        [ if onBoundary (c .+^ d)
+              then 1
+              else 0
+        | c <- allCoord @Big
+        , d <- [ 0 :| 0 :| EmptyCoord
+               , k :| k :| EmptyCoord
+               , 0 :| k :| EmptyCoord
+               , k :| 0 :| EmptyCoord
+               ]
+        ]
+
+-- | 'coordDistance' at the same four displacements, over 'Big'. Reaches
+-- 'axisDistance' and so 'axisDistanceIsCoord''s default, sized-grid-xv4's
+-- other still-unfixed call site.
+axisDistanceSweep :: Int -> Int
+axisDistanceSweep k =
+    total
+        [ coordDistance c (c .+^ d)
         | c <- allCoord @Big
         , d <- [ 0 :| 0 :| EmptyCoord
                , k :| k :| EmptyCoord
@@ -292,6 +345,7 @@ main = do
     _ <- evaluate (total bigGrid)
     _ <- evaluate (total midGrid)
     _ <- evaluate (total (focusedGrid stepGrid))
+    _ <- evaluate (total (focusedGrid stepGridPeriodic))
     defaultMain
         [ bgroup
               "coord arithmetic"
@@ -308,6 +362,10 @@ main = do
                 whnf cornerReads bigGrid
               , bench "offsetCoord x360000, checked, over Clamped 300x300" $
                 whnf checkedCornerReads 3
+              , bench "onBoundary x360000, over Clamped 300x300" $
+                whnf onBoundarySweep 3
+              , bench "coordDistance x360000, over Clamped 300x300" $
+                whnf axisDistanceSweep 3
               , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
                 whnf axisOffsets 1200
               , bench "toEnum/fromEnum x300, Clamped 300" $
@@ -345,6 +403,8 @@ main = do
               [ bench "extract 50x50" $ whnf extract stepGrid
               , bench "extend neighbourSum 50x50" $
                 whnf (total . focusedGrid . extend neighbourSum) stepGrid
+              , bench "extend neighbourSum 50x50, Periodic" $
+                whnf (total . focusedGrid . extend neighbourSum) stepGridPeriodic
               ]
         , bgroup
               "collapse round trip"

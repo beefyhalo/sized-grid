@@ -837,12 +837,14 @@ axisDistance = axisDistanceIsCoord @(CoordContainer x) @(CoordNat x)
 -- Both metrics below are folds of this, and it is the honest primitive when a
 -- caller wants something neither of them provides --- a weighted metric, or the
 -- axis that differs most.
+--
+-- Goes through 'Data.Grid.Sized.Coord.Class.npDistances' rather than
+-- @generics-sop@'s 'Generics.SOP.hczipWith', per the note on that method
+-- (sized-grid-xv4): the fold has to be an 'IsCoordList' method, the same
+-- reason 'sizeAndPosition' and 'npOffset' are, to unroll at a concrete axis
+-- list at all.
 axisDistances :: forall cs. IsCoordList cs => Coord cs -> Coord cs -> [Int]
-axisDistances (Coord as) (Coord bs) =
-    hcollapse $ hczipWith (Proxy @IsCoordLifted) step as bs
-  where
-    step :: IsCoordLifted x => I x -> I x -> K Int x
-    step (I a) (I b) = K (axisDistance a b)
+axisDistances (Coord as) (Coord bs) = npDistances as bs
 
 -- | The Chebyshev distance: the largest per-axis distance, counting a diagonal
 -- step as one. This is the metric 'mooreNeighbours' is a ball in ---
@@ -932,14 +934,15 @@ transportCoord (Coord c) (Coord d) =
 -- 'onBoundary' and 'isCorner' are both folds of this. It is the honest
 -- primitive for the questions they do not answer --- /which/ corner, or which
 -- edge a walker just met, which is what any reflect-or-stop rule needs.
+--
+-- Goes through 'Data.Grid.Sized.Coord.Class.npBoundaries' rather than
+-- @generics-sop@'s 'Generics.SOP.hcmap', per the note on that method
+-- (sized-grid-xv4).
 axisBoundaries ::
        forall cs. IsCoordList cs
     => Coord cs
     -> [Maybe Extremum]
-axisBoundaries (Coord cs) = hcollapse $ hcmap (Proxy @IsCoordLifted) step cs
-  where
-    step :: IsCoordLifted x => I x -> K (Maybe Extremum) x
-    step (I a) = K (axisBoundary a)
+axisBoundaries (Coord cs) = npBoundaries cs
 
 -- | Whether any axis is at one of its ends: the coordinate is somewhere on the
 -- edge of the space.
