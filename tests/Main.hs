@@ -233,62 +233,62 @@ main =
       -- take the defaults for the last three. It is therefore the instance
       -- where the two routes to a value have the most room to drift apart, and
       -- it had no 'isCoordLaws' call at all.
-      ordinal = [isCoordLaws (Proxy @(Ordinal 10))]
+      ordinal = [isCoordLaws @Ordinal @10]
       periodic =
-        let p = Proxy @(Periodic 10)
-        in [ semigroupLaws p
-           , monoidLaws p
-           , additiveGroupLaws p
-           , affineSpaceLaws p
-           , aesonLaws p
-           , isCoordLaws p
-           ]
+        [ semigroupLaws @(Periodic 10)
+        , monoidLaws @(Periodic 10)
+        , additiveGroupLaws @(Periodic 10)
+        , affineSpaceLaws @(Periodic 10)
+        , aesonLaws @(Periodic 10)
+        , isCoordLaws @Periodic @10
+        ]
       clamped =
-        let p = Proxy @(Clamped 10)
-        in [ semigroupLaws p
-           , monoidLaws p
-           , affineSpaceLaws p
-           , aesonLaws p
-           , isCoordLaws p
-           ]
+        [ semigroupLaws @(Clamped 10)
+        , monoidLaws @(Clamped 10)
+        , affineSpaceLaws @(Clamped 10)
+        , aesonLaws @(Clamped 10)
+        , isCoordLaws @Clamped @10
+        ]
       -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance:
       -- unlike 'Clamped' and 'Periodic', neither type gives '<>' a meaning the
       -- issue asked for, so none was invented. 'Test.Reflective' has the
       -- bounce-specific properties; these are the same three law suites every
       -- other axis type gets here.
       reflective =
-        let p = Proxy @(Reflective 10)
-        in [affineSpaceLaws p, aesonLaws p, isCoordLaws p]
+        [ affineSpaceLaws @(Reflective 10)
+        , aesonLaws @(Reflective 10)
+        , isCoordLaws @Reflective @10
+        ]
       reflect101 =
-        let p = Proxy @(Reflect101 10)
-        in [affineSpaceLaws p, aesonLaws p, isCoordLaws p]
+        [ affineSpaceLaws @(Reflect101 10)
+        , aesonLaws @(Reflect101 10)
+        , isCoordLaws @Reflect101 @10
+        ]
       coord =
-        let p = Proxy @(Coord '[ Clamped 10, Periodic 20])
-        in [ semigroupLaws p
-           , monoidLaws p
-           , affineSpaceLaws p
-           , aesonLaws p
-           , testAllCoordOrdered p
-           , testCoordLayout p
-             -- The library's other exported 'Iso'', and the one that shows
-             -- 'isoLaws' is worth having as a helper rather than inlined into
-             -- 'isCoordLaws'. Unlike 'asOrdinal' this round trip goes through
-             -- the hand-written 'Eq' for 'Coord', which compares the product
-             -- element by element with 'hcliftA2' rather than deriving it.
-           , isoLaws
-               "_WrappedCoord"
-               (_WrappedCoord @'[ Clamped 10, Periodic 20])
-           ]
+        [ semigroupLaws @(Coord '[ Clamped 10, Periodic 20])
+        , monoidLaws @(Coord '[ Clamped 10, Periodic 20])
+        , affineSpaceLaws @(Coord '[ Clamped 10, Periodic 20])
+        , aesonLaws @(Coord '[ Clamped 10, Periodic 20])
+        , testAllCoordOrdered (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+        , testCoordLayout (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+          -- The library's other exported 'Iso'', and the one that shows
+          -- 'isoLaws' is worth having as a helper rather than inlined into
+          -- 'isCoordLaws'. Unlike 'asOrdinal' this round trip goes through
+          -- the hand-written 'Eq' for 'Coord', which compares the product
+          -- element by element with 'hcliftA2' rather than deriving it.
+        , isoLaws
+            "_WrappedCoord"
+            (_WrappedCoord @'[ Clamped 10, Periodic 20])
+        ]
       coord2 =
-        let p = Proxy @(Coord '[ Periodic 10, Periodic 20])
-        in [ semigroupLaws p
-           , monoidLaws p
-           , affineSpaceLaws p
-           , additiveGroupLaws p
-           , aesonLaws p
-           , testAllCoordOrdered p
-           , testCoordLayout p
-           ]
+        [ semigroupLaws @(Coord '[ Periodic 10, Periodic 20])
+        , monoidLaws @(Coord '[ Periodic 10, Periodic 20])
+        , affineSpaceLaws @(Coord '[ Periodic 10, Periodic 20])
+        , additiveGroupLaws @(Coord '[ Periodic 10, Periodic 20])
+        , aesonLaws @(Coord '[ Periodic 10, Periodic 20])
+        , testAllCoordOrdered (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , testCoordLayout (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        ]
   in defaultMain $
      testGroup
        "tests"
@@ -326,7 +326,7 @@ main =
                , foldableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                , traversableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                ] ++
-             [ aesonLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
+             [ aesonLaws @(Grid '[ Periodic 10, Periodic 11] Int)
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
              ])
        , testGroup
@@ -343,27 +343,25 @@ main =
        , testGroup
            "Representable"
            [ lawsToTest $
-             representableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+             representableLaws @(Grid '[ Periodic 10, Periodic 11])
            , lawsToTest $
-             representableLaws
-               (Proxy @(Grid '[ Clamped 3, Periodic 4, Clamped 5]))
+             representableLaws @(Grid '[ Clamped 3, Periodic 4, Clamped 5])
            ]
        , testGroup
            "Distributive"
            [ lawsToTest $
-             distributiveLaws (Proxy @(Grid '[ Periodic 3, Periodic 4]))
+             distributiveLaws @(Grid '[ Periodic 3, Periodic 4])
            , lawsToTest $
-             distributiveLaws
-               (Proxy @(Grid '[ Clamped 2, Periodic 3, Clamped 2]))
+             distributiveLaws @(Grid '[ Clamped 2, Periodic 3, Clamped 2])
            ]
          -- Small on purpose: coassociativity builds a grid of grids of grids,
          -- so the cell count is cubed. See 'comonadLaws'.
        , testGroup
            "FocusedGrid"
            [ lawsToTest $
-             comonadLaws (Proxy @(FocusedGrid '[ Periodic 3, Periodic 3]))
+             comonadLaws @(FocusedGrid '[ Periodic 3, Periodic 3])
            , lawsToTest $
-             comonadLaws (Proxy @(FocusedGrid '[ Clamped 2, Periodic 3]))
+             comonadLaws @(FocusedGrid '[ Clamped 2, Periodic 3])
            ]
        , shrinkTests
        , tilingTests

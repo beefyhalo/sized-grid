@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes  #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -61,28 +62,25 @@ eq1Laws _ =
     in testGroup "Eq1 Laws" [testCase "Nil Eq" nilEq]
 
 aesonLaws ::
-     forall a proxy. (Show a, Eq a, ToJSON a, FromJSON a, Arbitrary a)
-  => proxy a
-  -> TestTree
-aesonLaws _ =
+     forall a. (Show a, Eq a, ToJSON a, FromJSON a, Arbitrary a)
+  => TestTree
+aesonLaws =
   let encodeDecode :: a -> Property
       encodeDecode a = Just a === decode (encode a)
   in testGroup "Aeson Laws" [testProperty "Encode decode" encodeDecode]
 
 semigroupLaws ::
-     forall a proxy. (Show a, Eq a, Semigroup a, Arbitrary a)
-  => proxy a
-  -> TestTree
-semigroupLaws _ =
+     forall a. (Show a, Eq a, Semigroup a, Arbitrary a)
+  => TestTree
+semigroupLaws =
   let assoc :: a -> a -> a -> Property
       assoc a b c = a <> (b <> c) === (a <> b) <> c
   in testGroup "Semigroup Laws" [testProperty "Associative" assoc]
 
 monoidLaws ::
-     forall a proxy. (Show a, Eq a, Monoid a, Arbitrary a)
-  => proxy a
-  -> TestTree
-monoidLaws _ =
+     forall a. (Show a, Eq a, Monoid a, Arbitrary a)
+  => TestTree
+monoidLaws =
   let assoc :: a -> a -> a -> Property
       assoc a b c = mappend a (mappend b c) === mappend (mappend a b) c
       memptyId :: a -> Property
@@ -97,10 +95,9 @@ monoidLaws _ =
        ]
 
 additiveGroupLaws ::
-     forall a proxy. (Show a, Eq a, AdditiveGroup a, Arbitrary a)
-  => proxy a
-  -> TestTree
-additiveGroupLaws _ =
+     forall a. (Show a, Eq a, AdditiveGroup a, Arbitrary a)
+  => TestTree
+additiveGroupLaws =
   let assoc :: a -> a -> a -> Property
       assoc a b c = a ^+^ (b ^+^ c) === (a ^+^ b) ^+^ c
       zeroId :: a -> Property
@@ -118,11 +115,10 @@ additiveGroupLaws _ =
        ]
 
 affineSpaceLaws ::
-     forall a proxy.
+     forall a.
      (Arbitrary a, Show a, Eq a, AffineSpace a, Eq (Diff a), Show (Diff a))
-  => proxy a
-  -> TestTree
-affineSpaceLaws _ =
+  => TestTree
+affineSpaceLaws =
   let addZero :: a -> Property
       addZero a = a === a .+^ zeroV
       takeSelf :: a -> Property
@@ -210,9 +206,8 @@ comonadLaws ::
      , forall a. Show a => Show (w a)
      , forall a. Eq a => Eq (w a)
      )
-  => Proxy w
-  -> Laws
-comonadLaws _ =
+  => Laws
+comonadLaws =
   let leftId :: w Int -> Property
       leftId w = extract (duplicate w) === w
       rightId :: w Int -> Property
@@ -250,9 +245,8 @@ representableLaws ::
      , Arbitrary (Rep f)
      , Show (Rep f)
      )
-  => Proxy f
-  -> Laws
-representableLaws _ =
+  => Laws
+representableLaws =
   let tabulateIndex :: f Int -> Property
       tabulateIndex g = tabulate (index g) === g
       indexTabulate :: f Int -> Rep f -> Property
@@ -284,9 +278,8 @@ distributiveLaws ::
      , forall a. Show a => Show (f a)
      , forall a. Eq a => Eq (f a)
      )
-  => Proxy f
-  -> Laws
-distributiveLaws _ =
+  => Laws
+distributiveLaws =
   let doubleDistribute :: f (f Int) -> Property
       doubleDistribute g = distribute (distribute g) === g
       distributeIsCollectId :: [f Int] -> Property
@@ -358,9 +351,8 @@ isCoordLaws ::
      , Show (c n)
      , Arbitrary (c n)
      )
-  => Proxy (c n)
-  -> TestTree
-isCoordLaws _ =
+  => TestTree
+isCoordLaws =
   let -- The range half of the same obligation, said in numbers. Note what it
       -- does /not/ cover: it quantifies over 'arbitrary', which draws through
       -- 'Data.Grid.Sized.Ordinal.unsafeOrdinal' at an already-reduced index, so every
