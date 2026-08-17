@@ -140,8 +140,35 @@ stepWalkerTests =
                     assertEqual "heading" (d2 1 1) (walkerHeading w')
         ]
 
+-- | Tests for 'partitionFocus' (sized-grid-meg): a window split into its
+-- centre value and a function over its 'PuncturedCoord's.
+partitionFocusTests :: TestTree
+partitionFocusTests =
+    testGroup
+        "partitionFocus"
+        [ testProperty "the first half is the value at the centre" $
+              \(g :: Grid '[Clamped 5, Clamped 5] Int) ->
+                  fst (partitionFocus g) === index g centreCoord
+        , testProperty "the second half agrees with index at every PuncturedCoord" $
+              \(g :: Grid '[Clamped 5, Clamped 5] Int) ->
+                  let (_, neighbourAt) = partitionFocus g
+                   in all
+                          (\pc -> neighbourAt pc == index g (puncturedToCoord pc))
+                          allPunctured
+        , testProperty "the second half's values are allCoord's, centre left out" $
+              \(g :: Grid '[Clamped 5, Clamped 5] Int) ->
+                  let (_, neighbourAt) = partitionFocus g
+                   in map neighbourAt allPunctured ===
+                      [index g c | c <- allCoord, c /= centreCoord]
+        ]
+
 focusedTests :: TestTree
 focusedTests =
     testGroup
         "Focused"
-        [traceOffsetTests, tracePathTests, walkEverywhereTests, stepWalkerTests]
+        [ traceOffsetTests
+        , tracePathTests
+        , walkEverywhereTests
+        , stepWalkerTests
+        , partitionFocusTests
+        ]
