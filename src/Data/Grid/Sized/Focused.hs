@@ -5,6 +5,7 @@ module Data.Grid.Sized.Focused
   , walkEverywhere
   , Walker(..)
   , stepWalker
+  , partitionFocus
   ) where
 
 import           Data.Grid.Sized.Coord
@@ -157,3 +158,20 @@ stepWalker ::
 stepWalker (Walker (FocusedGrid g p) h) =
     case transportCoord p h of
         (p', h') -> Walker (FocusedGrid g p') h'
+
+-- | Split a self-contained window into its centre value and a function
+-- naming every other cell's value, sized-grid-meg's answer to the shape
+-- Conway's rule actually wants --- a cell and its neighbours together,
+-- rather than a caller of 'neighbours' re-deriving the centre by hand.
+--
+-- Prior art and the reasoning behind returning a function rather than
+-- Chris Penner's @Grid window (Maybe a)@ are on 'PuncturedCoord'; this is
+-- that type's one consumer. @g@ is any self-contained window, not a
+-- 'FocusedGrid' sitting inside a larger one --- it is never boundary-clipped,
+-- so unlike 'neighbours' this needs no boundary policy and always hands back
+-- exactly @'MaxCoordSize' cs - 1@ values, whatever the axis types are.
+partitionFocus ::
+       forall cs a. (AllSizedKnown cs, IsCoordList cs, All CentredAxis cs)
+    => Grid cs a
+    -> (a, PuncturedCoord cs -> a)
+partitionFocus g = (index g (centreCoord @cs), index g . puncturedToCoord)

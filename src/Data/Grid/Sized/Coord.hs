@@ -26,6 +26,10 @@ module Data.Grid.Sized.Coord
     -- * Centred coordinates
   , CentredAxis
   , centreCoord
+    -- * Punctured coordinates
+  , PuncturedCoord
+  , puncturedToCoord
+  , allPunctured
     -- * Neighbourhoods
   , offsetCoord
   , neighbours
@@ -1055,6 +1059,110 @@ centreAxis =
 -- second instance written to reject it.
 centreCoord :: forall cs. All CentredAxis cs => Coord cs
 centreCoord = Coord $ hcpure (Proxy :: Proxy CentredAxis) (I centreAxis)
+
+-- | A coordinate other than the centre of a window, of which there are
+-- exactly @'MaxCoordSize' cs - 1@ --- sized-grid-meg's answer to the
+-- imprecision in Chris Penner's 'grids' (Hackage 0.5.0.1,
+-- @Data.Grid.Internal.Shapes@):
+--
+-- > partitionFocus :: (Centered window, IsGrid window)
+-- >                 => Grid window a -> (a, Grid window (Maybe a))
+--
+-- His second half keeps the window's shape but admits a 'Maybe' at every
+-- cell, when only the centre can ever be 'Nothing' and only the rest can
+-- ever be 'Just' --- the type states more than the function can produce.
+-- This is the index a caller of 'Data.Grid.Sized.Focused.partitionFocus'
+-- gets instead: exactly the coordinates that have a neighbour value, and no
+-- others, so there is no coordinate left over to apply a partial function
+-- to.
+--
+-- The cost against Penner's shape is real: a @'PuncturedCoord' cs@ carries a
+-- flat position, not an axis-by-axis one, so a caller who wants to know
+-- /which/ neighbour --- north, the corner, whichever --- has to go through
+-- 'puncturedToCoord' and read the axes back out, rather than pattern-matching
+-- a still-window-shaped result the way Penner's @Grid window (Maybe a)@
+-- allows. What is bought back is that 'puncturedToCoord' is total: there is
+-- no coordinate this type can hold that fails to have a neighbour.
+newtype PuncturedCoord cs =
+    PuncturedCoord (Ordinal (MaxCoordSize cs - 1))
+    deriving (Eq, Ord)
+
+-- | Not @deriving Show@: 'Ordinal'\'s own 'Show' instance asks for
+-- @'KnownNat' m@ so it can print the size alongside the value, and
+-- @'KnownNat' ('MaxCoordSize' cs '-' 1)@ is exactly the fact this module
+-- keeps behind 'coordSpaceNonEmpty' rather than asking every caller of this
+-- instance to supply. Printing the flat index alone needs no such thing.
+instance Show (PuncturedCoord cs) where
+    show (PuncturedCoord o) = "PuncturedCoord " ++ show (ordinalToInt o)
+
+-- | The 'Coord' a 'PuncturedCoord' names. Total: every 'PuncturedCoord' is,
+-- by construction, a coordinate other than 'centreCoord', so there is
+-- nothing for this to fail on.
+--
+-- Built by skipping over 'centreCoord''s own row-major position
+-- ('coordPosition'): a 'PuncturedCoord' whose flat index is below the
+-- centre's names that same position in 'allCoord', and one whose flat index
+-- is at or above it names the position one further along --- the single skip
+-- that turns the @'MaxCoordSize' cs - 1@ values a 'PuncturedCoord' can hold
+-- into a bijection with 'allCoord' minus 'centreCoord'.
+puncturedToCoord ::
+       forall cs. (IsCoordList cs, All CentredAxis cs)
+    => PuncturedCoord cs
+    -> Coord cs
+puncturedToCoord (PuncturedCoord o) =
+    case coordFromPosition flat of
+        Just c -> c
+        Nothing ->
+            error
+                "Data.Grid.Sized.Coord.puncturedToCoord: impossible: a \
+                \PuncturedCoord's flat index landed outside Coord's range"
+  where
+    k = coordPosition (centreCoord @cs)
+    i = ordinalToInt o
+    flat
+        | i < k = i
+        | otherwise = i + 1
+
+-- | Every axis contributes at least one value --- 'IsCoordLifted'\'s own
+-- @1 <= 'CoordNat' x@ --- so the coordinate space they build together is
+-- never empty, which is what lets 'allPunctured' subtract one from it at the
+-- type level.
+--
+-- Recovered from 'GHC.TypeLits.cmpNat' the same way
+-- 'Data.Grid.Sized.Ordinal.reifyOrdinal' recovers its own @<=@ evidence: by
+-- comparing the two sizes at run time and reading off the type-level proof
+-- 'GHC.TypeLits.cmpNat' hands back with the answer, rather than by
+-- re-deriving the fact from the axis list's structure the way
+-- 'coordSpaceSize' folds the sizes themselves. The @'GTI'@ branch is
+-- unreachable for the same reason 'reifyOrdinal'\'s is: it would mean
+-- 'MaxCoordSize' had come out below one, which no 'IsCoordLifted' axis can
+-- contribute to.
+--
+-- Not exported: nothing outside this module constructs a 'PuncturedCoord',
+-- so nothing outside it needs the proof that there is room for one.
+coordSpaceNonEmpty :: forall cs. AllSizedKnown cs => Dict (1 <= MaxCoordSize cs)
+coordSpaceNonEmpty =
+    case sizeProof @cs of
+        Dict ->
+            case cmpNat (Proxy @1) (Proxy @(MaxCoordSize cs)) of
+                LTI -> Dict
+                EQI -> Dict
+                GTI ->
+                    error
+                        "Data.Grid.Sized.Coord.coordSpaceNonEmpty: impossible: \
+                        \MaxCoordSize came out below one, though every axis \
+                        \contributes at least one value"
+
+-- | Every 'PuncturedCoord', in the same row-major order 'allCoord' visits ---
+-- 'allCoord' with 'centreCoord' left out, without ever comparing two
+-- coordinates for equality to leave it out.
+allPunctured ::
+       forall cs. (IsCoordList cs, AllSizedKnown cs)
+    => [PuncturedCoord cs]
+allPunctured =
+    case (sizeProof @cs, coordSpaceNonEmpty @cs) of
+        (Dict, Dict) ->
+            [PuncturedCoord (unsafeOrdinal i) | i <- [0 .. coordSpaceSize @cs - 2]]
 
 class AllSizedKnown (cs :: [Type]) where
   sizeProof :: Dict (KnownNat (MaxCoordSize cs))
