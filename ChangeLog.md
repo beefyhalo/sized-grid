@@ -658,7 +658,7 @@ value or a type error.
   `fmap extract . duplicate == id` catches a `duplicate` that rebuilds each cell
   from the wrong focus — which nothing else in the suite did.
 
-* Builds with GHC 9.8 through 9.14 via a nix flake; `stack.yaml` and Travis
+* Builds with GHC 9.10 through 9.14 via a nix flake; `stack.yaml` and Travis
   configuration removed.
 
 * The `sudoko`, `gameOfLife` and `ising-example` programs build again. They had
