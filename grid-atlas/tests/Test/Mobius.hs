@@ -1,19 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 
--- | Tests for the Mobius strip ("Data.Grid.Atlas.Mobius", sized-grid-00v).
---
--- Two checks, the same shape @Test.CubeMap@ uses to verify 'cubeSeam' and
--- 'cubeStep':
---
---   * every half-edge of the chart names a destination that names it back
---     ('mobiusSeamPairsUp'), 'seamViolations' (sized-grid-b15) applied to
---     'mobiusSeam'\'s own half-edges;
---   * a walker who never turns, always heading towards 'Wrapped'\'s
---     @'AtMax'@ end, lands on the mirrored row after crossing the seam once
---     (an odd number of times) and back on its exact starting row after
---     crossing it twice (an even number, the two flips cancelling) ---
---     the concrete, checkable statement of \"a Mobius strip has one edge,
---     not two\" ('mobiusStepBeltCloses').
 module Test.Mobius
   ( mobiusTests
   ) where
@@ -31,8 +17,6 @@ allAxes = [minBound .. maxBound]
 allExtrema :: [Extremum]
 allExtrema = [minBound .. maxBound]
 
--- | Every half-edge of the strip's one chart: the enumeration
--- 'seamViolations' checks the table over.
 mobiusHalfEdges :: [HalfEdge () (Axis, Extremum)]
 mobiusHalfEdges = [((), (a, e)) | a <- allAxes, e <- allExtrema]
 
@@ -44,15 +28,7 @@ mobiusSeamPairsUp =
         []
         (seamViolations mobiusSeam mobiusHalfEdges)
 
--- | The strip's width, fixed at the smallest value with an interior cell
--- (@> 2@), so a belt walk genuinely crosses several cells before it meets
--- the seam.
 type W = 5
-
--- | The strip's height, deliberately different from 'W' --- nothing about a
--- self-gluing on one axis requires the other axis to be the same size, and
--- a shared value would hide a transposed-axis bug that a mismatched one
--- cannot.
 type H = 3
 
 mobiusStepBeltCloses :: TestTree
