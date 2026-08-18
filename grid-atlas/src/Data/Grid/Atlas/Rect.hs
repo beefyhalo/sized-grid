@@ -9,29 +9,30 @@
 -- one chart shape: a rectangle of cells with two axes.
 --
 -- One shape, not all shapes. There is no class here saying what a boundary
--- of an arbitrary chart is, because the two atlases that exist are both
--- rectangular and a class fitted to two instances of one shape would be a
--- guess about the third. What the split does say is where the seam between
--- the two would go if a non-rectangular chart ever arrives: everything in
--- this module is what @Rect@ contributes, and nothing in it is cube- or
--- Mobius-specific.
+-- of an arbitrary chart is, because every atlas that exists is rectangular
+-- and a class fitted to instances of one shape would be a guess about the
+-- next. What the split does say is where the seam between the two halves
+-- would go if a non-rectangular chart ever arrives: everything in this
+-- module is what @Rect@ contributes, and nothing in it belongs to any one
+-- surface.
 --
--- == What varies between the two callers
+-- == What varies between the callers
 --
 -- 'rectStep' takes as arguments exactly the three things
--- "Data.Grid.Atlas.CubeMap" and "Data.Grid.Atlas.Mobius" disagree about,
--- and nothing else:
+-- "Data.Grid.Atlas.CubeMap", "Data.Grid.Atlas.Mobius" and
+-- "Data.Grid.Atlas.Klein" disagree about, and nothing else:
 --
 --   * the size of each axis --- @n@ twice for a cube face, @w@ and @h@ for
---     a Mobius strip;
+--     a strip or a bottle;
 --   * the gluing, as a lookup rather than a
 --     'Data.Atlas.Topology.Seam.SeamTable' directly, so a caller can hand
 --     over a table that does not glue every edge;
 --   * how partial that lookup is, as the 'Applicative' it answers in. A
---     cube has no edge of its own, so its lookup is total and it steps in
---     @Identity@; a Mobius strip's straight axis is a genuine @Clamped@
---     edge with nothing on the other side, so it steps in 'Maybe'. The
---     step is exactly as partial as the gluing it is given.
+--     cube and a Klein bottle have no edge of their own, so their lookups
+--     are total and they step in @Identity@; a Mobius strip's straight axis
+--     is a genuine @Clamped@ edge with nothing on the other side, so it
+--     steps in 'Maybe'. The step is exactly as partial as the gluing it is
+--     given.
 --
 -- == What a caller must guarantee
 --
