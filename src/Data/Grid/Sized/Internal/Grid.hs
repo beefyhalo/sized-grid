@@ -194,7 +194,9 @@ instance Traversable v => Traversable (GridOf v cs) where
 --
 -- Asserts what `gridFromVector` checks: that the vector holds exactly
 -- @MaxCoordSize cs@ elements. Nothing verifies it, and a grid that fails it
--- makes `Data.Functor.Rep.index` throw on positions its own type calls valid.
+-- makes `Data.Functor.Rep.index` read whatever is at that offset in memory ---
+-- `indexGrid` indexes without a bounds check, on the strength of the invariant
+-- this function asserts and does not establish.
 --
 -- Only construction needs to be unsafe. Reading the vector back out cannot
 -- invalidate anything, so that direction is `gridVector`, which is public. A
@@ -261,12 +263,24 @@ tabulateGrid func = Grid $ VG.fromListN (coordSpaceSize @cs) $ map func allCoord
 
 -- | Read the element at a coordinate. `Data.Functor.Rep.index` for grids whose
 -- element type cannot support `Representable`.
+--
+-- 'VG.unsafeIndex', and this is the case the dependent typing is supposed to
+-- pay for. @coordPosition c@ is in @[0, 'coordSpaceSize' \@cs)@ by the
+-- `Data.Grid.Sized.Ordinal.Ordinal` invariant on every axis, and the vector has
+-- exactly @MaxCoordSize cs@ = @coordSpaceSize \@cs@ elements by the `GridOf`
+-- size invariant, so the bounds check 'VG.!' would do can never fire on a grid
+-- built through the safe API. The check is not being skipped in spite of the
+-- types; it is licensed /by/ them.
+--
+-- The one way to falsify either half is `unsafeGridFromVector`, whose own
+-- documentation --- and that of "Data.Grid.Sized.Unsafe", which is the import
+-- that opts in --- states the consequence.
 indexGrid ::
        forall v cs a. (VG.Vector v a, IsCoordList cs)
     => GridOf v cs a
     -> Coord cs
     -> a
-indexGrid (Grid v) c = v VG.! coordPosition c
+indexGrid (Grid v) c = VG.unsafeIndex v (coordPosition c)
 {-# INLINE indexGrid #-}
 
 -- | `fmap` for grids whose element type cannot support `Functor`.

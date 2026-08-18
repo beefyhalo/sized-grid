@@ -7,12 +7,14 @@ import           Data.Grid.Sized.Focused
 -- As in "Data.Grid.Sized.Focused": the type is taken from its own hidden module
 -- rather than from "Data.Grid.Sized", which re-exports this one.
 import           Data.Grid.Sized.Internal.Grid (Grid, gridVector)
--- (& ix .~) replaces one element, so the length is unchanged. That is the whole
--- of the obligation unsafeGridFromVector carries, discharged here by inspection.
+-- 'V.unsafeUpd' replaces one element, so the length is unchanged. That is the
+-- whole of the obligation unsafeGridFromVector carries, discharged here by
+-- inspection.
 import           Data.Grid.Sized.Unsafe        (unsafeGridFromVector)
 
 import           Control.Lens           hiding (index)
 import           Data.Functor.Rep
+import qualified Data.Vector                   as V
 
 -- | Conversion between `Grid` and `FocusedGrid` and access grids at a `Coord`
 class IsGrid cs grid | grid -> cs where
@@ -25,12 +27,19 @@ class IsGrid cs grid | grid -> cs where
 
 instance (AllSizedKnown cs, IsCoordList cs) =>
          IsGrid cs (Grid cs) where
+    -- 'V.unsafeUpd' rather than the @ix (coordPosition coord)@ traversal this
+    -- used to be, for the reason `Data.Grid.Sized.indexGrid` drops its bounds
+    -- check: the position is in range by the 'Data.Grid.Sized.Ordinal.Ordinal'
+    -- invariant and the vector has exactly that many elements by the grid's own
+    -- size invariant, so the traversal could only ever have matched. Writing it
+    -- as a traversal also said the lens might miss its target, which is the one
+    -- thing the type of 'gridIndex' promises it does not.
     gridIndex coord =
         lens
             (`index` coord)
             (\g a ->
                  unsafeGridFromVector
-                     (gridVector g & ix (coordPosition coord) .~ a))
+                     (V.unsafeUpd (gridVector g) [(coordPosition coord, a)]))
     asGrid = id
     asFocusedGrid = lens (`FocusedGrid` zeroCoord) (const focusedGrid)
 

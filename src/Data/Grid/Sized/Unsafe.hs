@@ -8,8 +8,16 @@
 -- Importing this module opts out of the one guarantee the library provides. A
 -- @Grid cs a@ is supposed to hold exactly @MaxCoordSize cs@ elements; build one
 -- through `unsafeGridFromVector` and nothing checks that it does. A grid that is
--- too short makes `Data.Functor.Rep.index` throw on positions its own type says
--- are valid, and makes ('<*>') truncate silently against a well-formed grid.
+-- too short makes `Data.Functor.Rep.index` read past the end of the vector, and
+-- makes ('<*>') truncate silently against a well-formed grid.
+--
+-- /Read past the end/, not throw: `Data.Grid.Sized.index` indexes without a
+-- bounds check, because on a grid built through the safe API the size invariant
+-- has already proved the position is in range. Asserting that invariant with
+-- this function and getting it wrong therefore gives an unrelated value, or a
+-- crash, rather than an exception naming the position. That is the honest
+-- statement of the trade and it does not change who is exposed: the check it
+-- removes could only ever have fired on a grid built here.
 --
 -- It is a separate module, and not re-exported by "Data.Grid.Sized", so that reaching
 -- for it is a decision that shows up in an import list.

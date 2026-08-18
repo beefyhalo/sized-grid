@@ -80,12 +80,19 @@ atlasFromVector v
 -- | Read a single cell. Total: every 'AtlasCoord' names a chart in range (an
 -- 'Ordinal k' has no other kind of value) and a coordinate valid within it
 -- ('Coord' is the same guarantee), so there is nothing left to check.
+--
+-- 'V.unsafeIndex' says so, the same way `Data.Grid.Sized.index` does within a
+-- chart. Here the argument has no escape hatch to qualify it at all: 'Atlas'
+-- exports no constructor, and both builders establish the @k@ charts the
+-- 'Ordinal' indexes into --- 'atlasFromVector' by checking, 'atlasFromTiles'
+-- by construction.
 atlasIndex ::
        (IsCoordList cs, AllSizedKnown cs)
     => Atlas cs k a
     -> AtlasCoord cs k
     -> a
-atlasIndex (Atlas charts) (chart, c) = index (charts V.! ordinalToInt chart) c
+atlasIndex (Atlas charts) (chart, c) =
+    index (V.unsafeIndex charts (ordinalToInt chart)) c
 
 -- | Step the head axis of an atlas coordinate by a signed displacement,
 -- crossing into the neighbouring chart --- identically to the neighbouring
