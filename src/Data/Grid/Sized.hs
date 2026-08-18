@@ -54,8 +54,6 @@ module Data.Grid.Sized
     , zipWithGrid
     , foldlGrid'
       -- * Type-level machinery
-    , Head
-    , Tail
     , CollapseGrid
       -- * Rearranging
     , transposeGrid

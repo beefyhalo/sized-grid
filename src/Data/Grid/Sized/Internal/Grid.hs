@@ -102,8 +102,6 @@ module Data.Grid.Sized.Internal.Grid
   , foldlGrid'
   , scanl1Grid
     -- * Type-level machinery
-  , Head
-  , Tail
   , CollapseGrid
     -- * Rearranging
   , transposeGrid
@@ -387,14 +385,6 @@ instance (IsCoordList cs) => FoldableWithIndex (Coord cs) (Grid cs) where
 instance (IsCoordList cs) => TraversableWithIndex (Coord cs) (Grid cs) where
   itraverse func (Grid v) =
     Grid <$> sequenceA (V.zipWith func (V.fromList allCoord) v)
-
--- | The first element of a type level list
-type family Head xs where
-  Head (x ': xs) = x
-
--- | All but the first elements of a type level list
-type family Tail xs where
-  Tail (x ': xs) = xs
 
 -- | Given a grid type, give back a series of nested lists repesenting the grid. The lists will have a number of layers equal to the dimensionality.
 type family CollapseGrid cs a where
