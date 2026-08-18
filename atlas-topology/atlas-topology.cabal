@@ -1,0 +1,50 @@
+cabal-version:       3.0
+name:                atlas-topology
+version:             0.1.0.0
+synopsis:            Seam tables: the gluing combinatorics of a discrete atlas
+description:
+  The chart-content-free half of an atlas (sized-grid-1av): which boundary of
+  which chart is glued to which, and with what orientation. `grid-atlas`'s
+  cube map is the first consumer --- its @cubeSeam@ was already exactly this
+  shape and already tested by a property that never mentioned a grid, which
+  is why this is a lift rather than a speculative generalisation. Depends on
+  `base` and nothing else, deliberately: a seam table knows nothing about
+  cells, coordinates, or `grid-sized`, and a consumer that only wants the
+  gluing should not build a grid library to get it.
+license:             MIT
+license-file:        LICENSE
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
+category:            Data
+build-type:          Simple
+
+-- No type-checker plugins here, unlike grid-sized.cabal and
+-- grid-atlas.cabal: nothing in this package is indexed by a type-level Nat,
+-- so there is no arithmetic goal for a solver to discharge.
+common lang
+  default-language:   GHC2024
+  ghc-options:
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints
+
+library
+  import:          lang
+  hs-source-dirs:  src
+  exposed-modules: Data.Atlas.Topology.Seam
+  build-depends:   base >=4.20 && <4.23
+
+test-suite tests
+  import:         lang
+  type:           exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is:        Main.hs
+  other-modules:  Test.Seam
+
+  build-depends:
+    , atlas-topology
+    , base
+    , QuickCheck        >=2.14 && <2.16
+    , tasty             >=1.4  && <1.6
+    , tasty-hunit       >=0.10 && <0.11
+    , tasty-quickcheck  >=0.10 && <0.12
