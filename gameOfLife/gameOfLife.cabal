@@ -3,9 +3,11 @@ name:                gameOfLife
 version:             0.1.0.0
 synopsis:            Game of Life Example
 description:
-  Conway's Game of Life on a @Grid '[Periodic 60, Periodic 60]@, stepped with
-  the comonadic @extend@ and drawn with gloss. Shows that a wrap-around
-  neighbourhood needs no bounds checking when the coordinate type is periodic.
+  Conway's Game of Life on a @UGrid '[Periodic 60, Periodic 60]@, stepped with
+  a bulk pass over the unboxed grid and drawn with gloss. Shows that a
+  wrap-around neighbourhood needs no bounds checking when the coordinate type
+  is periodic, and doubles as the library's example of an unboxed element type
+  other than Int.
 license:             MIT
 license-file:        LICENSE
 author:              Kevin Horlick
@@ -17,13 +19,12 @@ extra-doc-files:     ChangeLog.md
 executable gameOfLife
   main-is:             Main.hs
   build-depends:
-    , adjunctions  >=4.4  && <4.5
     , base         >=4.19 && <5
-    , comonad      >=5.0  && <5.1
     , generics-sop >=0.5  && <0.6
     , gloss        >=1.13 && <1.14
     , lens         >=5.2  && <5.4
     , grid-sized
+    , vector       >=0.13 && <0.14
     , vector-space >=0.16 && <0.20
   hs-source-dirs:      src
   default-language:    GHC2024
