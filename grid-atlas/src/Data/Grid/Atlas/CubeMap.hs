@@ -59,10 +59,12 @@ module Data.Grid.Atlas.CubeMap
 
 import           Data.Atlas.Topology.Seam (SeamTable (..))
 import           Data.Grid.Atlas
+import           Data.Grid.Atlas.Rect
 import           Data.Grid.Sized
 
-import           Data.Maybe  (fromMaybe)
-import qualified Data.Vector as V
+import           Data.Functor.Identity (Identity (..))
+import           Data.Maybe            (fromMaybe)
+import qualified Data.Vector           as V
 import           GHC.TypeLits
 
 -- | The six faces of a cube map, named by the world axis and sign their
@@ -104,33 +106,15 @@ cubeAtlas px nx py ny pz nz =
     fromMaybe (error "cubeAtlas: impossible, six faces always match k = 6") $
     atlasFromVector (V.fromList [px, nx, py, ny, pz, nz])
 
--- | Which of a face's two axes: position 0 in @'[Ordinal n, Ordinal n]@, or
--- position 1. Not a type-level axis position (as 'mapAxis' names one) ---
--- both of a face's axes share a type, so a runtime tag is all a caller needs
--- to say which one a heading points along.
-data Axis
-    = U
-    | V
-    deriving (Eq, Show, Enum, Bounded)
-
--- | The direction a walker on the cube's surface is currently facing: one
--- axis of its current face, and which end of it the walker is heading
--- towards. Deliberately axis-aligned, the same restriction every neighbour
--- query in this library has ('vonNeumannNeighbours', 'axisSteps'): a diagonal
--- heading is not a thing a single seam crossing needs to resolve.
-data Heading = Heading
-    { headingAxis :: Axis
-    , headingSide :: Extremum
-    } deriving (Eq, Show)
-
-sideSign :: Extremum -> Int
-sideSign AtMin = -1
-sideSign AtMax = 1
-
-signSide :: Int -> Extremum
-signSide d
-    | d < 0 = AtMin
-    | otherwise = AtMax
+-- 'Axis' and 'Heading' are re-exported from "Data.Grid.Atlas.Rect" rather
+-- than declared here: a face is a rectangular chart like any other, and
+-- since sized-grid-4wn the coordinate half of a crossing -- did this step
+-- leave the face, and where on the destination does it land -- is that
+-- module's 'rectStep'. Only the table below is cube-specific.
+--
+-- A heading stays axis-aligned, the same restriction every neighbour query
+-- in this library has (vonNeumannNeighbours, axisSteps): a diagonal heading
+-- is not a thing a single seam crossing needs to resolve.
 
 -- | The transition table: crossing a named 'Axis' at a named 'Extremum' of a
 -- 'Face' lands on another face, at a named axis and extremum of its own, and
@@ -179,7 +163,10 @@ crossCubeEdge NegZ (V, AtMax) = (PosX, (V, AtMin), False)
 -- | Move one cell in a heading, crossing a seam --- with its frame transform
 -- applied to the heading itself --- if the step would leave the current
 -- face. Total, unlike 'atlasOffsetHead': a cube has no edge of its own, only
--- seams, so every step lands somewhere.
+-- seams, so every step lands somewhere. That totality is why the step runs
+-- in 'Identity' --- 'rectStep' is as partial as the gluing it is handed, and
+-- 'cubeSeam' glues all 24 half-edges --- where "Data.Grid.Atlas.Mobius",
+-- whose strip does have an edge, runs the same function in 'Maybe'.
 --
 -- Only ever moves the atlas coordinate by one cell. Composing several calls
 -- (as a caller walking a longer heading would) is what carries a walker
@@ -193,45 +180,15 @@ cubeStep ::
     => AtlasCoord '[ Ordinal n, Ordinal n] 6
     -> Heading
     -> (AtlasCoord '[ Ordinal n, Ordinal n] 6, Heading)
-cubeStep (chart, u :| v :| EmptyCoord) heading@(Heading axis side) =
-    let size = ordinalSize @n
-        ui = ordinalToInt u
-        vi = ordinalToInt v
-        d = sideSign side
-        (ui', vi') =
-            case axis of
-                U -> (ui + d, vi)
-                V -> (ui, vi + d)
-    in if ui' >= 0 && ui' < size && vi' >= 0 && vi' < size
-           then ( (chart, unsafeOrdinal ui' :| unsafeOrdinal vi' :| EmptyCoord)
-                , heading)
-           else
-               let free =
-                       case axis of
-                           U -> vi
-                           V -> ui
-                   (destFace, (destAxis, destSide), reversed) =
-                       crossSeam cubeSeam (indexFace chart) (axis, side)
-                   free'
-                       | reversed = size - 1 - free
-                       | otherwise = free
-                   fixed =
-                       case destSide of
-                           AtMin -> 0
-                           AtMax -> size - 1
-                   (u2, v2) =
-                       case destAxis of
-                           U -> (fixed, free')
-                           V -> (free', fixed)
-                   -- A walker landing on the destination's AtMax edge must
-                   -- now be heading towards AtMin (further into that face,
-                   -- away from the edge it just crossed), and the reverse at
-                   -- AtMin -- independently of which side of the source it
-                   -- left from, since a genuine crossing's approach
-                   -- direction is already fixed by 'side'. Exactly what
-                   -- 'cubeStepBeltCloses' checks, over all 600 starting
-                   -- configurations on an n=5 cube.
-                   newSign = negate (sideSign destSide)
-               in ( ( faceIndex destFace
-                    , unsafeOrdinal u2 :| unsafeOrdinal v2 :| EmptyCoord)
-                  , Heading destAxis (signSide newSign))
+cubeStep (chart, u :| v :| EmptyCoord) heading =
+    let (destFace, (u', v'), heading') =
+            runIdentity $
+            rectStep
+                (const (ordinalSize @n))
+                (\face edge -> Identity (crossSeam cubeSeam face edge))
+                (indexFace chart)
+                (ordinalToInt u, ordinalToInt v)
+                heading
+    in ( ( faceIndex destFace
+         , unsafeOrdinal u' :| unsafeOrdinal v' :| EmptyCoord)
+       , heading')

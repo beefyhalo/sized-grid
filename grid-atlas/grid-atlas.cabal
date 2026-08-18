@@ -57,6 +57,7 @@ library
     Data.Grid.Atlas.CubeMap
     Data.Grid.Atlas.Klein
     Data.Grid.Atlas.Mobius
+    Data.Grid.Atlas.Rect
 
   build-depends:
     , adjunctions    >=4.4  && <4.5

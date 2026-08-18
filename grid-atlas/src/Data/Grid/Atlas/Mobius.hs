@@ -1,9 +1,12 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | A Mobius strip: a single-chart 'Atlas' glued to itself along its
 -- 'Wrapped' axis, reflecting 'Straight' on crossing.
 module Data.Grid.Atlas.Mobius
   ( Axis(..)
+  , pattern Wrapped
+  , pattern Straight
   , Heading(..)
   , mobiusAtlas
   , mobiusSeam
@@ -12,30 +15,28 @@ module Data.Grid.Atlas.Mobius
 
 import           Data.Atlas.Topology.Seam (SeamTable (..), crossSeam)
 import           Data.Grid.Atlas
+import           Data.Grid.Atlas.Rect
 import           Data.Grid.Sized
 
 import           Data.Maybe  (fromMaybe)
 import qualified Data.Vector as V
 import           GHC.TypeLits
 
-data Axis
-    = Wrapped
-    | Straight
-    deriving (Eq, Show, Enum, Bounded)
+-- | The strip's two axes, named for what happens at their ends: 'Wrapped'
+-- is glued to itself, 'Straight' has a genuine 'Clamped' edge with nothing
+-- on the other side. Synonyms for "Data.Grid.Atlas.Rect"\'s 'U' and 'V'
+-- rather than a type of this module's own, so that 'rectStep' does this
+-- chart's coordinate arithmetic too --- the names are the only thing a
+-- Mobius strip adds, and they are worth keeping, because they are what make
+-- @crossMobiusEdge@ readable as a statement about the surface.
+pattern Wrapped :: Axis
+pattern Wrapped = U
 
-data Heading = Heading
-    { headingAxis :: Axis
-    , headingSide :: Extremum
-    } deriving (Eq, Show)
+-- | The axis with a genuine edge --- see 'Wrapped'.
+pattern Straight :: Axis
+pattern Straight = V
 
-sideSign :: Extremum -> Int
-sideSign AtMin = -1
-sideSign AtMax = 1
-
-signSide :: Int -> Extremum
-signSide d
-    | d < 0 = AtMin
-    | otherwise = AtMax
+{-# COMPLETE Wrapped, Straight #-}
 
 mobiusAtlas ::
        forall w h a. Grid '[ Clamped w, Clamped h] a
@@ -54,44 +55,33 @@ crossMobiusEdge () (Straight, side) = ((), (Straight, side), False)
 
 -- | 'Nothing' on a 'Straight' step off the edge: unlike a cube, this axis
 -- has a genuine 'Clamped' boundary rather than another seam to resolve.
+-- That is the whole of what this function says beyond 'rectStep' --- the
+-- gluing it hands over answers in 'Maybe', and a step is exactly as partial
+-- as its gluing, where "Data.Grid.Atlas.CubeMap" hands over a total one and
+-- gets a total step.
 mobiusStep ::
        forall w h. (KnownNat w, KnownNat h)
     => AtlasCoord '[ Clamped w, Clamped h] 1
     -> Heading
     -> Maybe (AtlasCoord '[ Clamped w, Clamped h] 1, Heading)
-mobiusStep (chart, u :| v :| EmptyCoord) (Heading axis side) =
-    let wSize = ordinalSize @w
-        hSize = ordinalSize @h
-        ui = ordinalToInt (unClamped u)
-        vi = ordinalToInt (unClamped v)
-        d = sideSign side
-        (ui', vi') =
-            case axis of
-                Wrapped  -> (ui + d, vi)
-                Straight -> (ui, vi + d)
-    in if ui' >= 0 && ui' < wSize && vi' >= 0 && vi' < hSize
-           then Just
-                    ( ( chart
-                      , Clamped (unsafeOrdinal ui') :| Clamped (unsafeOrdinal vi') :|
-                        EmptyCoord)
-                    , Heading axis side)
-           else
-               case axis of
-                   Straight -> Nothing
-                   Wrapped ->
-                       let (_, (_, destSide), reversed) =
-                               crossSeam mobiusSeam () (axis, side)
-                           vFixed
-                               | reversed = hSize - 1 - vi
-                               | otherwise = vi
-                           uFixed =
-                               case destSide of
-                                   AtMin -> 0
-                                   AtMax -> wSize - 1
-                           newSign = negate (sideSign destSide)
-                       in Just
-                              ( ( chart
-                                , Clamped (unsafeOrdinal uFixed) :|
-                                  Clamped (unsafeOrdinal vFixed) :|
-                                  EmptyCoord)
-                              , Heading Wrapped (signSide newSign))
+mobiusStep (chart, u :| v :| EmptyCoord) heading = do
+    ((), (ui, vi), heading') <-
+        rectStep
+            axisSize
+            glued
+            ()
+            (ordinalToInt (unClamped u), ordinalToInt (unClamped v))
+            heading
+    pure
+        ( ( chart
+          , Clamped (unsafeOrdinal ui) :| Clamped (unsafeOrdinal vi) :|
+            EmptyCoord)
+        , heading')
+  where
+    axisSize Wrapped  = ordinalSize @w
+    axisSize Straight = ordinalSize @h
+    -- 'mobiusSeam' has entries for the 'Straight' edges only because a
+    -- 'SeamTable' is total; they are the identity, and this is where the
+    -- honest answer -- that edge is glued to nothing -- is given instead.
+    glued () (Straight, _) = Nothing
+    glued () edge          = Just (crossSeam mobiusSeam () edge)
