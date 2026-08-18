@@ -25,7 +25,7 @@
 -- That table was not derived by staring at a paper net --- it was computed
 -- from the 6 faces' @(u, v)@ bases directly (see sized-grid-68j's closing
 -- notes for the derivation), then checked two ways before being transcribed
--- here as the 24 equations of 'cubeSeam':
+-- here as the 24 equations of 'cubeSeam'\'s table:
 --
 --   * every one of the 24 half-edges pairs with exactly one other half-edge,
 --     each pointing back at the one that named it (the 12 physical edges of
@@ -57,6 +57,7 @@ module Data.Grid.Atlas.CubeMap
   , cubeStep
   ) where
 
+import           Data.Atlas.Topology.Seam (SeamTable (..))
 import           Data.Grid.Atlas
 import           Data.Grid.Sized
 
@@ -135,37 +136,45 @@ signSide d
 -- 'Face' lands on another face, at a named axis and extremum of its own, and
 -- says whether the free (along-edge) coordinate runs the same way (@False@)
 -- or backwards (@True@) between the two. See the module haddock for how this
--- was derived and checked; see 'cubeStep' for how the 4 fields here become
--- both a landing coordinate and a frame transform for a crossing heading.
+-- was derived and checked; see 'cubeStep' for how those fields become both a
+-- landing coordinate and a frame transform for a crossing heading.
 --
--- 24 equations, one per half-edge of the cube's 12 physical edges, each
--- pointing back at the one that names it --- misassign any single entry and
--- @Test.CubeMap@'s @cubeSeamPairsUp@ catches it.
-cubeSeam :: Face -> Axis -> Extremum -> (Face, Axis, Extremum, Bool)
-cubeSeam PosX U AtMin = (NegY, U, AtMax, False)
-cubeSeam PosX U AtMax = (PosY, V, AtMax, False)
-cubeSeam PosX V AtMin = (NegZ, V, AtMax, False)
-cubeSeam PosX V AtMax = (PosZ, U, AtMax, False)
-cubeSeam NegX U AtMin = (NegZ, V, AtMin, False)
-cubeSeam NegX U AtMax = (PosZ, U, AtMin, False)
-cubeSeam NegX V AtMin = (NegY, U, AtMin, False)
-cubeSeam NegX V AtMax = (PosY, V, AtMin, False)
-cubeSeam PosY U AtMin = (NegZ, U, AtMax, False)
-cubeSeam PosY U AtMax = (PosZ, V, AtMax, False)
-cubeSeam PosY V AtMin = (NegX, V, AtMax, False)
-cubeSeam PosY V AtMax = (PosX, U, AtMax, False)
-cubeSeam NegY U AtMin = (NegX, V, AtMin, False)
-cubeSeam NegY U AtMax = (PosX, U, AtMin, False)
-cubeSeam NegY V AtMin = (NegZ, U, AtMin, False)
-cubeSeam NegY V AtMax = (PosZ, V, AtMin, False)
-cubeSeam PosZ U AtMin = (NegX, U, AtMax, False)
-cubeSeam PosZ U AtMax = (PosX, V, AtMax, False)
-cubeSeam PosZ V AtMin = (NegY, V, AtMax, False)
-cubeSeam PosZ V AtMax = (PosY, U, AtMax, False)
-cubeSeam NegZ U AtMin = (NegY, V, AtMin, False)
-cubeSeam NegZ U AtMax = (PosY, U, AtMin, False)
-cubeSeam NegZ V AtMin = (NegX, U, AtMin, False)
-cubeSeam NegZ V AtMax = (PosX, V, AtMin, False)
+-- A 'SeamTable' (sized-grid-b15): which boundary of which chart is glued to
+-- which is the same combinatorial object whatever a chart holds, so the type
+-- and the law it must obey live in @atlas-topology@, with 'Face' and
+-- @('Axis', 'Extremum')@ supplied here as this atlas's chart and
+-- boundary labels. Only @crossCubeEdge@'s equations are cube-specific.
+cubeSeam :: SeamTable Face (Axis, Extremum)
+cubeSeam = SeamTable crossCubeEdge
+
+-- | 'cubeSeam'\'s 24 equations, one per half-edge of the cube's 12 physical
+-- edges, each pointing back at the one that names it --- misassign any single
+-- entry and @Test.CubeMap@'s @cubeSeamPairsUp@ catches it.
+crossCubeEdge :: Face -> (Axis, Extremum) -> (Face, (Axis, Extremum), Bool)
+crossCubeEdge PosX (U, AtMin) = (NegY, (U, AtMax), False)
+crossCubeEdge PosX (U, AtMax) = (PosY, (V, AtMax), False)
+crossCubeEdge PosX (V, AtMin) = (NegZ, (V, AtMax), False)
+crossCubeEdge PosX (V, AtMax) = (PosZ, (U, AtMax), False)
+crossCubeEdge NegX (U, AtMin) = (NegZ, (V, AtMin), False)
+crossCubeEdge NegX (U, AtMax) = (PosZ, (U, AtMin), False)
+crossCubeEdge NegX (V, AtMin) = (NegY, (U, AtMin), False)
+crossCubeEdge NegX (V, AtMax) = (PosY, (V, AtMin), False)
+crossCubeEdge PosY (U, AtMin) = (NegZ, (U, AtMax), False)
+crossCubeEdge PosY (U, AtMax) = (PosZ, (V, AtMax), False)
+crossCubeEdge PosY (V, AtMin) = (NegX, (V, AtMax), False)
+crossCubeEdge PosY (V, AtMax) = (PosX, (U, AtMax), False)
+crossCubeEdge NegY (U, AtMin) = (NegX, (V, AtMin), False)
+crossCubeEdge NegY (U, AtMax) = (PosX, (U, AtMin), False)
+crossCubeEdge NegY (V, AtMin) = (NegZ, (U, AtMin), False)
+crossCubeEdge NegY (V, AtMax) = (PosZ, (V, AtMin), False)
+crossCubeEdge PosZ (U, AtMin) = (NegX, (U, AtMax), False)
+crossCubeEdge PosZ (U, AtMax) = (PosX, (V, AtMax), False)
+crossCubeEdge PosZ (V, AtMin) = (NegY, (V, AtMax), False)
+crossCubeEdge PosZ (V, AtMax) = (PosY, (U, AtMax), False)
+crossCubeEdge NegZ (U, AtMin) = (NegY, (V, AtMin), False)
+crossCubeEdge NegZ (U, AtMax) = (PosY, (U, AtMin), False)
+crossCubeEdge NegZ (V, AtMin) = (NegX, (U, AtMin), False)
+crossCubeEdge NegZ (V, AtMax) = (PosX, (V, AtMin), False)
 
 -- | Move one cell in a heading, crossing a seam --- with its frame transform
 -- applied to the heading itself --- if the step would leave the current
@@ -201,8 +210,8 @@ cubeStep (chart, u :| v :| EmptyCoord) heading@(Heading axis side) =
                        case axis of
                            U -> vi
                            V -> ui
-                   (destFace, destAxis, destSide, reversed) =
-                       cubeSeam (indexFace chart) axis side
+                   (destFace, (destAxis, destSide), reversed) =
+                       crossSeam cubeSeam (indexFace chart) (axis, side)
                    free'
                        | reversed = size - 1 - free
                        | otherwise = free

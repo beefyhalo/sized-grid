@@ -9,7 +9,11 @@
 --
 --   * every one of the 24 half-edges names a destination that names it back
 --     ('cubeSeamPairsUp'), the exhaustive check that the table really is 12
---     edges, not 24 independent (and possibly inconsistent) guesses;
+--     edges, not 24 independent (and possibly inconsistent) guesses. The law
+--     itself is @atlas-topology@'s 'seamViolations' (sized-grid-b15) --- it
+--     says nothing about squares or cells, so it belongs to seam tables in
+--     general, and this suite only supplies the cube's own half-edges to
+--     check it over;
 --   * a walker following a fixed heading returns to its exact starting
 --     chart, coordinate, and heading after exactly @4n@ steps, for every one
 --     of the 600 possible (face, axis, side, position) starting points on an
@@ -20,6 +24,7 @@ module Test.CubeMap
   ( cubeMapTests
   ) where
 
+import           Data.Atlas.Topology.Seam (HalfEdge, seamViolations)
 import           Data.Grid.Atlas.CubeMap
 import           Data.Grid.Sized
 
@@ -35,15 +40,21 @@ allAxes = [minBound .. maxBound]
 allExtrema :: [Extremum]
 allExtrema = [minBound .. maxBound]
 
+-- | Every half-edge of the cube: the enumeration 'seamViolations' checks the
+-- table over. Spelled out here rather than derived from a class because a
+-- boundary label is a product type, which base gives 'Bounded' but not
+-- 'Enum'.
+cubeHalfEdges :: [HalfEdge Face (Axis, Extremum)]
+cubeHalfEdges =
+    [(f, (a, e)) | f <- allFaces, a <- allAxes, e <- allExtrema]
+
 cubeSeamPairsUp :: TestTree
 cubeSeamPairsUp =
     testCase "cubeSeam pairs every half-edge with one that points back" $
-    mapM_
-        (\(f, a, e) ->
-             let (f2, a2, e2, r) = cubeSeam f a e
-                 (f3, a3, e3, r2) = cubeSeam f2 a2 e2
-             in assertEqual (show (f, a, e)) (f, a, e, r) (f3, a3, e3, r2))
-        [(f, a, e) | f <- allFaces, a <- allAxes, e <- allExtrema]
+    assertEqual
+        "half-edges whose partner does not point back"
+        []
+        (seamViolations cubeSeam cubeHalfEdges)
 
 -- | A face size fixed at the smallest value that still has an interior cell
 -- on every axis (@> 2@), so a belt walk genuinely crosses several cells of

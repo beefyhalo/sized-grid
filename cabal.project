@@ -4,6 +4,7 @@
 -- noticing.
 packages:
   .
+  atlas-topology
   sudoko
   gameOfLife
   ising-example

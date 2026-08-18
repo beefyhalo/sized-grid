@@ -57,13 +57,14 @@ library
     Data.Grid.Atlas.CubeMap
 
   build-depends:
-    , adjunctions  >=4.4  && <4.5
-    , base         >=4.20 && <4.23
-    , constraints  >=0.13 && <0.15
-    , generics-sop >=0.5  && <0.6
+    , adjunctions    >=4.4  && <4.5
+    , atlas-topology
+    , base           >=4.20 && <4.23
+    , constraints    >=0.13 && <0.15
+    , generics-sop   >=0.5  && <0.6
     , grid-sized
-    , lens         >=5.2  && <5.4
-    , vector       >=0.13 && <0.14
+    , lens           >=5.2  && <5.4
+    , vector         >=0.13 && <0.14
 
 test-suite tests
   import:         lang-base
@@ -76,6 +77,7 @@ test-suite tests
 
   build-depends:
     , adjunctions       >=4.4  && <4.5
+    , atlas-topology
     , base
     , grid-atlas
     , grid-sized
