@@ -1,28 +1,6 @@
--- | sized-grid-cti. Wave 02 (sized-grid-2h0) tightened 'Data.Grid.Sized.takeGrid',
--- 'Data.Grid.Sized.dropGrid' and 'Data.Grid.Sized.splitHigherDim' so that
--- misuse is a type error rather than a silently wrong 'Data.Grid.Sized.Grid'.
--- That is the right outcome, but it means the regression coverage for it
--- cannot live in the rest of this suite as an ordinary 'Test.Tasty.HUnit'
--- assertion: the misuse does not compile, so there is no value left at
--- runtime to assert against.
---
--- This module is the compile-fail harness instead. Each case under
--- @tests\/compile-fail@ is one deliberately ill-typed use of the tightened
--- API; 'assertCompileFails' shells out to GHC to compile it on its own and
--- checks that GHC rejects it with the diagnostic its precondition promises.
--- Compiling with @-isrc@ rather than against the built package avoids
--- depending on 'grid-sized' having been registered into a package database
--- first, so this runs the same way regardless of how the suite is invoked.
---
--- '-fdefer-type-errors' was tried and rejected before this: turning the
--- misuse into a runtime 'Control.Exception.TypeError' sounds like it would
--- let these live as ordinary assertions after all, but in practice GHC does
--- not scope the deferred error to the ill-typed subexpression. It was
--- observed here to swallow the entire enclosing top-level binding -- a
--- @main@ built this way ran none of its statements, not even the ones before
--- the bad one -- which is exactly the brittleness sized-grid-cti flagged
--- 'should-not-typecheck' for. Asking GHC to fail outright, and reading what
--- it says, is the more direct check of the two.
+-- | Compile-fail harness: each case under @tests\/compile-fail@ is a
+-- deliberately ill-typed use of the API, and 'assertCompileFails' shells out
+-- to GHC to check that it is rejected with the expected diagnostic.
 module Test.CompileFail
   ( compileFailTests
   ) where
@@ -34,10 +12,8 @@ import           System.Process        (readProcessWithExitCode)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
--- | The extensions and plugins the library itself is built with (the @lang@
--- common stanza in grid-sized.cabal), spelled out explicitly here: @-isrc@
--- compiles straight from source, bypassing cabal's own flag plumbing, so
--- nothing else supplies them.
+-- | @-isrc@ compiles straight from source, bypassing cabal's own flag
+-- plumbing, so the extensions and plugins are spelled out explicitly here.
 ghcFlags :: [String]
 ghcFlags =
   [ "-fno-code"
@@ -56,10 +32,9 @@ ghcFlags =
   , "-XViewPatterns"
   ]
 
--- | Compile a snippet under @tests\/compile-fail@ and assert that GHC rejects
--- it, with @expectedSubstring@ somewhere in the diagnostic -- not just that it
--- fails for any reason, so a typo that breaks the snippet in an unrelated way
--- cannot pass for the precondition actually firing.
+-- | Requires @expectedSubstring@ in the diagnostic, not just any failure, so a
+-- typo that breaks the snippet in an unrelated way cannot pass for the
+-- precondition actually firing.
 assertCompileFails :: FilePath -> String -> Assertion
 assertCompileFails file expectedSubstring = do
   (code, _out, err) <-

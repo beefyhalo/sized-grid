@@ -34,11 +34,8 @@ flipTileState :: TileState -> TileState
 flipTileState Alive = Dead
 flipTileState Dead  = Alive
 
--- | Unboxed as a single byte, so a 'UGrid' can hold a board of these without a
--- pointer per tile. See "Data.Grid.Sized.Unboxed" for what that buys the bulk
--- operations below, and what it costs: 'applyRule' can no longer be written
--- with 'Control.Comonad.extend', because 'duplicate' would need a grid of
--- grids, and a grid is never an unboxed element.
+-- | Unboxed as a single byte, so a 'UGrid' can hold a board of these without
+-- a pointer per tile.
 instance VU.IsoUnbox TileState Word8 where
     toURepr Dead  = 0
     toURepr Alive = 1
@@ -64,24 +61,11 @@ gameOfLife = Rule $ \here neigh ->
           | here == Dead && aliveNeigh == 3 -> Alive
           | otherwise -> Dead
 
--- | One tick, as a bulk pass over the unboxed grid rather than a comonadic
--- 'Control.Comonad.extend': for every coordinate, read its neighbours back out
--- of the *old* grid and decide the new tile. Non-comonadic because the old
--- grid, not a focused view of it, is what 'runRule' reads from -- there is no
--- @duplicate@ here to build a grid of grids out of.
---
--- The neighbourhood comes in as a 'Stencil' rather than being enumerated per
--- cell. This used to be
---
--- > imapGrid (\c here -> runRule rule here (map (indexGrid g) (neighbours c))) g
---
--- which rebuilt every cell's neighbour coordinates on every tick, sixty times a
--- second, to get the same eight vector positions each time. A 'Stencil' is those
--- positions worked out once for the board's *type*, built in @main@ and held
--- in the world state.
---
--- Note what left the signature with the loop: @IsCoordList cs@. Nothing here
--- takes a coordinate apart any more.
+-- | One tick, as a bulk pass over the unboxed grid: for every coordinate,
+-- read its neighbours back out of the old grid and decide the new tile.
+-- The neighbourhood comes in as a precomputed 'Stencil' rather than being
+-- enumerated per cell, since the same positions would otherwise be rebuilt
+-- sixty times a second for no reason.
 applyRule ::
        Rule n
     -> Stencil cs

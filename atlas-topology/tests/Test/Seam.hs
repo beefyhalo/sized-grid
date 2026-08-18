@@ -1,25 +1,4 @@
--- | Tests for "Data.Atlas.Topology.Seam" (sized-grid-b15).
---
--- The package has no seam table of its own to check --- a table is always
--- somebody else's data --- so the law is checked against tables the tests
--- build, in both directions:
---
---   * every genuine gluing passes. A random perfect matching of a fixed set
---     of half-edges, with a random orientation bit per pair, is exactly what
---     \"these charts are glued into a surface\" means, and
---     'seamViolations' must find nothing in any of them
---     (@matchingsAreInvolutions@);
---   * a broken gluing fails, and fails precisely. Negating the flip bit of
---     one half-edge of one otherwise-valid table must be reported --- and
---     reported as exactly the two half-edges of that one seam, not as a
---     vague \"something is wrong\" (@oneBrokenSeamIsFoundExactly@). Without
---     this direction, a law that accepted everything would pass the first
---     property too.
---
--- The hand-written tables ('cylinder', 'mobius', 'badMobius') are the same
--- check at a size a reader can verify by eye, and pin down the one part of
--- the law that is not obvious: the two sides of a seam must /agree/ about
--- whether it reverses direction.
+-- | Tests for "Data.Atlas.Topology.Seam".
 module Test.Seam
   ( seamTests
   ) where
@@ -34,9 +13,7 @@ import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
 
 -- | Three charts and four boundary labels each: 12 half-edges, an even
--- number, so a perfect matching exists to generate against. Nothing here is
--- square or grid-shaped --- @Room@ and @Door@ would do as well, which is the
--- point of the package.
+-- number, so a perfect matching exists to generate against.
 data Chart
     = A
     | B
@@ -53,9 +30,8 @@ data Side
 allHalfEdges :: [HalfEdge Chart Side]
 allHalfEdges = [(c, s) | c <- [minBound .. maxBound], s <- [minBound .. maxBound]]
 
--- | A seam table as an association list: each half-edge paired with where it
--- lands. Built as data so a test can inspect and perturb it, then handed to
--- 'SeamTable' as the lookup function it wants.
+-- | A seam table as an association list, so a test can inspect and perturb
+-- it before handing it to 'SeamTable'.
 type Gluing = [(HalfEdge Chart Side, (HalfEdge Chart Side, Bool))]
 
 tableOf :: Gluing -> SeamTable Chart Side
@@ -66,8 +42,7 @@ tableOf g =
             Nothing -> error ("tableOf: incomplete gluing at " ++ show (c, s))
 
 -- | Pair up all 12 half-edges at random, give each pair its own orientation
--- bit, and record both directions of every pair. Any output of this is a
--- surface by construction, whatever the shuffle produced.
+-- bit, and record both directions of every pair.
 genGluing :: Gen Gluing
 genGluing = do
     shuffled <- shuffle allHalfEdges
@@ -89,9 +64,7 @@ matchingsAreInvolutions =
 
 -- | Negate the flip bit of one half-edge only, leaving its partner saying
 -- the opposite: the two now disagree about whether crossing the seam
--- reverses the along-seam direction. Crossing and crossing back still lands
--- home, so only the orientation half of the law catches this --- and it must
--- catch it at both ends of the one broken seam and nowhere else.
+-- reverses the along-seam direction.
 oneBrokenSeamIsFoundExactly :: TestTree
 oneBrokenSeamIsFoundExactly =
     testProperty "negating one half-edge's flip bit breaks exactly that seam" $
@@ -104,7 +77,7 @@ oneBrokenSeamIsFoundExactly =
            sort [broken, partner]
 
 -- | One chart, its two ends glued to each other the same way round: a
--- cylinder. The smallest table that is a surface and not a disjoint chart.
+-- cylinder.
 cylinder :: SeamTable () Side
 cylinder =
     SeamTable $ \_ s ->
@@ -113,8 +86,7 @@ cylinder =
             E -> ((), W, False)
             other -> ((), other, False)
 
--- | The same two ends glued with a twist --- a Mobius band. Legal: both
--- sides say @True@, so they agree.
+-- | The same two ends glued with a twist --- a Mobius band.
 mobius :: SeamTable () Side
 mobius =
     SeamTable $ \_ s ->
@@ -123,9 +95,7 @@ mobius =
             E -> ((), W, True)
             other -> ((), other, False)
 
--- | One end twisted, the other not. Crossing and crossing back still returns
--- home, which is why \"it is an involution on half-edges\" alone would let
--- this through; it describes no surface, and 'seamIsInvolution' rejects it.
+-- | One end twisted, the other not.
 badMobius :: SeamTable () Side
 badMobius =
     SeamTable $ \_ s ->

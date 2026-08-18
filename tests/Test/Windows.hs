@@ -2,9 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
--- | Tests for 'gridWindows': the sliding-window counterpart to 'gridTiles'
--- (sized-grid-3t6). 'gridTiles' cuts a grid into disjoint tiles; 'gridWindows'
--- gives every overlapping window at stride 1.
+-- | Tests for 'gridWindows': the sliding-window counterpart to 'gridTiles'.
+-- 'gridTiles' cuts a grid into disjoint tiles; 'gridWindows' gives every
+-- overlapping window at stride 1.
 module Test.Windows
   ( windowTests
   ) where
@@ -24,8 +24,7 @@ windowsOfThree :: [Grid '[ Ordinal 3] Int]
 windowsOfThree = gridWindows sourceOfFive
 
 -- | 'gridWindows' is exactly 'shrinkGrid' applied at every offset the window
--- size admits -- the fact 'gridWindows' exists to give a name to, and the
--- acceptance criterion sized-grid-3t6 was filed against.
+-- size admits.
 windowIsShrinkGrid :: Grid '[ Ordinal 5] Int -> Property
 windowIsShrinkGrid src =
   let expected =

@@ -4,8 +4,6 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeOperators       #-}
 
--- | Tests for 'traceOffset', 'tracePath' and 'walkEverywhere', the plain
--- functions sized-grid-yws chose over a @ComonadTraced@ instance.
 module Test.Focused
   ( focusedTests
   ) where
@@ -59,11 +57,7 @@ tracePathTests =
                    in tracePath p fg ===
                       (index (focusedGrid fg) <$>
                        walkPath (focusedGridPosition fg) p)
-        , -- The wall sized-grid-ghj and 'Test.Path.wallTests' both open with:
-          -- two steps that cancel still fail if the first alone leaves the
-          -- grid, so 'tracePath' cannot be replaced by 'traceOffset' at the
-          -- path's summed 'pathOffset' in general.
-          testCase "a route a wall interrupts differs from its summed offset" $
+        , testCase "a route a wall interrupts differs from its summed offset" $
               let fg =
                       FocusedGrid
                           (tabulate (const (0 :: Int)))
@@ -88,18 +82,13 @@ walkEverywhereTests =
               \(fg :: FG) (steps :: [(Int, Int)]) ->
                   let p = Path (map (uncurry d2) steps)
                    in extract (walkEverywhere p fg) === tracePath p fg
-        , -- The point of 'walkEverywhere': every cell of the result is the
-          -- answer 'tracePath' would have given a walker that started there,
-          -- not just at the original focus.
-          testProperty "every cell is tracePath from a walker starting there" $
+        , testProperty "every cell is tracePath from a walker starting there" $
               \(fg :: FG) (steps :: [(Int, Int)]) (q :: Coord '[ Clamped 5, Clamped 5]) ->
                   let p = Path (map (uncurry d2) steps)
                    in index (focusedGrid (walkEverywhere p fg)) q ===
                       tracePath p (FocusedGrid (focusedGrid fg) q)
         ]
 
--- | The bounce policies, so 'stepWalkerTests' has an axis whose
--- 'axisFrameFlips' is sometimes 'True' to exercise (sized-grid-448).
 type RG = FocusedGrid '[ Reflective 5, Reflective 5] Int
 
 rf :: Int -> Reflective 5
@@ -119,16 +108,9 @@ stepWalkerTests =
                   let w = Walker fg (d2 a b)
                       (p', h') = transportCoord (focusedGridPosition fg) (d2 a b)
                    in stepWalker w === Walker (FocusedGrid (focusedGrid fg) p') h'
-        , -- 'Clamped' destroys the excess offset instead of reflecting it
-          -- (the note on 'axisFrameFlips'), so a walker's heading survives a
-          -- step into the wall even though its position does not move past it.
-          testProperty "a Clamped wall never turns the heading" $
+        , testProperty "a Clamped wall never turns the heading" $
               \(fg :: FG) (a, b) -> walkerHeading (stepWalker (Walker fg (d2 a b))) === d2 a b
-        , -- The case sized-grid-448 opens with: on a bounce axis, hitting a
-          -- wall reverses that axis's component of the heading and leaves the
-          -- other axis alone, computed against the position through ('.+^')
-          -- rather than a hand-picked number.
-          testCase "a bounce wall reverses the heading on the axis it hit" $
+        , testCase "a bounce wall reverses the heading on the axis it hit" $
               let g = tabulate (const (0 :: Int))
                   w = Walker (FocusedGrid g (rf 0 :| rf 2 :| EmptyCoord)) (d2 (-1) 1)
                   w' = stepWalker w
@@ -140,8 +122,6 @@ stepWalkerTests =
                     assertEqual "heading" (d2 1 1) (walkerHeading w')
         ]
 
--- | Tests for 'partitionFocus' (sized-grid-meg): a window split into its
--- centre value and a function over its 'PuncturedCoord's.
 partitionFocusTests :: TestTree
 partitionFocusTests =
     testGroup

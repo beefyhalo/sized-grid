@@ -1,5 +1,3 @@
--- | Tests for the offset that reports where it hit the edge, and the ray built
--- on it (@sized-grid-dr1@).
 module Test.Ray
   ( rayTests
   ) where
@@ -67,10 +65,7 @@ offsetCoordUpToTests =
                   ""
                   (Left (OffGrid (mixc 4 4) 4))
                   (offsetCoordUpTo 6 (mixc 0 0) (d2 1 1))
-        , -- The step count is what 'offsetCoord' threw away, so it has to be the
-          -- honest one: a walk of five steps that got four has taken four, not
-          -- five and not "some".
-          testCase "the steps taken are the steps that succeeded" $
+        , testCase "the steps taken are the steps that succeeded" $
               assertEqual
                   ""
                   (Left (OffGrid (hwc 0 4) 4))
@@ -117,8 +112,6 @@ coordRayTests =
                   (coordRay (mixc 0 3) (d2 1 1))
         ]
 
--- | The two are one walk seen twice, so they have to agree everywhere: a ray is
--- an unbounded 'offsetCoordUpTo', and an 'offsetCoordUpTo' is a bounded ray.
 agreementTests :: TestTree
 agreementTests =
     testGroup
@@ -130,10 +123,8 @@ agreementTests =
                   (if length prefix == steps
                        then Right (last (c : prefix))
                        else Left (OffGrid (last (c : prefix)) (length prefix)))
-        , -- A zero displacement is excluded because it makes the ray infinite
-          -- even on a bounded coord --- standing still never leaves the grid ---
-          -- so its length is not a thing to compare against. That case is a
-          -- unit test below rather than a property, for the same reason.
+        , -- Zero displacement excluded: it makes the ray infinite even on a
+          -- bounded coord, since standing still never leaves the grid.
           testProperty "a ray is as long as the walk that fails first" $ \(c :: Coord '[Clamped 5, Clamped 5]) (a, b) ->
               (a, b) /= (0, 0) ==>
               let ray = coordRay c (d2 a b)
@@ -144,9 +135,6 @@ agreementTests =
                in not (null ray) ==> onBoundary (last ray) === True
         ]
 
--- | A ray of unit steps ends on the boundary, which is what makes @lastInside@
--- worth reporting rather than something the caller could recompute: the cell it
--- names is the edge the walk met.
 lastInsideTests :: TestTree
 lastInsideTests =
     testGroup
@@ -166,12 +154,8 @@ lastInsideTests =
                   ""
                   [Just AtMax, Just AtMin]
                   (either (axisBoundaries . lastInside) (const []) (offsetCoordUpTo 9 (hwc 0 0) (d2 1 0)))
-        , -- A step wider than one cell can leave the grid from the interior, so
-          -- the cell reported is the last one that was inside rather than
-          -- necessarily one on an edge. Documented, and pinned here so the
-          -- weaker guarantee is deliberate. The walk starts in the middle
-          -- column, because a walk up column zero is on the boundary the whole
-          -- way along and would pass for the wrong reason.
+        , -- Starts in the middle column: column zero is on the boundary the
+          -- whole way along and would pass for the wrong reason.
           testCase "a wide step stops at the last cell inside, edge or not" $
               assertEqual
                   ""
@@ -184,8 +168,6 @@ lastInsideTests =
                   (either (onBoundary . lastInside) (const True) (offsetCoordUpTo 4 (hwc 0 2) (d2 3 0)))
         ]
 
--- | A torus walk has no edge to report, so it is always 'Right'. This is the
--- same fact 'axisBoundary' states for a single value, seen by a walker.
 torusTests :: TestTree
 torusTests =
     testGroup
@@ -199,9 +181,6 @@ torusTests =
               assertEqual "" (replicate 4 (hwc 2 2)) (take 4 (coordRay (hwc 2 2) (d2 0 0)))
         ]
 
--- | The call site that asked for this: three steps in a direction, or nothing.
--- Written out because it is the shape every raycasting problem has, and because
--- it is what the consumer had to embed into a larger grid to express.
 threeStepTests :: TestTree
 threeStepTests =
     testGroup

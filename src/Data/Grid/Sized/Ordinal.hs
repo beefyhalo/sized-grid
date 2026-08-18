@@ -1,32 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings   #-}
 
--- |
--- An 'Ordinal' is a number in @[0, m)@, where @m@ is a type-level 'Nat'.
---
--- == Representation
---
--- This used to be a GADT carrying the value at the type level:
---
--- > data Ordinal m where
--- >   Ordinal :: (KnownNat n, KnownNat m, n + 1 <= m) => Proxy n -> Ordinal m
---
--- which made every value a boxed 'Proxy' plus two 'KnownNat' dictionaries, and
--- every construction a call to 'someNatVal' (which builds a dictionary through
--- 'unsafeCoerce') followed by 'cmpNat'. Coordinate arithmetic therefore
--- allocated a type-level natural per operation: @tabulate@ on a 300x300 grid of
--- 'Int' allocated 93 MB for a payload well under 1 MB.
---
--- It is now a newtype over 'Int'. The size stays at the type level, the value
--- does not, and the invariant @0 <= i < m@ is maintained by the constructors in
--- this module rather than by the type checker. The constructor is not exported;
--- 'unsafeOrdinal' is the single unchecked way in, and it states and asserts its
--- precondition.
---
--- The one thing the GADT gave away for free was recovering the value as a type,
--- which 'Data.Grid.Sized.Coord.Class.reifyCoord' needs. 'reifyOrdinal' does that on
--- demand, so the 'someNatVal' cost is paid at the one call site that wants it
--- instead of by every value that might.
+-- | A number in @[0, m)@, where @m@ is a type-level 'Nat'.
 module Data.Grid.Sized.Ordinal
     ( Ordinal
       -- * Conversion
@@ -52,47 +27,26 @@ import           Data.Proxy
 import           GHC.TypeLits
 import           System.Random
 
--- | An 'Ordinal' can only hold @m@ different values, corresponding to
--- @0 .. m - 1@.
---
--- Despite representing a number, 'Ordinal' is not an instance of 'Num': most of
--- that class (negate, in particular) would only be partial.
+-- | 'Ordinal' is not an instance of 'Num': most of that class (negate, in
+-- particular) would only be partial.
 newtype Ordinal (m :: Nat) = UnsafeOrdinal
     { ordinalToInt :: Int
     } deriving (Eq, Ord)
 
--- | Nominal, not the phantom role GHC would infer. With a phantom role
--- @coerce :: Ordinal 9 -> Ordinal 3@ typechecks, and it is exactly the sort of
--- thing that looks harmless: it produces a value whose type promises it is in
--- range when it is not, which is the invariant every unchecked read in this
--- library relies on.
+-- | Nominal, not the phantom role GHC would infer: a phantom role would let
+-- @coerce@ forge an out-of-range value.
 type role Ordinal nominal
 
--- | The number of distinct values an @'Ordinal' m@ has, as an 'Int'.
---
--- 'GHC.TypeLits.natVal' returns an 'Integer'; the sizes here index a
--- 'Data.Vector.Vector', so they have to fit in an 'Int' anyway.
 ordinalSize :: forall m. KnownNat m => Int
 ordinalSize = fromInteger $ natVal (Proxy @m)
 {-# INLINE ordinalSize #-}
 
--- | Build an 'Ordinal' without checking it.
---
--- __Precondition:__ @0 <= i < m@. This is the only unchecked construction in
--- the library, and everything else that builds an 'Ordinal' has just
--- established the precondition by a @mod@, a @min@/@max@ clamp or a comparison
--- against 'ordinalSize'.
---
--- The precondition is checked by 'assert', so it is live under
--- @-fno-ignore-asserts@ (and in an unoptimised build) and compiled away under
--- @-O@. Use 'numToOrdinal' when the value is not already known to be in range.
+-- | __Precondition:__ @0 <= i < m@, checked via 'assert'.
 unsafeOrdinal :: forall m. KnownNat m => Int -> Ordinal m
 unsafeOrdinal i =
     assert (i >= 0 && i < ordinalSize @m) $ UnsafeOrdinal i
 {-# INLINE unsafeOrdinal #-}
 
--- | Convert a normal integral to an ordinal. If it is outside the range (< 0 or
--- >= m), Nothing is returned.
 numToOrdinal ::
        forall a m. (KnownNat m, Integral a)
     => a
@@ -106,26 +60,12 @@ numToOrdinal n
     -- input into an in-range one.
     i = toInteger n
 
--- | Transform an ordinal to a given number
 ordinalToNum :: Num a => Ordinal m -> a
 ordinalToNum = fromIntegral . ordinalToInt
 {-# INLINE ordinalToNum #-}
 
--- | Recover an ordinal's value as a type-level 'Nat', with the evidence that it
--- is in range.
---
--- The value is handed to the continuation as a required type argument, so the
--- caller writes @reifyOrdinal o $ \\m -> ...@ and @m@ is a type.
---
--- This is the operation the old GADT representation carried in every value. The
--- library needs it in exactly one place --- 'Data.Grid.Sized.Coord.Class.reifyCoord',
--- used by 'Data.Grid.Sized.shrinkGrid' to turn a window offset into a
--- @dropGrid@ --- so it is reconstructed here on demand.
---
--- The evidence is real: 'cmpNat' compares the reified value against @n@ at
--- runtime and hands back a proof. The 'GTI' branch is reachable only if the
--- representation invariant has already been broken by a misuse of
--- 'unsafeOrdinal', which is why it reports that rather than the comparison.
+-- | The value is handed to the continuation as a required type argument, so
+-- the caller writes @reifyOrdinal o $ \\m -> ...@ and @m@ is a type.
 reifyOrdinal ::
        forall n x. KnownNat n
     => Ordinal n
@@ -140,8 +80,6 @@ reifyOrdinal (UnsafeOrdinal i) func =
                 EQI -> func k
                 GTI -> invariantViolated i (natVal (Proxy @n))
 
--- | Reported when a value that claims to be an @'Ordinal' m@ is not in
--- @[0, m)@. Only 'unsafeOrdinal' can produce one.
 invariantViolated :: Int -> Integer -> a
 invariantViolated i m =
     error $
@@ -152,21 +90,14 @@ invariantViolated i m =
     ". Ordinals must satisfy 0 <= i < m; this one was built by unsafeOrdinal " ++
     "with its precondition violated."
 
--- | Reinterpret an ordinal at a larger size. Always succeeds: @i < n@ and
--- @n <= m@ give @i < m@.
+-- | Always succeeds: @i < n@ and @n <= m@ give @i < m@.
 strengthenOrdinal :: forall n m. (KnownNat m, n <= m) => Ordinal n -> Ordinal m
 strengthenOrdinal (UnsafeOrdinal i) =
-    -- Both constraints are the caller's contract rather than something this
-    -- body can use: @n <= m@ is what makes the reinterpretation sound, and
-    -- 'KnownNat' stays for source compatibility with the GADT version, which
-    -- needed it to rebuild the proxy.
     requiring @(KnownNat m, n <= m) $ UnsafeOrdinal i
 
--- | Reinterpret an ordinal at a smaller size, if it fits.
 weakenOrdinal :: KnownNat m => Ordinal n -> Maybe (Ordinal m)
 weakenOrdinal = numToOrdinal . ordinalToInt
 
--- | Convert between an ordinal and a usual number. This is a `Prism` as it may fail as `Ordinals` can only exist in a certain range.
 _Ordinal :: (KnownNat n, Integral a) => Prism' a (Ordinal n)
 _Ordinal = prism' ordinalToNum numToOrdinal
 
@@ -195,10 +126,8 @@ instance (1 <= m, KnownNat m) => Enum (Ordinal m) where
                 show n ++
                 " is out of range for Ordinal " ++ show (natVal (Proxy @m))
     fromEnum = ordinalToInt
-    -- The defaults for these three route every element through 'toEnum', which
-    -- both re-checks a bound the endpoints already establish and --- for
-    -- 'enumFrom', whose default counts up from @fromEnum x@ forever --- walks
-    -- straight off the end and calls 'error'. @[minBound ..]@ used to throw.
+    -- Overridden because the default 'enumFrom' counts up from @fromEnum x@
+    -- forever, walking off the end and calling 'error'.
     enumFromTo a b = map UnsafeOrdinal [ordinalToInt a .. ordinalToInt b]
     enumFromThenTo a b c =
         map UnsafeOrdinal [ordinalToInt a,ordinalToInt b .. ordinalToInt c]

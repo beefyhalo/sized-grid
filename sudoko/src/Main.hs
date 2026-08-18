@@ -1,11 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | A sudoku board sliced into its rows, columns and 3x3 squares purely by
--- type-level shape: each slice is a @Grid@ of a smaller size cut out of the
--- 9x9 board, and the compiler checks that the shapes tile.
---
--- 'main' validates the board rather than solving it: the search itself is
--- still to be written.
+-- type-level shape. Validates the board; does not solve it.
 module Main (main) where
 
 import           Data.Grid.Sized            hiding (All, Compose)
@@ -43,12 +39,9 @@ exampleGrid =
 rows :: Board -> [Grid '[ Ordinal 1, Ordinal 9] (Maybe Symbol)]
 rows = gridTiles
 
--- | 'zipLowerDim', not 'mapLowerDim': the nine per-row slices are to be zipped
--- into nine columns, not multiplied into 9^9 combinations.
 columns :: Board -> [Grid '[ Ordinal 9, Ordinal 1] (Maybe Symbol)]
 columns = zipLowerDim gridTiles
 
--- | Three horizontal bands of three squares each, in band-major order.
 squares :: Board -> [Grid '[ Ordinal 3, Ordinal 3] (Maybe Symbol)]
 squares b = do
     band :: Grid '[ Ordinal 3, Ordinal 9] (Maybe Symbol) <- gridTiles b
@@ -66,10 +59,6 @@ columAtPoint ::
     -> Grid '[ Ordinal 9, Ordinal 1] (Maybe Symbol)
 columAtPoint (_ :| y :| _) b = columns b !! ordinalToNum y
 
--- | The board is cut into three horizontal bands of three squares each, so the
--- square holding @(x, y)@ is at @3 * (x `div` 3) + (y `div` 3)@. This used to
--- say @mod@ rather than @div@, which addresses the squares in a repeating
--- pattern instead of walking them once.
 squareAtPoint ::
        Coord '[ Ordinal 9, Ordinal 9]
     -> Board
@@ -96,9 +85,6 @@ sliceSolved as = all isJust as && allUnique as
 gameIsSolved :: Board -> Bool
 gameIsSolved = getAll . withAllSlices (All . sliceSolved . toList)
 
--- | Only the filled cells are checked for duplicates. Running 'allUnique' over
--- the @Maybe@s directly calls every partially-filled board invalid, because two
--- blanks are two equal 'Nothing's.
 gameIsInvalid :: Board -> Bool
 gameIsInvalid = getAny . withAllSlices (Any . not . allUnique . catMaybes . toList)
 
@@ -111,8 +97,6 @@ allValues b =
 displayBoard :: Board -> String
 displayBoard = unlines . map (concatMap displaySymbol) . collapseGrid
 
--- | Renders any one-dimensional-ish slice as a flat list, so a row and a column
--- can be compared side by side.
 displaySlice :: Foldable f => f (Maybe Symbol) -> String
 displaySlice = intercalate "," . map displaySymbol . toList
 
@@ -121,9 +105,6 @@ showSlices label slices =
     unlines $ (label ++ " (" ++ show (length slices) ++ "):")
             : map (("  " ++) . displaySlice) slices
 
--- | A point picked purely to demonstrate the by-point lookups below on an
--- empty cell, where the candidate list is worth looking at; nothing about
--- the coordinate itself is special to the puzzle.
 samplePoint :: Coord '[ Ordinal 9, Ordinal 9]
 samplePoint =
     fromJust (numToOrdinal (4 :: Integer)) :|
@@ -134,9 +115,6 @@ main = do
     putStrLn "Board:"
     putStr (displayBoard exampleGrid)
     putStrLn ""
-    -- Each of these is 9 slices. Printing them all is the point: it is what
-    -- makes a slicing bug visible, and it is only affordable because
-    -- 'zipLowerDim' zips the per-row results instead of multiplying them.
     putStr (showSlices "rows" (rows exampleGrid))
     putStr (showSlices "columns" (columns exampleGrid))
     putStr (showSlices "squares" (squares exampleGrid))
@@ -144,8 +122,6 @@ main = do
     putStrLn ("solved:  " ++ show (gameIsSolved exampleGrid))
     putStrLn ("invalid: " ++ show (gameIsInvalid exampleGrid))
     putStrLn ""
-    -- The by-point lookups a solver would call once per cell, exercised here
-    -- at a single sample point rather than over the whole board.
     putStrLn "Slices through (4,4):"
     putStr (showSlices "row"    [rowAtPoint    samplePoint exampleGrid])
     putStr (showSlices "column" [columAtPoint  samplePoint exampleGrid])

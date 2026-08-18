@@ -4,12 +4,7 @@ module Data.Grid.Sized.Class
 
 import           Data.Grid.Sized.Coord
 import           Data.Grid.Sized.Focused
--- As in "Data.Grid.Sized.Focused": the type is taken from its own hidden module
--- rather than from "Data.Grid.Sized", which re-exports this one.
 import           Data.Grid.Sized.Internal.Grid (Grid, gridVector)
--- 'V.unsafeUpd' replaces one element, so the length is unchanged. That is the
--- whole of the obligation unsafeGridFromVector carries, discharged here by
--- inspection.
 import           Data.Grid.Sized.Unsafe        (unsafeGridFromVector)
 
 import           Control.Lens           hiding (index)
@@ -18,11 +13,8 @@ import qualified Data.Vector                   as V
 
 -- | Conversion between `Grid` and `FocusedGrid` and access grids at a `Coord`
 class IsGrid cs grid | grid -> cs where
-  -- | Get the element at a grid location. This is a lens because we know it must exist
   gridIndex :: Coord cs -> Lens' (grid a) a
-  -- | Convert to, or run a function over, a `Grid`
   asGrid :: Lens' (grid a) (Grid cs a)
-  -- | Convert to, or run a function over, a `FocusedGrid`
   asFocusedGrid :: Lens' (grid a) (FocusedGrid cs a)
 
 instance (AllSizedKnown cs, IsCoordList cs) =>

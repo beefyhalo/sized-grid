@@ -49,12 +49,10 @@ testAllCoordOrdered ::
 testAllCoordOrdered _ =
     testCase "allCoord is ordered" $ assertOrderd (allCoord @cs)
 
--- | The row-major layout `coordPosition` defines, and the inverse that undoes
--- it. Both `index` and `tabulate` rest on this being a bijection between
--- @[0, coordSpaceSize)@ and the coordinates taken in `allCoord` order, and
--- nothing checked that: `coordPosition` used to fold the axis sizes back up on
--- every call, so a mistake in the stride would have been invisible until a grid
--- read the wrong cell.
+-- | The row-major layout `coordPosition` defines, and the inverse that
+-- undoes it. Both `index` and `tabulate` rest on this being a bijection
+-- between @[0, coordSpaceSize)@ and the coordinates taken in `allCoord`
+-- order.
 testCoordLayout ::
        forall cs proxy.
        (All Eq cs, All Show cs, All Arbitrary cs, IsCoordList cs)
@@ -108,10 +106,8 @@ gridTests _genC _genA =
           cg :: [[a]] <-
             replicateM (fromIntegral $ natVal (Proxy @x)) $
             replicateM (fromIntegral $ natVal (Proxy @y)) arbitrary
-          -- The annotation is load-bearing. 'gridFromList' is polymorphic in
-          -- the vector, and a grid built only to be collapsed straight back
-          -- leaves nothing to infer it from -- this round trip is the one shape
-          -- of call where the representation has to be named.
+          -- The annotation is load-bearing: 'gridFromList' is polymorphic in
+          -- the vector and this round trip leaves nothing else to infer it from.
           return
             (Just cg ===
              (collapseGrid <$> (gridFromList cg :: Maybe (Grid cs a))))
@@ -119,10 +115,6 @@ gridTests _genC _genA =
         property $ do
           g :: Grid cs a <- sequenceA $ pure arbitrary
           return (g === transposeGrid (transposeGrid g))
-      -- Each indexed traversal hands a cell the coordinate that `index` would
-      -- read it back by, and all of them agree on the order. `ifoldr` and
-      -- `ifoldl'` are given explicitly by the instance rather than derived from
-      -- `ifoldMap`, so they need saying separately.
       imapIsTabulate =
         property $ do
           g :: Grid cs a <- sequenceA $ pure arbitrary
@@ -227,13 +219,7 @@ coordCreationTests _genC _gen =
 
 main :: IO ()
 main =
-  let -- 'Ordinal' is the type the other two coords are newtypes over, and the
-      -- only 'IsCoord' instance that overrides 'asOrdinal', 'zeroPosition',
-      -- 'maxCoord' and 'reifyCoord' all at once -- 'Periodic' and 'Clamped'
-      -- take the defaults for the last three. It is therefore the instance
-      -- where the two routes to a value have the most room to drift apart, and
-      -- it had no 'isCoordLaws' call at all.
-      ordinal = [isCoordLaws @Ordinal @10]
+  let ordinal = [isCoordLaws @Ordinal @10]
       periodic =
         [ semigroupLaws @(Periodic 10)
         , monoidLaws @(Periodic 10)
@@ -249,11 +235,8 @@ main =
         , aesonLaws @(Clamped 10)
         , isCoordLaws @Clamped @10
         ]
-      -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance:
-      -- unlike 'Clamped' and 'Periodic', neither type gives '<>' a meaning the
-      -- issue asked for, so none was invented. 'Test.Reflective' has the
-      -- bounce-specific properties; these are the same three law suites every
-      -- other axis type gets here.
+      -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance;
+      -- 'Test.Reflective' has the bounce-specific properties.
       reflective =
         [ affineSpaceLaws @(Reflective 10)
         , aesonLaws @(Reflective 10)
@@ -271,11 +254,6 @@ main =
         , aesonLaws @(Coord '[ Clamped 10, Periodic 20])
         , testAllCoordOrdered (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Clamped 10, Periodic 20]))
-          -- The library's other exported 'Iso'', and the one that shows
-          -- 'isoLaws' is worth having as a helper rather than inlined into
-          -- 'isCoordLaws'. Unlike 'asOrdinal' this round trip goes through
-          -- the hand-written 'Eq' for 'Coord', which compares the product
-          -- element by element with 'hcliftA2' rather than deriving it.
         , isoLaws
             "_WrappedCoord"
             (_WrappedCoord @'[ Clamped 10, Periodic 20])
@@ -312,12 +290,6 @@ main =
            (gridTests
                (Proxy @(Coord '[ Periodic 10, Periodic 11]))
                (Proxy @Int) ++
-             -- The base-class laws (sized-grid-05b): 'Grid' has Functor,
-             -- Applicative, Monad, Foldable and Traversable instances, and
-             -- before this only Applicative was tested, by hand. These come
-             -- from @quickcheck-classes@ rather than 'Test.Utils' because
-             -- upstream already ships exactly these five bundles; nothing here
-             -- needed reinventing.
              map
                lawsToTest
                [ functorLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
@@ -334,12 +306,6 @@ main =
            (splitTests
               (Proxy @'[ Clamped 8, Clamped 3, Clamped 5])
               (Proxy @Int))
-         -- `Representable` is the instance the whole `Grid` API is built on:
-         -- `index`, `tabulate`, `Distributive` and the `Comonad` for
-         -- `FocusedGrid` all bottom out in it. The 3D case is here because
-         -- `coordPosition`'s strides are only interestingly wrong past two
-         -- dimensions -- with two axes a transposed stride is still a
-         -- permutation of the right one on square grids.
        , testGroup
            "Representable"
            [ lawsToTest $

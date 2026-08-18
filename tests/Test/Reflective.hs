@@ -4,17 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
--- | Tests for the two bounce boundary policies, 'Reflective' and
--- 'Reflect101' (@sized-grid-kvs@).
+-- | Tests for the two bounce boundary policies, 'Reflective' and 'Reflect101'.
 --
--- Both types are total on ('.+^') by construction --- the closed form always
--- lands on a valid 'Ordinal' --- so the interesting obligation is not "does
--- it stay in range" (that is 'isCoordLaws', run on both in @Main.hs@) but
--- "does the closed form compute the bounce the issue actually specified".
--- The reference implementations below are direct transcriptions of the
--- recursive definitions in the issue, deliberately written the slow, obvious
--- way so that a bug shared between the closed form and its reference would
--- have to be a bug in the reference too.
+-- Both are total on ('.+^') by construction, so the obligation checked here is
+-- not "does it stay in range" but "does the closed form compute the right
+-- bounce" -- checked against slow, obviously-correct recursive references.
 module Test.Reflective
   ( reflectiveTests
   ) where
@@ -28,9 +22,7 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty, (===), (==>))
 
--- | The reference the issue itself gives: a billiard bounce off two walls
--- @size@ apart, written as the obviously-correct recursive walk rather than
--- the closed form under test.
+-- | Billiard bounce off two walls @size@ apart, written the obvious recursive way.
 bounceRef :: Int -> Int -> Int
 bounceRef size = go
   where
@@ -39,11 +31,9 @@ bounceRef size = go
       | i >= size = go (2 * size - 1 - i)
       | otherwise = i
 
--- | The same shape of reference for 'Reflect101': a mirror around the edge
--- /cell/ rather than the wall beyond it, so the fixed points are @0@ and
--- @m@ instead of the reflection landing between @-1@\/@0@ and
--- @m@\/@m + 1@. Degenerate at @m == 0@, where the single cell has no
--- neighbour to mirror around and every displacement is absorbed.
+-- | Like 'bounceRef', but mirrors around the edge /cell/ (fixed points @0@,
+-- @m@) rather than the wall beyond it. Degenerate at @m == 0@: every
+-- displacement is absorbed by the single cell.
 reflect101Ref :: Int -> Int -> Int
 reflect101Ref m
   | m == 0 = const 0
@@ -54,19 +44,12 @@ reflect101Ref m
       | i > m = go (2 * m - i)
       | otherwise = i
 
--- | Whether 'bounceRef' bounces an odd number of times reaching @i@ --- the
--- seam rule's frame half (sized-grid-o1n), computed the same slow, obvious
--- way 'bounceRef' itself is, so a bug shared between it and the closed form
--- under test ('Data.Grid.Sized.axisFrameFlips') would have to be a bug here
--- too.
+-- | Whether 'bounceRef' bounces an odd number of times reaching @i@.
 --
--- Well-defined for every integer, with no boundary caveat: 'Reflective''s
--- walls sit at half-integers (@-0.5@, @size - 0.5@, ...) and so are never
--- landed on by an integer position, which is what makes counting bounces
--- along /this/ deterministic reduction agree with the closed form's parity
--- at every input --- checked without exception by the property tests below.
--- Contrast 'reflect101FlipRef', where the analogous walls sit ON lattice
--- points and the two reductions genuinely part ways there.
+-- Well-defined for every integer: 'Reflective''s walls sit at half-integers,
+-- never landed on by an integer position, so this agrees with the closed
+-- form's parity at every input. Contrast 'reflect101FlipRef', whose walls
+-- sit on lattice points and so genuinely part ways there.
 bounceFlipRef :: Int -> Int -> Bool
 bounceFlipRef size = go False
   where
@@ -75,18 +58,11 @@ bounceFlipRef size = go False
       | i >= size = go (not flipped) (2 * size - 1 - i)
       | otherwise = flipped
 
--- | The same shape of reference for 'Reflect101', tracking parity through
--- 'reflect101Ref''s recursion.
---
--- Unlike 'bounceFlipRef', this is not checked at every input: at @i@ an
--- exact multiple of @m@, 'Reflect101''s walls (unlike 'Reflective''s) sit ON
--- the lattice rather than between two cells, so the point is fixed by more
--- than one combination of reflections and translations, and nothing forces
--- this recursion's particular reduction path to agree with whatever
--- convention the closed form under test picks --- see the note on
--- 'Data.Grid.Sized.Coord.Reflect101.mirrorAt'. The property test below
--- excludes exactly that case and 'frameFlipExamples' pins the convention
--- there explicitly instead.
+-- | Tracks parity through 'reflect101Ref''s recursion. Unlike 'bounceFlipRef',
+-- not checked at every input: at @i@ an exact multiple of @m@ the wall sits on
+-- the lattice, so the fixed point admits more than one reflection convention.
+-- The property test below excludes that case; 'frameFlipExamples' pins the
+-- convention there explicitly instead.
 reflect101FlipRef :: Int -> Int -> Bool
 reflect101FlipRef m
   | m == 0 = const False
@@ -97,11 +73,9 @@ reflect101FlipRef m
       | i > m = go (not flipped) (2 * m - i)
       | otherwise = flipped
 
--- | Reflective 5, read off a bare 'Int' position.
 rf :: Int -> Reflective 5
 rf = Reflective . unsafeOrdinal
 
--- | Reflect101 5, read off a bare 'Int' position.
 r1 :: Int -> Reflect101 5
 r1 = Reflect101 . unsafeOrdinal
 
@@ -111,15 +85,12 @@ bounceExamples =
     "Reflective bounces off the wall, not around the edge cell"
     [ testCase "-1 becomes 0" $ assertEqual "" (rf 0) (rf 0 .+^ (-1))
     , testCase "-2 becomes 1" $ assertEqual "" (rf 1) (rf 0 .+^ (-2))
-    , -- One past the top (index 5, since the valid range is 0..4) bounces to
-      -- the top itself, and two past it bounces to one below the top --- the
-      -- mirror image of the -1\/-2 cases above the other wall.
+    , -- Mirror image of the -1/-2 cases above, at the other wall.
       testCase "size becomes size - 1" $
         assertEqual "" (rf 4) (rf 0 .+^ 5)
     , testCase "size + 1 becomes size - 2" $
         assertEqual "" (rf 3) (rf 0 .+^ 6)
-    , -- The edge cell is visited twice in a row on the way out and back,
-      -- which is what distinguishes this from 'Reflect101' below.
+    , -- Distinguishes this from 'Reflect101': the edge cell is visited twice in a row.
       testCase "stepping onto the top and one past it both land on the top" $ do
         assertEqual "onto" (rf 4) (rf 3 .+^ 1)
         assertEqual "past" (rf 4) (rf 3 .+^ 2)
@@ -131,14 +102,12 @@ reflect101Examples =
     "Reflect101 mirrors around the edge cell, never repeating it"
     [ testCase "-1 becomes 1, not 0" $ assertEqual "" (r1 1) (r1 0 .+^ (-1))
     , testCase "-2 becomes 2" $ assertEqual "" (r1 2) (r1 0 .+^ (-2))
-    , -- Past the top (index 5, one past the valid range 0..4, mirrored around
-      -- the top cell 4) lands one below the top rather than on it.
+    , -- Mirrored around the top cell (4), so it lands one below the top, not on it.
       testCase "size becomes size - 2" $
         assertEqual "" (r1 3) (r1 0 .+^ 5)
     , testCase "the top cell is its own mirror image" $
         assertEqual "" (r1 4) (r1 4 .+^ 0)
-    , -- A single-cell axis has no neighbour to mirror around: every
-      -- displacement is absorbed by the one value it has.
+    , -- No neighbour to mirror around, so every displacement is absorbed.
       testCase "a one-cell axis absorbs every displacement" $
         assertEqual "" (Reflect101 (unsafeOrdinal 0) :: Reflect101 1)
                     (Reflect101 (unsafeOrdinal 0) .+^ 37)
@@ -165,11 +134,8 @@ closedFormAgreesWithReferenceTests =
          in ordinalToInt (view asOrdinal (c .+^ d)) === reflect101Ref 0 (i + d)
     ]
 
--- | 'offsetIsCoord' stays the checked default on both types: the bounce lives
--- in ('.+^') alone, so stepping off the axis is reported with 'Nothing'
--- rather than folded back inside. This is the fact the issue's "fit with the
--- thesis" section states, and it is what tells the two types apart from
--- 'Data.Grid.Sized.Coord.Periodic.Periodic', whose 'offsetIsCoord' is total.
+-- | The bounce lives in ('.+^') alone; 'offsetIsCoord' still reports 'Nothing'
+-- on stepping off the axis, unlike 'Data.Grid.Sized.Coord.Periodic.Periodic'.
 offsetIsCoordStaysCheckedTests :: TestTree
 offsetIsCoordStaysCheckedTests =
   testGroup
@@ -189,10 +155,7 @@ offsetIsCoordStaysCheckedTests =
     ]
 
 -- | Both types are still bounded axes with real edges, and 'axisDistance'
--- still measures straight: neither fact changes just because ('.+^') bounces.
--- This is the deliberate decision documented on each instance, checked here
--- rather than left to be rediscovered --- the same treatment
--- 'Data.Grid.Sized.Coord.Periodic.Periodic''s override gets in "Test.Boundary".
+-- still measures straight -- neither changes just because ('.+^') bounces.
 boundaryAndDistanceStayDefaultTests :: TestTree
 boundaryAndDistanceStayDefaultTests =
   testGroup
@@ -215,9 +178,8 @@ boundaryAndDistanceStayDefaultTests =
           abs (ordinalToInt (view asOrdinal a) - ordinalToInt (view asOrdinal b))
     ]
 
--- | The seam rule's frame half (sized-grid-o1n): a bounce off a wall reverses
--- the walker's sense of direction on an odd number of hits, and
--- 'axisFrameFlips' reports exactly that parity.
+-- | A bounce off a wall reverses the walker's sense of direction on an odd
+-- number of hits, and 'axisFrameFlips' reports exactly that parity.
 frameFlipExamples :: TestTree
 frameFlipExamples =
   testGroup
@@ -226,9 +188,8 @@ frameFlipExamples =
         assertEqual "" False (axisFrameFlips (rf 2) 1)
     , testCase "Reflective: one wall hit, flips" $
         assertEqual "" True (axisFrameFlips (rf 0) (-1))
-    , testCase "Reflective: two wall hits (there and back), no net flip" $
-        -- size 5: 0 + 10 hits the high wall once and the low wall once ---
-        -- one full period --- landing back at 0 facing the original way.
+    , -- 10 is one full period at size 5: hits both walls once.
+      testCase "Reflective: two wall hits (there and back), no net flip" $
         assertEqual "" False (axisFrameFlips (rf 0) 10)
     , testCase "Reflect101: no wall hit, no flip" $
         assertEqual "" False (axisFrameFlips (r1 2) 1)
@@ -237,20 +198,12 @@ frameFlipExamples =
     , testCase "Reflect101: the degenerate size-1 axis never bounces" $
         assertEqual "" False
           (axisFrameFlips (Reflect101 (unsafeOrdinal 0) :: Reflect101 1) 37)
-    , -- The convention 'Data.Grid.Sized.Coord.Reflect101.mirrorAt' documents:
-      -- landing exactly on the far wall (here, index @m = 4@ of a size-5
-      -- axis) is already facing the mirrored direction, even though the
-      -- position formula's two branches agree on the value there. Pinned
-      -- explicitly because it is a choice, not a derivable fact --- see
-      -- 'reflect101FlipRef''s note on why the property test below cannot
-      -- check it.
+    , -- A choice, not a derivable fact: landing exactly on the far wall counts as
+      -- flipped even though the position formula's two branches agree there.
       testCase "Reflect101: landing exactly on the far wall counts as flipped" $
         assertEqual "" True (axisFrameFlips (r1 0) (-4))
     ]
 
--- | 'axisFrameFlips' agrees with the parity of the recursive reference's own
--- bounce count, at the same sizes 'closedFormAgreesWithReferenceTests' checks
--- the position at.
 frameFlipAgreesWithReferenceTests :: TestTree
 frameFlipAgreesWithReferenceTests =
   testGroup
@@ -261,10 +214,7 @@ frameFlipAgreesWithReferenceTests =
     , testProperty "Reflective, size 1" $ \(c :: Reflective 1) (d :: Int) ->
         let i = ordinalToInt (view asOrdinal c)
          in axisFrameFlips c d === bounceFlipRef 1 (i + d)
-    , -- Excludes @(i + d) \`mod\` 4 == 0@: 'reflect101FlipRef' does not claim
-      -- to agree with the closed form exactly on the multiples of @m@, per
-      -- its own note, and the explicit case in 'frameFlipExamples' covers
-      -- that boundary instead.
+    , -- Excludes multiples of @m@, where 'reflect101FlipRef' doesn't claim to agree.
       testProperty "Reflect101, size 5" $ \(c :: Reflect101 5) (d :: Int) ->
         let i = ordinalToInt (view asOrdinal c)
          in (i + d) `mod` 4 /= 0 ==> axisFrameFlips c d === reflect101FlipRef 4 (i + d)

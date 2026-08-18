@@ -5,38 +5,7 @@
 {-# LANGUAGE TypeApplications    #-}
 
 
--- |
--- Baseline benchmarks for the operations the real workloads hit.
---
--- Shapes are taken from the consumer rather than invented: 'Big' is the
--- @300 x 300@ grid of ../aoc/src/2018/11.hs and 'Mid' the @100 x 100@ of
--- ../aoc/src/2015/18.hs and ../aoc/src/2018/18.hs.
---
--- Every benchmark reduces to an 'Int' or a 'Bool' so that 'whnf' forces the
--- whole computation. That avoids an orphan 'NFData' instance for 'Grid', and it
--- avoids the trap of timing a 'whnf' that stops at the outermost constructor:
--- @Grid@ is a newtype over a boxed vector, so WHNF of a @tabulate@ would
--- measure almost nothing.
---
--- == Do not compare against the recorded CSV across sessions
---
--- @bench\/baseline-ghc9.12.3-aarch64-darwin.csv@ holds the times of the code at
--- the commit that recorded it, on the machine state of that moment, and that
--- second half does not keep. Re-running the /same/ code weeks later measured
--- every benchmark 1.9x slower, uniformly --- including @pure@ and @fmap@, which
--- touch none of the machinery being worked on. Read against the stale CSV, a
--- change that made coordinate arithmetic twice as fast looked like a
--- regression.
---
--- So the allocation columns are the ones that transfer between sessions; they
--- are deterministic. To compare times, measure both sides now:
---
--- > git archive HEAD | tar -x -C /tmp/before
--- > (cd /tmp/before && cabal run bench:benchmarks -- --csv /tmp/before.csv)
--- > cabal run bench:benchmarks -- --baseline /tmp/before.csv
---
--- tasty-bench then prints each result as a percentage of the run it can
--- actually be compared with.
+-- | Baseline benchmarks for the operations the real workloads hit.
 module Main (main) where
 
 import           Data.Grid.Sized
@@ -55,10 +24,10 @@ import           Data.Maybe              (isJust)
 import qualified Data.Vector.Generic     as VG
 import           Test.Tasty.Bench
 
--- | ../aoc/src/2018/11.hs works at this size: 90,000 cells.
+-- | 90,000 cells, a real consumer's working size.
 type Big = '[Clamped 300, Clamped 300]
 
--- | ../aoc/src/2015/18.hs and ../aoc/src/2018/18.hs: 10,000 cells.
+-- | 10,000 cells, another real consumer's working size.
 type Mid = '[Clamped 100, Clamped 100]
 
 -- | Small enough that the comonadic step stays interactive: 2,500 cells.
@@ -68,8 +37,8 @@ type Step = '[Clamped 50, Clamped 50]
 type Walk = '[Periodic 300, Periodic 300]
 
 -- | 'Step', but 'Periodic': for measuring the boundary policy whose
--- 'offsetIsCoord' override (sized-grid-xv4) is not the bounds-check default
--- 'Clamped' now folds to a literal comparison.
+-- 'offsetIsCoord' override is not the bounds-check default 'Clamped' folds
+-- to a literal comparison.
 type StepPeriodic = '[Periodic 50, Periodic 50]
 
 bigGrid :: Grid Big Int
@@ -113,24 +82,18 @@ total :: (Foldable f) => f Int -> Int
 total = sum
 
 -- | A game-of-life shaped step: read the Moore neighbourhood and fold it.
--- Mirrors the 'experiment'/'peek' pattern in the consumer's rules.
---
--- This reads eight cells rather than the nine 'moorePoints' used to return:
--- that one included the centre, and every caller filtered it back out.
 --
 -- Polymorphic in the axis list (rather than fixed at 'Step') so the same
--- function drives both 'stepGrid' and 'stepGridPeriodic': the point of the
--- Periodic benchmark is to exercise the same neighbourhood fold over a
--- different boundary policy, not a different function.
+-- function drives both 'stepGrid' and 'stepGridPeriodic', to exercise the
+-- same neighbourhood fold over a different boundary policy.
 neighbourSum :: (IsCoordList cs, AllSizedKnown cs) => FocusedGrid cs Int -> Int
 neighbourSum fg = total [peek p fg | p <- neighbours (pos fg)]
 
 -- | 'neighbourSum' iterated to depth @n@ through 'extend', the shape a
--- cellular automaton actually runs: hundreds of generations, each one built
--- on the last, rather than the single 'extend' the benchmarks above measure.
--- sized-grid-bc6 is the hypothesis this exists to check -- that
--- 'FocusedGrid'\'s two lazy fields let a thunk chain build up across
--- generations even though 'Grid' underneath is a strict vector.
+-- cellular automaton actually runs: hundreds of generations built on the
+-- last, rather than the single 'extend' the benchmarks above measure --
+-- checking whether 'FocusedGrid'\'s two lazy fields let a thunk chain build
+-- up across generations even though 'Grid' underneath is a strict vector.
 iterateExtend ::
        (IsCoordList cs, AllSizedKnown cs)
     => Int
@@ -177,14 +140,9 @@ walk :: Int -> Coord Walk -> Int
 walk 0 c = coordPosition c
 walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
 
--- | Four corner reads per position at a fixed window size: the summed-area-table
--- solve of ../aoc/src/2018/11.hs, which is 360,000 offsets over the 90,000 cells
--- of 'Big'.
---
--- This is the workload sized-grid-0tj was found on, and it is here because the
--- two benchmarks above did not catch it. @walk@ offsets a 'Periodic' coord it
--- carries from step to step, and the @(.-.)@ one does no offsetting at all;
--- neither measures a /constant/ displacement applied to every coordinate of a
+-- | Four corner reads per position at a fixed window size: a summed-area-table
+-- solve, 360,000 offsets over the 90,000 cells of 'Big'. Neither benchmark
+-- above measures a constant displacement applied to every coordinate of a
 -- 'Clamped' grid, which is what a read loop actually does.
 cornerReads :: Grid Big Int -> Int
 cornerReads g =
@@ -198,33 +156,14 @@ cornerReads g =
 
 -- | The same four displacements as 'cornerReads', through the /checked/ offset
 -- instead of @('.+^')@: 360,000 'offsetCoord' calls over the 90,000 cells of
--- 'Big'.
+-- 'Big'. @('.+^')@ and 'offsetCoord' are different functions over different
+-- folds, so a change to one is invisible to a benchmark of the other.
 --
--- It exists because 'cornerReads' does not reach 'offsetCoord' and neither does
--- anything else here. @('.+^')@ and 'offsetCoord' are different functions over
--- different folds --- 'Data.Grid.Sized.Coord.AffineCoordList' and
--- 'Data.Grid.Sized.Coord.Class.IsCoordList' respectively --- so a change to one is
--- invisible to a benchmark of the other. sized-grid-135 was filed against the
--- neighbourhood benchmark on the assumption that neighbourhoods offset; they do
--- not, they enumerate ('stepsWithin'), and so the suite had no measurement of
--- the checked offset at all.
---
--- Counts successes rather than summing positions, so that the 'Maybe' is forced
--- without an index into the grid on top. Most offsets succeed and the last @k@
--- rows and columns refuse, so both branches of the bounds check are measured
--- rather than only the one.
---
--- Consumed with 'total' and not with @length@, so that it is 'cornerReads' with
--- the offset swapped and nothing else changed. @length@ over the same
--- comprehension is @foldr@ with a function accumulator: it allocates a closure
--- per element, and at 360,000 elements that buried the operation being measured
--- under 130 MB of its own.
---
--- The window size is an argument for the reason given in the note on
--- @allCoord@ below: with the displacements written as literals the whole list
--- is a CAF, GHC floats it past the lambda, and the benchmark reports 3.36 ns
--- for 360,000 offsets. Taking @k@ from the caller is what 'axisOffsets' does
--- and it is what makes the list depend on the argument.
+-- Counts successes rather than summing positions, so both branches of the
+-- bounds check are forced and measured, and consumed with 'total' rather
+-- than @length@, whose @foldr@-with-accumulator form allocates a closure
+-- per element. The window size is an argument, not a literal, so full
+-- laziness can't float the displacement list out as a CAF.
 checkedCornerReads :: Int -> Int
 checkedCornerReads k =
     total
@@ -240,14 +179,8 @@ checkedCornerReads k =
         ]
 
 -- | 'onBoundary' at the same four displacements as 'checkedCornerReads',
--- over 'Big'. It exists because nothing else here reaches 'onBoundary' (and
--- so 'axisBoundaryIsCoord''s default, 'axisBoundaryByPosition'), which
--- sized-grid-xv4 found still reading its axis size out of a run-time
--- 'GHC.Natural.Natural' the way 'offsetByPosition' did before sized-grid-bw8.
---
--- The displacement is an argument for the reason given on 'checkedCornerReads':
--- written as literals, full laziness floats the whole comprehension out as a
--- CAF and the benchmark measures nothing.
+-- over 'Big'. Reaches 'axisBoundaryIsCoord''s default,
+-- 'axisBoundaryByPosition', which nothing else here exercises.
 onBoundarySweep :: Int -> Int
 onBoundarySweep k =
     total
@@ -263,8 +196,7 @@ onBoundarySweep k =
         ]
 
 -- | 'coordDistance' at the same four displacements, over 'Big'. Reaches
--- 'axisDistance' and so 'axisDistanceIsCoord''s default, sized-grid-xv4's
--- other still-unfixed call site.
+-- 'axisDistance' and so 'axisDistanceIsCoord''s default.
 axisDistanceSweep :: Int -> Int
 axisDistanceSweep k =
     total
@@ -278,22 +210,9 @@ axisDistanceSweep k =
         ]
 
 -- | The same 360,000 offsets as 'cornerReads', on a bare axis instead of a
--- 'Coord', and it exists to be read against it.
---
--- The pair separates two costs that sized-grid-0tj ran together, and has to,
--- because the issue's own decomposition could not: it compared a 'Coord' loop
--- against an 'Int' loop, which removes the per-axis arithmetic and the 'NP'
--- rebuild in one step and so cannot say which was paying.
---
--- Measured apart, across the @Diff Integer -> Diff Int@ change: this benchmark
--- went from 8.41 ms and 22 MB to 2.20 ms and 94 KB, while 'cornerReads' above
--- went from 32.4 ms and 143 MB to only 28.6 ms and 126 MB. The per-axis
--- operation was fixed outright and the loop barely moved, which places the
--- remaining 126 MB in the fold over the axis list rather than in the arithmetic.
---
--- Keep both. Improving the axis arithmetic shows up here, improving the fold
--- shows up in 'cornerReads', and only the gap between them says which is worth
--- doing.
+-- 'Coord', read against it to separate the per-axis arithmetic cost from
+-- the cost of the fold over the axis list. Keep both: improving the axis
+-- arithmetic shows up here, improving the fold shows up in 'cornerReads'.
 axisOffsets :: Int -> Int
 axisOffsets k =
     total
@@ -303,24 +222,20 @@ axisOffsets k =
         ]
 
 --------------------------------------------------------------------------------
--- Boxed against unboxed (sized-grid-up6).
+-- Boxed against unboxed.
 --
--- Each pair below differs in the vector type and in nothing else. That is only
--- possible because the two representations share one implementation: 'GridOf'
--- takes its vector as a parameter, so 'tabulateGrid', 'mapGrid', 'foldlGrid'',
--- 'scanl1Grid', 'mapLowerDim', 'transposeGrid' and 'scanAxis' below are
--- literally the same code at @v ~ V.Vector@ and @v ~ U.Vector@.
+-- Each pair below differs only in the vector type: 'GridOf' takes its vector
+-- as a parameter, so 'tabulateGrid', 'mapGrid', 'foldlGrid'', 'scanl1Grid',
+-- 'mapLowerDim', 'transposeGrid' and 'scanAxis' below are the same code at
+-- @v ~ V.Vector@ and @v ~ U.Vector@.
 --
--- Both sides go through 'coordPosition' and 'allCoord', so the coordinate
--- machinery cancels and what is left is the representation.
---
--- Keep the 'indexGrid' pair even though it reports no difference. It is the row
--- that says where the win is /not/, and the module haddock on
--- "Data.Grid.Sized.Unboxed" tells callers not to reach for unboxing to speed up
--- indexed reads. Delete the benchmark and that claim stops being checked.
+-- Keep the 'indexGrid' pair even though it reports no difference -- it is
+-- the row that says where the win is /not/, and "Data.Grid.Sized.Unboxed"
+-- tells callers not to reach for unboxing to speed up indexed reads. Delete
+-- the benchmark and that claim stops being checked.
 --------------------------------------------------------------------------------
 
--- | Total, without going through 'Foldable' --- which the unboxed grid does not
+-- | Total, without going through 'Foldable', which the unboxed grid does not
 -- have.
 totalG :: VG.Vector v Int => GridOf v cs Int -> Int
 totalG = foldlGrid' (+) 0
@@ -330,8 +245,8 @@ totalG = foldlGrid' (+) 0
 rowPrefix :: VG.Vector v Int => GridOf v Big Int -> GridOf v Big Int
 rowPrefix = runIdentity . mapLowerDim (Identity . scanl1Grid (+))
 
--- | The cell values of ../aoc/src/2018/11.hs, so the summed-area benchmark
--- below builds the table the consumer actually builds.
+-- | Cell values for the summed-area benchmark below, matching a real
+-- consumer's table-building workload.
 power :: Int -> Coord Big -> Int
 power serial ((fromEnum -> y) :| (fromEnum -> x) :| _) =
     ((rack * y + serial) * rack `div` 100) `mod` 10 - 5
@@ -345,62 +260,26 @@ satBuild serial =
     transposeGrid . rowPrefix . transposeGrid . rowPrefix . tabulateGrid $
     power serial
 
--- | The same table, named by axis instead of built from the transpose trick
--- (sized-grid-e6h). Kept alongside 'satBuild' so the two are measured against
--- each other rather than assumed equal.
---
--- @scanAxis 1@ (the inner axis, already contiguous) is exactly as cheap as
--- 'rowPrefix' -- 'mapAxisHere' recognises that no transpose is needed there.
--- @scanAxis 0@ genuinely transposes, and on the boxed grid that measured
--- ~25% slower than the hand-fused @'transposeGrid' . rowPrefix .
--- 'transposeGrid'@: 'mapAxisHere' pays for a whole extra vector (the
--- transposed copy) that the specialised three-function pipeline does not
--- allocate. Unboxed is unaffected, and slightly faster here, since that
--- representation was never paying for boxed thunks at each transposed
--- position in the first place. The trade is a function that reaches any
--- axis of a grid of any dimension for a boxed-only cost on the position
--- that used to be hand-optimised for exactly two.
+-- | The same table, named by axis instead of built from the transpose
+-- trick. Kept alongside 'satBuild' so the two are measured against each
+-- other rather than assumed equal: @scanAxis 0@ genuinely transposes and
+-- measured ~25% slower boxed than the hand-fused pipeline, trading that for
+-- a function that reaches any axis of a grid of any dimension.
 satBuildAxis :: VG.Vector v Int => Int -> GridOf v Big Int
 satBuildAxis serial =
     scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid $ power serial
 
--- Note on why there is no standalone @allCoord@ benchmark.
+-- There is no standalone @allCoord@ benchmark: at a fixed type it is a CAF,
+-- so the obvious benchmark just measures a pointer, and @-fno-full-laziness@
+-- would be needed to defeat that -- which would make every other benchmark
+-- here stop resembling how the library is actually compiled. The cost is
+-- measured where it is real instead, in the instances that receive
+-- @IsCoordList@ at runtime.
 --
--- 'allCoord' takes no value arguments, so at a fixed type it is a CAF: the
--- obvious benchmark builds the list once and then measures a pointer.
--- Empirically it reported 1.96 ns for 90,000 coordinates. Hiding it behind a
--- NOINLINE function with a 'Proxy' argument does not help either -- GHC's full
--- laziness floats the list out past the 'Proxy' lambda, and it still reported
--- 1.72 ns.
---
--- Only @-fno-full-laziness@ would defeat that, and turning it on would make
--- every other benchmark here stop resembling how the library is actually
--- compiled. So the cost is measured where it is real instead, in the library's
--- own instances, which receive @IsCoordList@ at runtime.
---
--- == The second group is named for what it actually measures
---
--- It used to be called "allCoord overhead", paired so that each member differs
--- from its neighbour by whether the operation walks the coordinate list. But the two members of a pair also differ in what they do
--- per cell -- @tabulate@ and @imap@ are given 'coordPosition' as their function
--- and @pure@ and @fmap@ are not -- and 'coordPosition' turned out to cost far
--- more than the coordinate it is handed. Reading the gap as allCoord's cost is
--- what sent sized-grid-uvd looking in the wrong place.
---
--- The honest figures, from the @index@ benchmark below (which shares its
--- coordinate list, so it is 90,000 'coordPosition' calls and nothing else)
--- against @imap@ over the same 90,000 cells: 'coordPosition' was ~800 bytes a
--- call, and the coordinate list about 67 bytes a cell.
---
--- 'coordPosition' is no longer the expensive half. Moving its fold into
--- 'Data.Grid.Sized.Coord.Class.IsCoordList' as a method let it unroll at a concrete
--- axis list, and @index x90000@ went from 27 MB to 38 bytes total --- the whole
--- benchmark, not per call. What the second group now measures is much closer to
--- the coordinate list it was originally named for. The list is also not
--- rebuilt in the sense the issue meant -- @V.zipWith@ fuses with the
--- @V.fromList@ that feeds it, so the coordinates are produced and consumed one
--- at a time and never all exist at once. Do not "fix" that; see the note on the
--- instances in Data.Grid.Sized.Internal.Grid.
+-- The "indexed vs unindexed" group below is named for what it measures, not
+-- allCoord overhead: 'coordPosition' costs far more per call than producing
+-- the coordinate itself does, so the gap between a pair like @tabulate@\/@pure@
+-- is mostly 'coordPosition''s cost, not the coordinate list's.
 
 main :: IO ()
 main = do
@@ -417,9 +296,6 @@ main = do
                 whnf (`walk` zeroCoord) 10000
               , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 whnf
-                    -- No 'fromIntegral': the displacement is an 'Int' as of
-                    -- sized-grid-0tj, so the conversion this used to need is
-                    -- now the identity and warns under -Widentities.
                     (\o -> total [view coordHead (c .-. o) | c <- allCoord @Mid])
                     zeroCoord
               , bench "(.+^) x360000, four corner reads over Clamped 300x300" $

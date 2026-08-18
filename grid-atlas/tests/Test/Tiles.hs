@@ -1,11 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 
--- | Tests for the degenerate atlas ("Data.Grid.Atlas", sized-grid-fh2's first
--- slice).
---
--- The headline property both groups check, one exhaustively and one at
--- random, is the one sized-grid-fh2 names as free: an atlas whose transitions
--- are all identity is observationally equal to the grid it came from.
+-- | Tests for "Data.Grid.Atlas".
 module Test.Tiles
   ( tilesTests
   ) where
@@ -21,11 +16,8 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
 
--- | A 12x4 board whose cells are their own linear position. Content built
--- from 'coordPosition' rather than random data: two distinct coordinates
--- always disagree, so reading the wrong cell through the atlas shows up
--- immediately, and there is nothing here an 'Arbitrary' instance would buy
--- that this does not already give for free.
+-- | A 12x4 board whose cells are their own linear position, so reading the
+-- wrong cell through the atlas shows up immediately.
 board :: Grid '[ Ordinal 12, Ordinal 4] Int
 board = tabulate coordPosition
 
@@ -33,8 +25,7 @@ board = tabulate coordPosition
 atlas :: Atlas '[ Ordinal 3, Ordinal 4] 4 Int
 atlas = atlasFromTiles @(Ordinal 3) board
 
--- | The same split 'atlasFromTiles' makes, computed independently so the
--- test is not just checking the implementation against itself.
+-- | The same split 'atlasFromTiles' makes, computed independently.
 splitChart :: Coord '[ Ordinal 12, Ordinal 4] -> AtlasCoord '[ Ordinal 3, Ordinal 4] 4
 splitChart (a0 :| rest) =
     let (q, r) = ordinalToInt a0 `divMod` 3

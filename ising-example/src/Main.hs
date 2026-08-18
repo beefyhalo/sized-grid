@@ -50,7 +50,6 @@ instance Random Spin where
          else (Down, g')
 
 type GridType = '[Periodic 60, Periodic 60]
---type GridType = '[Periodic (AsPeano 1), Periodic (AsPeano 1)]
 
 -- | The four orthogonal neighbours of every site, worked out once for the
 -- lattice /type/ rather than per site per sweep.
