@@ -160,6 +160,7 @@ library
     Data.Grid.Sized.Coord.Reflective
     Data.Grid.Sized.Focused
     Data.Grid.Sized.Ordinal
+    Data.Grid.Sized.Stencil
     Data.Grid.Sized.Unboxed
     Data.Grid.Sized.Unsafe
 
@@ -201,6 +202,7 @@ test-suite tests
     Test.Ray
     Test.Reflective
     Test.Shrink
+    Test.Stencil
     Test.Tiling
     Test.Unboxed
     Test.Utils

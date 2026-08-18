@@ -69,13 +69,25 @@ gameOfLife = Rule $ \here neigh ->
 -- of the *old* grid and decide the new tile. Non-comonadic because the old
 -- grid, not a focused view of it, is what 'runRule' reads from -- there is no
 -- @duplicate@ here to build a grid of grids out of.
+--
+-- The neighbourhood comes in as a 'Stencil' rather than being enumerated per
+-- cell. This used to be
+--
+-- > imapGrid (\c here -> runRule rule here (map (indexGrid g) (neighbours c))) g
+--
+-- which rebuilt every cell's neighbour coordinates on every tick, sixty times a
+-- second, to get the same eight vector positions each time. A 'Stencil' is those
+-- positions worked out once for the board's *type*, built in @main@ and held
+-- in the world state.
+--
+-- Note what left the signature with the loop: @IsCoordList cs@. Nothing here
+-- takes a coordinate apart any more.
 applyRule ::
-       IsCoordList cs
-    => Rule n
+       Rule n
+    -> Stencil cs
     -> UGrid cs TileState
     -> UGrid cs TileState
-applyRule rule g =
-    imapGrid (\c here -> runRule rule here (map (indexGrid g) (neighbours c))) g
+applyRule rule s = stencilGrid s (runRule rule)
 
 data DisplayInfo = DisplayInfo {
   tileSize, offset :: Float
@@ -85,6 +97,12 @@ data WorldState cs = WorldState
     { _grid                     :: UGrid cs TileState
     , _timeElapsedSinceLastTick :: Float
     , _rule                     :: Rule (Length cs)
+    -- | The board's neighbourhood, built once at start-up and held for the
+    -- lifetime of the game. It is a field rather than something 'tickWorld'
+    -- computes because that is the whole trade a 'Stencil' offers: building one
+    -- costs a tick's worth of work, and it then makes every subsequent tick an
+    -- order of magnitude cheaper.
+    , _neighbourhood            :: Stencil cs
     , _isTicking                :: Bool
     }
 makeLenses ''WorldState
@@ -145,13 +163,12 @@ updateWorld _ (EventKey (Char 't') Up _ _) world = world & isTicking %~ not
 updateWorld _ _ world = world
 
 tickWorld ::
-       IsCoordList cs
-    =>Float
+       Float
     -> WorldState cs
     -> WorldState cs
 tickWorld dt world
     | world ^. timeElapsedSinceLastTick + dt >= 0.1 && world ^. isTicking  =
-        world & grid %~ applyRule (world ^. rule)
+        world & grid %~ applyRule (world ^. rule) (world ^. neighbourhood)
               & timeElapsedSinceLastTick +~ dt - 0.1
     | world ^. isTicking = world & timeElapsedSinceLastTick +~ dt
     | otherwise = world
@@ -163,6 +180,7 @@ main =
             { _grid = tabulateGrid (const Dead)
             , _timeElapsedSinceLastTick = 0
             , _rule = gameOfLife
+            , _neighbourhood = mooreStencil 1
             , _isTicking = False
             }
         di = DisplayInfo {tileSize = 16, offset = 500}

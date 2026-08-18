@@ -15,6 +15,7 @@ import           Test.Path
 import           Test.Ray
 import           Test.Reflective
 import           Test.Shrink
+import           Test.Stencil
 import           Test.Tiling
 import           Test.Unboxed
 import           Test.Utils
@@ -363,6 +364,7 @@ main =
              comonadLaws @(FocusedGrid '[ Clamped 2, Periodic 3])
            ]
        , shrinkTests
+       , stencilTests
        , tilingTests
        , unboxedTests
        , windowTests

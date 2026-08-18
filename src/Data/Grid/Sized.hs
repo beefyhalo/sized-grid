@@ -93,6 +93,7 @@ import           Data.Grid.Sized.Coord.Reflect101 as X
 import           Data.Grid.Sized.Coord.Reflective as X
 import           Data.Grid.Sized.Focused          as X
 import           Data.Grid.Sized.Ordinal          as X
+import           Data.Grid.Sized.Stencil          as X
 
 -- The `Grid` type is defined in the hidden "Data.Grid.Sized.Internal.Grid", and
 -- this module publishes the safe half of it -- hence the explicit export list

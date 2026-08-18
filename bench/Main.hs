@@ -90,6 +90,24 @@ stepGrid = FocusedGrid (tabulate coordPosition) zeroCoord
 stepGridPeriodic :: FocusedGrid StepPeriodic Int
 stepGridPeriodic = FocusedGrid (tabulate coordPosition) zeroCoord
 
+-- | The same two grids without the focus, for the stencil benchmarks. A
+-- `Data.Grid.Sized.Stencil.Stencil` needs no focus, so measuring it through one
+-- would charge it for machinery it does not use.
+plainStepGrid :: Grid Step Int
+plainStepGrid = tabulate coordPosition
+
+plainStepGridPeriodic :: Grid StepPeriodic Int
+plainStepGridPeriodic = tabulate coordPosition
+
+-- | The tables the iterated stencil benchmarks share. Top level because that is
+-- where a real consumer would put them: built once for the grid type, reused
+-- for every generation.
+stepStencil :: Stencil Step
+stepStencil = mooreStencil 1
+
+stepStencilPeriodic :: Stencil StepPeriodic
+stepStencilPeriodic = mooreStencil 1
+
 -- | Total a grid, forcing every element on the way.
 total :: (Foldable f) => f Int -> Int
 total = sum
@@ -119,6 +137,39 @@ iterateExtend ::
     -> FocusedGrid cs Int
     -> FocusedGrid cs Int
 iterateExtend n fg = iterate (extend neighbourSum) fg !! n
+
+-- | The same neighbourhood fold as 'neighbourSum', written against a
+-- precomputed `Data.Grid.Sized.Stencil.Stencil` rather than against `neighbours`.
+--
+-- A plain `Grid`, not a 'FocusedGrid': `Data.Grid.Sized.Stencil.stencilGrid` is
+-- already the bulk step, so there is no focus to carry and no @extend@ to build
+-- one with. That is part of what is being measured --- the comonadic version
+-- pays for a focus per cell that the rule never reads.
+stencilStep :: Stencil cs -> Grid cs Int -> Grid cs Int
+stencilStep s = stencilGrid s (\_ ns -> total ns)
+
+-- | The loop `Data.Grid.Sized.Stencil.stencilGrid` literally replaces, and what
+-- @gameOfLife@\'s @applyRule@ was before this: the neighbourhood enumerated per
+-- cell, on a plain `Grid`.
+--
+-- This, not @extend neighbourSum@, is the like-for-like comparison. The
+-- comonadic version also pays for a `FocusedGrid` per cell that the rule never
+-- reads, so measuring the stencil against it would credit the table with a
+-- saving that is really the focus.
+neighbourStep :: IsCoordList cs => Grid cs Int -> Grid cs Int
+neighbourStep g = imapGrid (\c _ -> total (map (indexGrid g) (neighbours c))) g
+
+-- | 'neighbourStep' iterated, the counterpart of 'iterateStencil'.
+iterateNeighbourStep :: IsCoordList cs => Int -> Grid cs Int -> Grid cs Int
+iterateNeighbourStep n g = iterate neighbourStep g !! n
+
+-- | 'stencilStep' iterated, the counterpart of 'iterateExtend'.
+--
+-- The stencil is built once, outside the loop, which is the entire claim the
+-- API makes: the neighbourhood is a fact about the type, so a hundred
+-- generations should consult the axis list once rather than a hundred times.
+iterateStencil :: Stencil cs -> Int -> Grid cs Int -> Grid cs Int
+iterateStencil s n g = iterate (stencilStep s) g !! n
 
 -- | Repeated coordinate offset. Recursive rather than a fold so the
 -- intermediate 'Coord's cannot be fused away.
@@ -422,6 +473,45 @@ main = do
                 whnf (total . focusedGrid . iterateExtend 100) stepGrid
               , bench "iterate (extend neighbourSum) x100, 50x50, Periodic" $
                 whnf (total . focusedGrid . iterateExtend 100) stepGridPeriodic
+              ]
+        , -- The same workload as the four above, through a precomputed
+          -- neighbourhood, split into the three costs that make up the trade.
+          --
+          -- Building the table is the case the stencil /loses/: it is one full
+          -- pass of the neighbourhood computation it replaces, and rather more
+          -- than one 'extend' because it also lays out a vector. Running an
+          -- already-built table is the case it wins, and by how much. A caller
+          -- taking @n@ passes pays the first once and the second @n@ times, so
+          -- the two together say where the crossover is.
+          --
+          -- The radius is the 'whnf' argument in the two build benchmarks and
+          -- not a literal in the expression, because as a literal GHC floats
+          -- @mooreStencil 1@ out of the benchmarked function --- it depends on
+          -- nothing else --- and what gets measured is the step alone under a
+          -- label claiming otherwise. That happened, and these numbers are the
+          -- ones after it was caught.
+          bgroup
+              "stencil (the same neighbourhood, precomputed)"
+              [ bench "imapGrid over neighbours 50x50 (what it replaces)" $
+                whnf (total . neighbourStep) plainStepGrid
+              , bench "imapGrid over neighbours 50x50, Periodic" $
+                whnf (total . neighbourStep) plainStepGridPeriodic
+              , bench "imapGrid over neighbours x100, 50x50" $
+                whnf (total . iterateNeighbourStep 100) plainStepGrid
+              , bench "mooreStencil r, 50x50 (building the table)" $
+                whnf (\r -> VG.length (stencilPositions (mooreStencil @Step r))) 1
+              , bench "mooreStencil r, 50x50, Periodic" $
+                whnf (\r -> VG.length (stencilPositions (mooreStencil @StepPeriodic r))) 1
+              , bench "stencilStep 50x50, table already built" $
+                whnf (total . stencilStep stepStencil) plainStepGrid
+              , bench "stencilStep 50x50, Periodic, table already built" $
+                whnf (total . stencilStep stepStencilPeriodic) plainStepGridPeriodic
+              , bench "stencilStep 50x50, table built for this one pass" $
+                whnf (\r -> total (stencilStep (mooreStencil r) plainStepGrid)) 1
+              , bench "stencilStep x100, 50x50" $
+                whnf (total . iterateStencil stepStencil 100) plainStepGrid
+              , bench "stencilStep x100, 50x50, Periodic" $
+                whnf (total . iterateStencil stepStencilPeriodic 100) plainStepGridPeriodic
               ]
         , bgroup
               "collapse round trip"
