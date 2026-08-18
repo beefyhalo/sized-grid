@@ -440,10 +440,36 @@ splitVectorBySize n v
 -- What remains is one 'VG.convert' per call. For a boxed grid that is a copy
 -- between a type and itself, and it costs 'toJSON' about 19% and 'collapseGrid'
 -- about 9%; 'gridFromList' and 'parseJSON' come out level with the boxed-only
--- original. An unboxed grid pays the same copy. That is the right place to
--- leave it: JSON and nested-list conversion are boundary operations, not what
--- anyone reaches for either representation to speed up, and both alternative
--- shapes above cost more elsewhere.
+-- original. An unboxed grid pays the same copy. Both alternative shapes above
+-- cost more elsewhere, and JSON and nested-list conversion are boundary
+-- operations, not what anyone reaches for either representation to speed up
+-- -- so this is where it was left (sized-grid-2g0).
+--
+-- 'collapseGrid' and 'gridFromList' were later given the boxed case back for
+-- free (still 2g0): each already carries its own @'VG.Vector' v a@ as a
+-- genuine function argument, so a RULE stated at @v ~ "Data.Vector".Vector@
+-- can match the whole call and replace it with the boxed helper directly, no
+-- 'VG.convert' involved. GHC does not do this on its own -- @VG.convert@'s
+-- definition is @unstream . stream@, and the fusion rules in "Data.Vector"
+-- turn @unstream (stream v)@ into @clone v@, not @v@, so even a fully
+-- specialised, fully inlined boxed-to-boxed 'VG.convert' still allocates.
+-- Confirmed by measurement to be back to the boxed-only baseline
+-- (collapseGrid/boxed and gridFromList/boxed below).
+--
+-- The same trick does not reach 'toJSON' and 'parseJSON'. Both are class
+-- methods, so the only dictionary a RULE sees at the call site is the single
+-- opaque @'ToJSON' (GridOf v cs a)@ (or @'FromJSON'@) dictionary; the
+-- @'AllSizedKnown' cs@ and element dictionaries the instance was built from
+-- are not projectable back out of it, and a RULE pragma has no syntax for
+-- adding its own class context to supply them separately (tried; parse error
+-- on @=>@). Reaching them needs a real constraint -- an internal
+-- @v@-to-boxed-conversion class with @'VG.Vector' v a@ as its only other
+-- instance, dispatched instead of 'VG.convert' -- and that constraint would
+-- have to sit in the 'ToJSON'\/'FromJSON' instance context, which is exactly
+-- the leak the class-based angle in 2g0 was passed over for: any function
+-- written the way 'collapseGrid' is, polymorphic in @v@ and calling 'toJSON'
+-- internally, would need the new constraint threaded through it too, or stop
+-- compiling. Left as the residual cost.
 --
 -- Keep it this way. If one of these grows a @'VG.Vector' v a@ constraint on the
 -- recursive helper, or reaches for the exported generic 'splitVectorBySize',
@@ -493,7 +519,25 @@ collapseGrid ::
   => GridOf v cs a
   -> CollapseGrid cs a
 collapseGrid (Grid v) = nestByShape @cs (VG.convert v)
-{-# INLINABLE collapseGrid #-}
+{-# INLINABLE [1] collapseGrid #-}
+
+-- | At a boxed grid, 'VG.convert' in 'collapseGrid' is a copy of a vector to
+-- itself; this rule bypasses it when GHC can see @v ~ V.Vector@ at the call
+-- site (see \"Recursing down the axis list\"). It does nothing for other
+-- vector types, which still need the real conversion.
+--
+-- Phase control matters here the way it does for @map@\/@build@ fusion in
+-- "Data.List": unphased, 'collapseGrid' is small enough that the simplifier
+-- inlines its body before this rule gets a chance to match, silently
+-- disarming it (GHC warns "may never fire" for exactly this reason). Marking
+-- 'collapseGrid' @[1]@ (inlinable only from phase 1) and the rule @[~1]@
+-- (active only before phase 1, i.e. in phase 2) gives the rule first refusal;
+-- 'collapseGrid' still inlines normally from phase 1 on for every @v@ the
+-- rule does not match.
+{-# RULES
+"collapseGrid/boxed" [~1] forall (g :: GridOf V.Vector cs a).
+  collapseGrid g = nestByShape @cs (unGrid g)
+  #-}
 
 -- | Convert a series of nested lists to a grid. If the size of the grid does not match the size of lists this will be `Nothing`
 gridFromList ::
@@ -501,7 +545,15 @@ gridFromList ::
   => CollapseGrid cs a
   -> Maybe (GridOf v cs a)
 gridFromList cg = Grid . VG.convert <$> flattenByShape @cs cg
-{-# INLINABLE gridFromList #-}
+{-# INLINABLE [1] gridFromList #-}
+
+-- | As 'collapseGrid/boxed', for the other direction. @v@ only appears in the
+-- /result/ here, so it is pinned with an explicit type application rather than
+-- an argument annotation.
+{-# RULES
+"gridFromList/boxed" [~1] forall (cg :: CollapseGrid cs a).
+  gridFromList @V.Vector @cs @a cg = Grid <$> flattenByShape @cs cg
+  #-}
 
 instance (VG.Vector v a, AllSizedKnown cs, ToJSON a) =>
          ToJSON (GridOf v cs a) where
