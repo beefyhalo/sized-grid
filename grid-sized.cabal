@@ -124,6 +124,22 @@ common lang
 library
   import:          lang
   hs-source-dirs:  src
+
+  -- sized-grid-6os. 'unsafeOrdinal' is the single unchecked way to build an
+  -- Ordinal, and it states its precondition with Control.Exception.assert --
+  -- but -fignore-asserts is implied by -O, and cabal builds this component at
+  -- -O1 by default. Because unsafeOrdinal is INLINE, that stripping happens
+  -- once, here, when this module's unfolding is written to its interface: no
+  -- flag on a downstream component (the test suite included) can bring the
+  -- check back, since it links against the already-stripped unfolding. This
+  -- has to be set where unsafeOrdinal is defined, which makes the check live
+  -- for every consumer, not just this package's own test suite. That is
+  -- intentional: an out-of-range Ordinal indexes a vector out of bounds or
+  -- silently reads the wrong cell, so a few comparisons on coord arithmetic
+  -- (Clamped's Semigroup and AffineSpace instances, Periodic's Semigroup and
+  -- toEnum) are cheap insurance against that everywhere, not just in CI.
+  ghc-options:     -fno-ignore-asserts
+
   exposed-modules:
     Data.Grid.Sized
     Data.Grid.Sized.Class
