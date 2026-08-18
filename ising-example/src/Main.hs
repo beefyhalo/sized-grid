@@ -64,13 +64,6 @@ singleEnergy PhysicalOptions {..} fg =
     (map (\p -> spinNumber (peek p fg) * spinNumber (extract fg)) $
      vonNeumannNeighbours 1 (pos fg))
 
-totalEnergy ::
-     IsGrid GridType (grid GridType)
-  => PhysicalOptions
-  -> grid GridType Spin
-  -> Double
-totalEnergy po = sum . extend (singleEnergy po) . view asFocusedGrid
-
 energyAtPoint ::
      IsGrid GridType (grid GridType)
   => PhysicalOptions

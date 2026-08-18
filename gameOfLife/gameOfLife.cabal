@@ -32,4 +32,4 @@ executable gameOfLife
   ghc-options:
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
     -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
-    -Wredundant-constraints
+    -Wredundant-constraints -Werror

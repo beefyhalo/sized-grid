@@ -6,7 +6,7 @@
 --
 -- 'main' validates the board rather than solving it: the search itself is
 -- still to be written.
-module Main where
+module Main (main) where
 
 import           Data.Grid.Sized            hiding (All, Compose)
 
@@ -121,6 +121,14 @@ showSlices label slices =
     unlines $ (label ++ " (" ++ show (length slices) ++ "):")
             : map (("  " ++) . displaySlice) slices
 
+-- | A point picked purely to demonstrate the by-point lookups below on an
+-- empty cell, where the candidate list is worth looking at; nothing about
+-- the coordinate itself is special to the puzzle.
+samplePoint :: Coord '[ Ordinal 9, Ordinal 9]
+samplePoint =
+    fromJust (numToOrdinal (4 :: Integer)) :|
+    singleCoord (fromJust (numToOrdinal (4 :: Integer)))
+
 main :: IO ()
 main = do
     putStrLn "Board:"
@@ -135,3 +143,12 @@ main = do
     putStrLn ""
     putStrLn ("solved:  " ++ show (gameIsSolved exampleGrid))
     putStrLn ("invalid: " ++ show (gameIsInvalid exampleGrid))
+    putStrLn ""
+    -- The by-point lookups a solver would call once per cell, exercised here
+    -- at a single sample point rather than over the whole board.
+    putStrLn "Slices through (4,4):"
+    putStr (showSlices "row"    [rowAtPoint    samplePoint exampleGrid])
+    putStr (showSlices "column" [columAtPoint  samplePoint exampleGrid])
+    putStr (showSlices "square" [squareAtPoint samplePoint exampleGrid])
+    putStrLn ("candidates at (4,4): " ++
+              displaySlice (map Just (indexGrid (allValues exampleGrid) samplePoint)))

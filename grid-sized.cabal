@@ -83,7 +83,16 @@ common lang-base
   ghc-options:
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
     -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
-    -Wredundant-constraints
+    -Wredundant-constraints -Werror
+
+  -- GHC 9.14 deprecates the 'pattern' namespace specifier that
+  -- Data.Grid.Sized.Coord's export list uses for (:|) and EmptyCoord, in
+  -- favour of 'data'. But 'data' there is a parse error on GHC 9.10/9.12
+  -- (the syntax doesn't exist yet), so 'pattern' is still what every
+  -- supported GHC accepts -- silence the 9.14-only deprecation instead of
+  -- forking the export list per compiler.
+  if impl(ghc >= 9.14)
+    ghc-options: -Wno-pattern-namespace-specifier
 
 common lang
   import: lang-base

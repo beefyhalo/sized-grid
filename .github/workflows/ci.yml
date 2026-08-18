@@ -62,4 +62,9 @@ jobs:
       # this job. This matrix builds only -- it exists to keep the bounds in
       # grid-sized.cabal honest across the supported GHC range; the tasty
       # suite itself is exercised by `nix flake check` above on ghc912/ghc914.
+      #
+      # -Werror is baked into every package's ghc-options (not passed here),
+      # so any file this job actually recompiles fails the build on a new
+      # warning -- this doesn't depend on dist-newstyle being cold, since GHC
+      # only needs to be compiling the file to enforce it (sized-grid-ior).
       - run: cabal build all --enable-tests --enable-benchmarks
