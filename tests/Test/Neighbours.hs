@@ -306,6 +306,27 @@ mixedPolicyTests =
               assertEqual "manhattan" 2 (coordManhattan (hwc 2 2) (hwc 3 3))
         ]
 
+-- | 'coordDistance' and 'coordManhattan' fold the axes directly through
+-- 'npMaxDistance'\/'npSumDistance' rather than over the list 'axisDistances'
+-- builds. These say the two still agree, in particular on a 'Periodic' axis,
+-- whose wrap-around distance is the one that could drift apart.
+fusedMetricTests :: TestTree
+fusedMetricTests =
+    testGroup
+        "the fused metrics agree with axisDistances"
+        [ testProperty "Chebyshev is the largest per-axis distance" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
+              coordDistance a b === foldl' max 0 (axisDistances a b)
+        , testProperty "Manhattan is their sum" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
+              coordManhattan a b === sum (axisDistances a b)
+        , testProperty "on axes mixing every policy (Chebyshev)" $ \(a :: Coord '[Clamped 5, Periodic 4, Reflective 3, Reflect101 5]) b ->
+              coordDistance a b === foldl' max 0 (axisDistances a b)
+        , testProperty "on axes mixing every policy (Manhattan)" $ \(a :: Coord '[Clamped 5, Periodic 4, Reflective 3, Reflect101 5]) b ->
+              coordManhattan a b === sum (axisDistances a b)
+        , testCase "both are zero on the empty coord, as the empty fold is" $ do
+              assertEqual "chebyshev" 0 (coordDistance EmptyCoord EmptyCoord)
+              assertEqual "manhattan" 0 (coordManhattan EmptyCoord EmptyCoord)
+        ]
+
 -- | Worth stating because the torus case is where a hand-rolled distance
 -- stops satisfying the laws.
 metricLawTests :: TestTree
@@ -496,6 +517,7 @@ neighbourTests =
         , axisDistanceTests
         , metricTests
         , mixedPolicyTests
+        , fusedMetricTests
         , metricLawTests
         , stepsWithinTests
         , centredTests

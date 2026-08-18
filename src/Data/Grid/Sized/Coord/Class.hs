@@ -22,6 +22,7 @@ import           Data.Grid.Sized.Ordinal
 import           Control.Lens
 import           Data.AffineSpace   (Diff)
 import           Data.Kind          (Constraint, Type)
+import           Data.Maybe         (isJust)
 import           Data.Type.Bool     (Not)
 import           Data.Type.Equality (type (==))
 import           Generics.SOP       (All, I (..), NP (..))
@@ -271,6 +272,26 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- 'Data.Grid.Sized.Coord.coordManhattan'.
     npDistances :: NP I cs -> NP I cs -> [Int]
 
+    -- | Whether any axis is at one of its ends, and whether every axis is.
+    -- Fused counterparts of @'any' 'isJust' . 'npBoundaries'@ and @'all'
+    -- 'isJust' . 'npBoundaries'@, which built a @['Maybe' 'Extremum']@ per
+    -- call to answer a 'Bool': the 360,000-call
+    -- 'Data.Grid.Sized.Coord.onBoundary' sweep allocated 123 MB, and 60 MB
+    -- once fused. Methods rather than folds over 'npBoundaries' for the
+    -- unrolling reason above.
+    --
+    -- 'npAllBoundary' is the fold's identity on the empty axis list, so it
+    -- is vacuously 'True' there; 'Data.Grid.Sized.Coord.isCorner' rejects
+    -- that case itself.
+    npAnyBoundary :: NP I cs -> Bool
+    npAllBoundary :: NP I cs -> Bool
+
+    -- | The largest and the summed per-axis distance: the Chebyshev and
+    -- Manhattan metrics, without the @['Int']@ 'npDistances' would build to
+    -- feed them.
+    npMaxDistance :: NP I cs -> NP I cs -> Int
+    npSumDistance :: NP I cs -> NP I cs -> Int
+
 instance IsCoordList '[] where
     sizeAndPosition Nil = (1, 0)
     npOffset Nil Nil = Just Nil
@@ -281,12 +302,20 @@ instance IsCoordList '[] where
     coordListSize = 1
     npBoundaries Nil = []
     npDistances Nil Nil = []
+    npAnyBoundary Nil = False
+    npAllBoundary Nil = True
+    npMaxDistance Nil Nil = 0
+    npSumDistance Nil Nil = 0
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
     {-# INLINE npStepsWithin #-}
     {-# INLINE coordListSize #-}
     {-# INLINE npBoundaries #-}
     {-# INLINE npDistances #-}
+    {-# INLINE npAnyBoundary #-}
+    {-# INLINE npAllBoundary #-}
+    {-# INLINE npMaxDistance #-}
+    {-# INLINE npSumDistance #-}
 
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     sizeAndPosition (I c :* cs) =
@@ -315,12 +344,22 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     -- directly rather than through a lifted wrapper.
     npBoundaries (I x :* xs) = axisBoundaryIsCoord x : npBoundaries xs
     npDistances (I x :* xs) (I y :* ys) = axisDistanceIsCoord x y : npDistances xs ys
+    npAnyBoundary (I x :* xs) = isJust (axisBoundaryIsCoord x) || npAnyBoundary xs
+    npAllBoundary (I x :* xs) = isJust (axisBoundaryIsCoord x) && npAllBoundary xs
+    npMaxDistance (I x :* xs) (I y :* ys) =
+        max (axisDistanceIsCoord x y) (npMaxDistance xs ys)
+    npSumDistance (I x :* xs) (I y :* ys) =
+        axisDistanceIsCoord x y + npSumDistance xs ys
     {-# INLINE sizeAndPosition #-}
     {-# INLINE npOffset #-}
     {-# INLINE npStepsWithin #-}
     {-# INLINE coordListSize #-}
     {-# INLINE npBoundaries #-}
     {-# INLINE npDistances #-}
+    {-# INLINE npAnyBoundary #-}
+    {-# INLINE npAllBoundary #-}
+    {-# INLINE npMaxDistance #-}
+    {-# INLINE npSumDistance #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id

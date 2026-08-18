@@ -85,7 +85,6 @@ import           Data.AffineSpace
 import           Data.Constraint
 import           Data.Kind (Type)
 import           Data.List             (intercalate, unfoldr)
-import           Data.Maybe            (isJust)
 import qualified Data.Vector           as V
 import           Generics.SOP          hiding (Generic, S, Z)
 import qualified Generics.SOP          as SOP
@@ -429,13 +428,17 @@ axisDistance = axisDistanceIsCoord @(CoordContainer x) @(CoordNat x)
 axisDistances :: forall cs. IsCoordList cs => Coord cs -> Coord cs -> [Int]
 axisDistances (Coord as) (Coord bs) = npDistances as bs
 
--- | The Chebyshev distance: the largest per-axis distance.
+-- | The Chebyshev distance: the largest per-axis distance. Folded by the
+-- 'npMaxDistance' method rather than over 'axisDistances', so the @['Int']@
+-- that was built only to be consumed immediately is gone (measured: 135 MB to
+-- 60 MB over 360,000 calls).
 coordDistance :: IsCoordList cs => Coord cs -> Coord cs -> Int
-coordDistance a b = foldl' max 0 (axisDistances a b)
+coordDistance (Coord as) (Coord bs) = npMaxDistance as bs
 
--- | The Manhattan distance: the per-axis distances summed.
+-- | The Manhattan distance: the per-axis distances summed, likewise without
+-- the intermediate list.
 coordManhattan :: IsCoordList cs => Coord cs -> Coord cs -> Int
-coordManhattan a b = sum (axisDistances a b)
+coordManhattan (Coord as) (Coord bs) = npSumDistance as bs
 
 -- | Which end of its axis a single coordinate sits at, or 'Nothing' if interior.
 axisBoundary :: forall x. IsCoordLifted x => x -> Maybe Extremum
@@ -464,14 +467,18 @@ axisBoundaries (Coord cs) = npBoundaries cs
 
 -- | Whether any axis is at one of its ends. 'False' on a coord with no axes.
 onBoundary :: IsCoordList cs => Coord cs -> Bool
-onBoundary = any isJust . axisBoundaries
+onBoundary (Coord cs) = npAnyBoundary cs
 
 -- | Whether every axis is at one of its ends. 'False' on any coord with a torus axis, and 'False' rather than a vacuous 'True' on the empty coord.
+--
+-- The match on 'Nil' is what keeps the empty coord 'False': 'npAllBoundary' is
+-- a fold and so vacuously 'True' there, and there is no longer a list whose
+-- emptiness could be tested instead.
 isCorner :: IsCoordList cs => Coord cs -> Bool
-isCorner c =
-  case axisBoundaries c of
-    [] -> False
-    bs -> all isJust bs
+isCorner (Coord cs) =
+  case cs of
+    Nil -> False
+    _   -> npAllBoundary cs
 
 -- | Every coordinate that is not 'onBoundary', in 'allCoord' order.
 interiorCoords :: IsCoordList cs => [Coord cs]

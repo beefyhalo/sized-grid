@@ -165,6 +165,35 @@ isCornerTests =
               isCorner c ==> onBoundary c
         ]
 
+-- | 'onBoundary' and 'isCorner' answer from 'npAnyBoundary'\/'npAllBoundary',
+-- which fold the axes directly instead of folding the list 'axisBoundaries'
+-- builds. Nothing in the types ties the two together, so these say the
+-- answers still match, on axis lists that mix every boundary policy.
+fusedBoundaryTests :: TestTree
+fusedBoundaryTests =
+    testGroup
+        "the fused folds agree with axisBoundaries"
+        [ testProperty "onBoundary is any isJust, on bounded axes" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
+              onBoundary c === any isJust (axisBoundaries c)
+        , testProperty "and on mixed policies" $ \(c :: Coord '[Clamped 5, Periodic 4, Reflective 3, Reflect101 5]) ->
+              onBoundary c === any isJust (axisBoundaries c)
+        , testProperty "isCorner is a non-empty all isJust, on bounded axes" $ \(c :: Coord '[Clamped 5, Clamped 5]) ->
+              isCorner c === cornerByList c
+        , testProperty "and on mixed policies" $ \(c :: Coord '[Clamped 5, Periodic 4, Reflective 3, Reflect101 5]) ->
+              isCorner c === cornerByList c
+        , testProperty "on a single axis, where the empty tail is the vacuous case" $ \(c :: Coord '[Clamped 5]) ->
+              isCorner c === cornerByList c
+        , testCase "including on the empty coord, where the list version is False" $ do
+              assertEqual "onBoundary" (any isJust (axisBoundaries EmptyCoord)) (onBoundary EmptyCoord)
+              assertEqual "isCorner" (cornerByList EmptyCoord) (isCorner EmptyCoord)
+        ]
+  where
+    cornerByList :: IsCoordList cs => Coord cs -> Bool
+    cornerByList c =
+        case axisBoundaries c of
+            [] -> False
+            bs -> all isJust bs
+
 -- | The property that makes the interior worth naming: a cellular automaton
 -- special-cases edge cells precisely because their neighbourhood is short.
 interiorTests :: TestTree
@@ -269,6 +298,7 @@ boundaryTests =
         , axisBoundariesTests
         , onBoundaryTests
         , isCornerTests
+        , fusedBoundaryTests
         , interiorTests
         , interiorTraversalTests
         ]
