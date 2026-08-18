@@ -42,6 +42,16 @@
 -- to name for the overhang. Nothing here checks it --- the caller's own
 -- @unsafeOrdinal@ assertion is what fires --- because it is a property of
 -- the table, fixed once when the table is written, not of a step.
+--
+-- Which is also why a mirrored crossing measures against the /destination/
+-- axis rather than the source's sibling. The two coincide whenever a seam
+-- lands on the axis it left from --- which is every seam a strip or a
+-- bottle has, and is why a hand-written single-chart stepper can use the
+-- sibling and still be right --- but a cube's seams turn a corner, and only
+-- the all-sizes-equal accident hides the difference there. 'rectStep' takes
+-- one size function for the whole atlas rather than one per chart because
+-- @Atlas cs k a@ gives every chart the same shape @cs@ by construction;
+-- charts of differing sizes would make this a per-chart question again.
 module Data.Grid.Atlas.Rect
   ( Axis(..)
   , Heading(..)
