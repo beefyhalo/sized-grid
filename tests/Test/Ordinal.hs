@@ -78,13 +78,19 @@ enumTests =
       (map (fromEnum . (toEnum :: Int -> Clamped 5)) [0 .. 4])
   ]
 
+-- reifyCoord's continuation is @forall m -> (KnownNat m, m + 1 <= n) => x@, so
+-- @x@ is bound outside an implication that carries givens. Under GHC 9.10 that
+-- makes an as-yet-unsolved @x@ untouchable from within the continuation
+-- ([GHC-83865]), and the numeric literals here are then ambiguous for want of
+-- it. Annotating each result fixes @x@ before the continuation is checked.
+-- GHC 9.12 solves this unaided; the annotations are what keep 9.10 building.
 sizeProxyTests :: [TestTree]
 sizeProxyTests =
   [ testCase "reifyCoord at every value of an Ordinal 5" $
     assertEqual
       ""
       [0 .. 4]
-      [ reifyCoord o (\m -> natVal (Proxy @m))
+      [ reifyCoord o (\m -> natVal (Proxy @m)) :: Integer
       | i <- [0 .. 4]
       , Just (o :: Ordinal 5) <- [numToOrdinal (i :: Int)]
       ]
@@ -94,7 +100,7 @@ sizeProxyTests =
       3
       (reifyCoord
            (view (re asOrdinal) (toEnum 3) :: Periodic 5)
-           (\m -> natVal (Proxy @m)))
+           (\m -> natVal (Proxy @m)) :: Integer)
   ]
 
 arithmeticTests :: [TestTree]

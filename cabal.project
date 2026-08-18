@@ -9,3 +9,22 @@ packages:
   gameOfLife
   ising-example
   grid-atlas
+
+-- sized-grid-8hx. GHC 9.14.1 ships containers-0.8, but the gloss stack still
+-- caps containers <0.8 and has no 9.14 release upstream. containers is
+-- non-reinstallable -- the `ghc` package, pulled in by ghc-typelits-natnormalise,
+-- pins the installed instance -- so without this the solver cannot produce any
+-- plan and `cabal build all` fails outright on 9.14, taking the library down
+-- with it rather than just the examples.
+--
+-- The bound is stale, not a real incompatibility: the whole stack plus both
+-- examples compiles and links against containers-0.8 on 9.14.1. Scoped to the
+-- five packages that actually carry the bound rather than a blanket
+-- `allow-newer: containers`, so a genuine future breakage elsewhere still
+-- shows up as a solver error. No-op on 9.10/9.12, where containers is <0.8.
+allow-newer:
+  gloss:containers,
+  gloss-rendering:containers,
+  OpenGL:containers,
+  GLUT:containers,
+  OpenGLRaw:containers
