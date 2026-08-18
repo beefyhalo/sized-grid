@@ -23,6 +23,29 @@ import           Data.Functor.Rep
 import           Generics.SOP
 
 -- | Similar to `Grid`, but this has a focus on a certain square. Becuase of this we loose some instances, such as `Applicative`, but we gain a `Comonad` and `ComonadStore` instance. We can convert between a focused and unfocused list using facilites in `IsGrid`
+--
+-- == Both fields are lazy, and that is measured, not assumed
+--
+-- 'duplicate' and 'seeks' below each build a new 'FocusedGrid' without
+-- forcing either field, so iterating 'extend' -- what every cellular
+-- automaton does, hundreds of generations deep -- was suspected
+-- (sized-grid-bc6) of chaining up thunks across generations even though
+-- 'Grid' underneath is a strict vector. Bang patterns on both fields were
+-- tried and measured against @bench@'s @iterate (extend neighbourSum) x100@
+-- benchmark, the shape sized-grid-0tj's history says this kind of claim has
+-- to be checked at (a single 'extend' is the wrong shape; nothing forces the
+-- chain until something reads deep into it).
+--
+-- The result was no difference: 1,570,443,384 bytes allocated over 100
+-- generations with lazy fields against 1,570,440,960 strict, noise at that
+-- scale, and wall-clock reported \"same as baseline\" by @tasty-bench@ in
+-- both directions. So the bang patterns were reverted rather than kept on
+-- faith. This is consistent with the caveat the issue raised going in: both
+-- fields are newtypes ('Grid' over a 'V.Vector', 'Coord' over an 'NP'), so
+-- forcing them to WHNF forces only the wrapper, and 'total' (or anything
+-- else that folds the grid) already forces every element on its own,
+-- independent of what the field's laziness was doing. There was no thunk
+-- chain of a size this benchmark could see.
 data FocusedGrid cs a = FocusedGrid
     { focusedGrid         :: Grid cs a
     , focusedGridPosition :: Coord cs

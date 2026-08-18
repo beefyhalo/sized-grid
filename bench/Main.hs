@@ -107,6 +107,19 @@ total = sum
 neighbourSum :: (IsCoordList cs, AllSizedKnown cs) => FocusedGrid cs Int -> Int
 neighbourSum fg = total [peek p fg | p <- neighbours (pos fg)]
 
+-- | 'neighbourSum' iterated to depth @n@ through 'extend', the shape a
+-- cellular automaton actually runs: hundreds of generations, each one built
+-- on the last, rather than the single 'extend' the benchmarks above measure.
+-- sized-grid-bc6 is the hypothesis this exists to check -- that
+-- 'FocusedGrid'\'s two lazy fields let a thunk chain build up across
+-- generations even though 'Grid' underneath is a strict vector.
+iterateExtend ::
+       (IsCoordList cs, AllSizedKnown cs)
+    => Int
+    -> FocusedGrid cs Int
+    -> FocusedGrid cs Int
+iterateExtend n fg = iterate (extend neighbourSum) fg !! n
+
 -- | Repeated coordinate offset. Recursive rather than a fold so the
 -- intermediate 'Coord's cannot be fused away.
 walk :: Int -> Coord Walk -> Int
@@ -405,6 +418,10 @@ main = do
                 whnf (total . focusedGrid . extend neighbourSum) stepGrid
               , bench "extend neighbourSum 50x50, Periodic" $
                 whnf (total . focusedGrid . extend neighbourSum) stepGridPeriodic
+              , bench "iterate (extend neighbourSum) x100, 50x50" $
+                whnf (total . focusedGrid . iterateExtend 100) stepGrid
+              , bench "iterate (extend neighbourSum) x100, 50x50, Periodic" $
+                whnf (total . focusedGrid . iterateExtend 100) stepGridPeriodic
               ]
         , bgroup
               "collapse round trip"
