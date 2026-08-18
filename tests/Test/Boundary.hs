@@ -1,5 +1,5 @@
 -- | Tests for boundary detection: which end of its axis a coordinate sits at,
--- and the whole-coordinate questions built on it (@sized-grid-4lt@).
+-- and the whole-coordinate questions built on it.
 module Test.Boundary
   ( boundaryTests
   ) where
@@ -52,10 +52,7 @@ axisBoundaryTests =
               assertEqual "bottom" (Just AtMin) (axisBoundary (unsafeOrdinal @5 0))
               assertEqual "middle" Nothing (axisBoundary (unsafeOrdinal @5 2))
               assertEqual "top" (Just AtMax) (axisBoundary (unsafeOrdinal @5 4))
-        , -- A one-cell axis is both ends at once. The answer has to be one of
-          -- them; 'AtMin' is the one the bounds check reaches first, and what
-          -- matters downstream is that it is not 'Nothing' --- the single cell
-          -- of a 1x1 grid is all boundary and no interior.
+        , -- A one-cell axis is both ends at once; 'AtMin' is the one the bounds check reaches first.
           testCase "the only value of a one-cell bounded axis is at an edge" $
               assertEqual "" (Just AtMin) (axisBoundary (hwOf @1 0))
         , testCase "the only value of a one-cell torus is still edgeless" $

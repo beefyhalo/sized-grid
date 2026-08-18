@@ -2,17 +2,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Tests for the unboxed representation, "Data.Grid.Sized.Unboxed".
---
--- The claim this module exists to check is not that unboxing is fast -- that is
--- the benchmark's job -- but that it is the /same library/. @UGrid@ and @Grid@
--- are one implementation at two vector types, so every shape operation should
--- give an answer indistinguishable from the boxed one, and a size proof that
--- holds for one should hold for the other.
---
--- So each test below runs an operation at both representations and compares the
--- results element by element. A regression in which the two drift apart -- the
--- exact failure mode a separate hand-written unboxed module would have risked --
--- shows up here as a mismatch rather than as a silently wrong grid.
 module Test.Unboxed
   ( unboxedTests
   ) where
@@ -37,7 +26,6 @@ boxed = fromJust $ gridFromList cells
 unboxed :: UGrid Square Int
 unboxed = fromJust $ ugridFromList cells
 
--- | The two representations hold the same elements in the same order.
 sameAs :: UGrid cs Int -> Grid cs Int -> Assertion
 sameAs u b =
     assertEqual
@@ -90,8 +78,7 @@ unboxedTests =
               ]
         , testGroup
               "the shared shape algebra works unboxed"
-              -- None of these are defined for the unboxed grid separately.
-              -- That they typecheck at all is half the test.
+              -- None of these are defined separately for the unboxed grid; typechecking is half the test.
               [ testCase "transposeGrid" $
                 transposeGrid unboxed `sameAs` transposeGrid boxed
               , testCase "gridTiles cuts the same rows" $
@@ -101,10 +88,6 @@ unboxedTests =
                          (gridTiles boxed :: [Grid '[ Ordinal 1, Ordinal 4] Int]))
                     (map (U.toList . gridVector)
                          (gridTiles unboxed :: [UGrid '[ Ordinal 1, Ordinal 4] Int]))
-                -- gridWindows landed on master while this work was on a
-                -- branch, and was generalised to GridOf in the merge rather
-                -- than written a second time. This is the check that the
-                -- generalisation was faithful.
               , testCase "gridWindows slides the same windows" $
                 assertEqual
                     "windows"

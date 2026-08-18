@@ -5,8 +5,7 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeOperators       #-}
 
--- | Tests for 'Path', the order-dependent counterpart to a displacement
--- (@sized-grid-ghj@).
+-- | Tests for 'Path', the order-dependent counterpart to a displacement.
 module Test.Path
   ( pathTests
   ) where
@@ -20,7 +19,6 @@ import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty, (===))
 
--- | The bounded space: a walk along it can be blocked.
 hwOf :: KnownNat n => Int -> Clamped n
 hwOf = Clamped . fromJust . numToOrdinal
 
@@ -30,8 +28,6 @@ hw = hwOf
 hwc :: Int -> Int -> Coord '[Clamped 5, Clamped 5]
 hwc r c = hw r :| hw c :| EmptyCoord
 
--- | A two-dimensional displacement, the shape 'Diff' gives every @Coord@
--- above and so what a single 'Path' step is.
 d2 :: Int -> Int -> Coord '[Int, Int]
 d2 a b = a :| b :| EmptyCoord
 
@@ -64,12 +60,7 @@ collapseTests =
     testGroup
         "walking a path agrees with offsetting by its sum, on a torus"
         [ -- A torus never refuses a step, so nothing can block a route the
-          -- combined displacement would otherwise reach: this is the case
-          -- sized-grid-ghj calls flat, and the case 'pathOffset' is filed
-          -- for. Every 'IsCoord' instance in the library is separable
-          -- (sized-grid-3u1), so the agreement is not special to 'Periodic';
-          -- it is stated on a torus because a torus is where no wall can
-          -- interfere with checking it.
+          -- combined displacement would otherwise reach.
           testProperty "any sequence of steps" $
               \(c :: Coord '[Periodic 5, Periodic 5]) (steps :: [(Int, Int)]) ->
                   let p = Path (map (uncurry d2) steps)
@@ -81,9 +72,7 @@ collapseTests =
                    in walkPath c p1 === walkPath c p2
         ]
   where
-    -- A deterministic shuffle from an arbitrary 'Int': not a uniform
-    -- permutation, but enough to reorder a list of more than one element,
-    -- which is all this property needs.
+    -- Not a uniform shuffle, but enough to reorder a list of more than one element.
     permute :: Int -> [a] -> [a]
     permute _ [] = []
     permute n xs =
@@ -95,12 +84,9 @@ wallTests :: TestTree
 wallTests =
     testGroup
         "a wall blocks a route even when it does not block the destination"
-        [ -- The example sized-grid-ghj opens with, transplanted from a Möbius
-          -- seam (which nothing in the library can express yet) to an
-          -- ordinary edge: two steps that cancel still fail if the first one
-          -- alone would have left the grid. This is order-dependence with no
-          -- seam anywhere in sight, and it is why 'walkPath' is not simply
-          -- 'offsetCoord' at the summed 'pathOffset'.
+        [ -- Two steps that cancel still fail if the first one alone would have left
+          -- the grid; this is why 'walkPath' is not simply 'offsetCoord' at the
+          -- summed 'pathOffset'.
           testCase "out and back across the low edge fails, though it sums to zero" $
               assertEqual
                   ""

@@ -1,7 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- | Tests for the checked offset and the neighbourhoods built on it
--- (@sized-grid-7gs@).
+-- | Tests for the checked offset and the neighbourhoods built on it.
 module Test.Neighbours
   ( neighbourTests
   ) where
@@ -50,19 +49,7 @@ offsetIsCoordTests =
               assertEqual "" (Just (pe 4)) (offsetIsCoord (pe 0) (-1))
         , testCase "Periodic wraps at the high edge" $
               assertEqual "" (Just (pe 0)) (offsetIsCoord (pe 4) 1)
-        , -- This used to pass a displacement wider than an 'Int' and check that
-          -- narrowing it did not fold it into range. The displacement is an
-          -- 'Int' now, so that input no longer exists, and the extremes of the
-          -- type are what is left to guard.
-          --
-          -- Unlike the 'Clamped' saturation cases in "Test.Ordinal", these do
-          -- not discriminate between the current body and the @numToOrdinal
-          -- (i + d)@ one it replaced: an overflowing sum comes back negative,
-          -- and 'Nothing' is the right answer for a negative sum too. They are a
-          -- regression guard on the answer, not a demonstration of the bug ---
-          -- what the rewrite bought here was the 'Integer' conversion, not
-          -- correctness.
-          testCase "an extreme displacement is refused, not wrapped into range" $ do
+        , testCase "an extreme displacement is refused, not wrapped into range" $ do
               assertEqual "maxBound" Nothing (offsetIsCoord (hw 4) maxBound)
               assertEqual "minBound" Nothing (offsetIsCoord (hw 0) minBound)
         , testCase "Periodic reduces a huge displacement" $
@@ -78,14 +65,10 @@ hwc r c = hw r :| hw c :| EmptyCoord
 pec :: Int -> Int -> Coord '[Periodic 5, Periodic 5]
 pec r c = pe r :| pe c :| EmptyCoord
 
--- | One bounded axis and one torus axis, to pin down that the policy is read
--- per axis rather than once for the whole coordinate.
+-- | One bounded axis and one torus axis: the policy is read per axis.
 mixc :: Int -> Int -> Coord '[Clamped 5, Periodic 5]
 mixc r c = hw r :| pe c :| EmptyCoord
 
--- | A two-dimensional displacement. This is the shape every @Coord '[_, _]@
--- above takes, because 'Diff' of a coord is a coord of the axes' 'Diff's and
--- both 'Clamped' and 'Periodic' have @Diff ~ Int@.
 d2 :: Int -> Int -> Coord '[Int, Int]
 d2 a b = a :| b :| EmptyCoord
 
@@ -128,11 +111,7 @@ mooreTests =
         , testCase "a torus has 8 neighbours everywhere, corners included" $ do
               assertEqual "corner" 8 (length (neighbours (pec 0 0)))
               assertEqual "interior" 8 (length (neighbours (pec 2 2)))
-        , -- The measurement recorded on sized-grid-7gs: moorePoints 1 at a
-          -- corner of a Clamped 5 x Clamped 5 returned nine results of which
-          -- only four were distinct, because (.+^) clamped every off-grid
-          -- offset back onto an edge cell. Callers had to nubOrd it away.
-          testCase "regression: a corner yields no clamped duplicates" $ do
+        , testCase "regression: a corner yields no clamped duplicates" $ do
               let ns = neighbours (hwc 0 0)
               assertEqual "count" 3 (length ns)
               assertEqual "all distinct" 3 (length (nub ns))
@@ -172,9 +151,7 @@ mooreTests =
               all (\c' -> c `elem` neighbours c') (neighbours c)
         ]
 
--- | Three dimensions, to keep the tests honest about von Neumann counts: a
--- radius-1 von Neumann neighbourhood has four cells in 2D but six in 3D, which
--- is exactly why the function is not called @neighbours4@.
+-- | A radius-1 von Neumann neighbourhood has four cells in 2D but six in 3D.
 hwc3 :: Int -> Int -> Int -> Coord '[Clamped 5, Clamped 5, Clamped 5]
 hwc3 x y z = hw x :| hw y :| hw z :| EmptyCoord
 
@@ -207,26 +184,17 @@ vonNeumannTests =
               all (`elem` mooreNeighbours 2 c) (vonNeumannNeighbours 2 c)
         , testProperty "is a subset of the Moore neighbourhood on a torus" $ \(c :: Coord '[Periodic 5, Periodic 5]) ->
               all (`elem` mooreNeighbours 2 c) (vonNeumannNeighbours 2 c)
-        , -- On a 3-cycle every other cell is one step away whichever way you
-          -- walk, so a radius-2 von Neumann ball is the entire grid.
-          testCase "a small torus counts the shorter way round" $
+        , testCase "a small torus counts the shorter way round" $
               assertEqual
                   ""
                   8
                   (length (vonNeumannNeighbours 2 (pec3 0 0)))
-        , -- Offsets -2 and +2 reach the same cell on a Periodic 4 axis. If the
-          -- axis enumeration kept both, the product would contain repeats.
-          testCase "colliding offsets on a torus do not duplicate cells" $ do
+        , testCase "colliding offsets on a torus do not duplicate cells" $ do
               let ns = mooreNeighbours 2 (pec4 0 0)
               assertEqual "every other cell, once" 15 (length ns)
               assertEqual "all distinct" 15 (length (nub ns))
         ]
 
--- | 'Ordinal' has no 'Data.AffineSpace.AffineSpace' instance, so the old
--- @moorePoints@ could not be called on a coord containing one at all: its
--- @All AffineSpace cs@ was unsatisfiable. These ask only for
--- @IsCoordList cs@, so they can. The ChangeLog claims this; this is the
--- evidence.
 ordinalTests :: TestTree
 ordinalTests =
     testGroup
@@ -251,34 +219,16 @@ ordinalTests =
     ord r c =
         fromJust (numToOrdinal r) :| fromJust (numToOrdinal c) :| EmptyCoord
 
--- | Tests for the exported distances (@sized-grid-lcl@).
---
--- The library computed these all along --- 'axisSteps' works out the true
--- per-axis distance and 'stepsWithin' sums it --- and then both neighbourhood
--- functions discarded the number and nothing exported it. The first group below
--- is the one that matters: 'axisDistance' is a second, independent
--- implementation of the "shorter route wins" rule, so it has to be pinned to the
--- enumeration rather than trusted to agree with it.
 axisDistanceTests :: TestTree
 axisDistanceTests =
     testGroup
         "axisDistance agrees with the axisSteps enumeration"
-        [ -- The law in the haddock for 'axisDistanceIsCoord': the distance is
-          -- the least @abs d@ for which @offsetIsCoord a d == Just b@, which is
-          -- exactly what 'axisSteps' works out by trying every offset.
-          --
-          -- Checked exhaustively rather than by QuickCheck: these axes have five
-          -- inhabitants, so every start value and every reachable target fits in
-          -- a list comprehension, which is both cheaper and stronger than
-          -- sampling. It also covers 'Ordinal', which has no 'Arbitrary'
-          -- instance and so cannot be reached by a property at all.
+        [ -- Checked exhaustively rather than by QuickCheck: also covers
+          -- 'Ordinal', which has no 'Arbitrary' instance.
           testCase "every step axisSteps records is the distance" $ do
               assertBool "Clamped 5" (agreesEverywhere @Clamped @5 5)
               assertBool "Periodic 5" (agreesEverywhere @Periodic @5 5)
               assertBool "Ordinal 5" (agreesEverywhere @Ordinal @5 5)
-              -- A 4-cycle is where offsets -2 and +2 collide, and a 3-cycle is
-              -- where every other cell is one step away. Both are the cases the
-              -- naive @abs (i - j)@ gets wrong.
               assertBool "Periodic 4" (agreesEverywhere @Periodic @4 4)
               assertBool "Periodic 3" (agreesEverywhere @Periodic @3 3)
         , testCase "a bounded axis measures straight" $ do
@@ -297,8 +247,6 @@ axisDistanceTests =
               axisDistance a b === axisDistance b a
         ]
   where
-    -- Every value of the axis, against every target 'axisSteps' can reach from
-    -- it within @r@.
     agreesEverywhere ::
            forall c n. (IsCoord c, KnownNat n, 1 <= n) => Int -> Bool
     agreesEverywhere r =
@@ -307,10 +255,6 @@ axisDistanceTests =
             , (d, v) <- axisSteps r c
             ]
 
--- | The two exported metrics are exactly the balls the two neighbourhood
--- functions already enumerate. This is the strongest evidence available that
--- the distances are right, because the neighbourhoods are covered by the tests
--- above and were reviewed when they landed.
 metricTests :: TestTree
 metricTests =
     testGroup
@@ -341,17 +285,13 @@ metricTests =
         sort (f r c) ==
         sort [c' | c' <- allCoord, let d = dist c c', d > 0, d <= r]
 
--- | The mixed-axis case from the acceptance criteria on @sized-grid-lcl@: the
--- bounded axis measures straight while the torus axis takes the shorter way
--- round, in the same coordinate. This is the answer a caller cannot easily
--- write by hand, and the reason the distance is worth exporting at all.
 mixedPolicyTests :: TestTree
 mixedPolicyTests =
     testGroup
         "each axis applies its own boundary policy"
         [ testCase "the torus axis wraps, the bounded axis does not" $ do
-              -- Row 0 -> 4 on a Clamped axis is 4 steps; column 0 -> 4 on a
-              -- Periodic axis is 1 step back across the seam.
+              -- Row 0 -> 4 on Clamped is 4 steps; column 0 -> 4 on Periodic is
+              -- 1 step back across the seam.
               assertEqual "per axis" [4, 1] (axisDistances (mixc 0 0) (mixc 4 4))
               assertEqual "chebyshev" 4 (coordDistance (mixc 0 0) (mixc 4 4))
               assertEqual "manhattan" 5 (coordManhattan (mixc 0 0) (mixc 4 4))
@@ -366,11 +306,8 @@ mixedPolicyTests =
               assertEqual "manhattan" 2 (coordManhattan (hwc 2 2) (hwc 3 3))
         ]
 
--- | Both exported distances are metrics. Manhattan and Chebyshev are the sum
--- and the maximum of the per-axis distances, and each axis metric is itself a
--- metric --- @abs (i - j)@ on a line, @min d (n - d)@ on a cycle --- so both
--- inherit the laws. Worth stating because the torus case is where a
--- hand-rolled distance stops satisfying them.
+-- | Worth stating because the torus case is where a hand-rolled distance
+-- stops satisfying the laws.
 metricLawTests :: TestTree
 metricLawTests =
     testGroup
@@ -391,18 +328,13 @@ metricLawTests =
               coordManhattan a c <= coordManhattan a b + coordManhattan b c
         , testProperty "Chebyshev never exceeds Manhattan" $ \(a :: Coord '[Clamped 5, Periodic 5]) b ->
               coordDistance a b <= coordManhattan a b
-        , -- A step to an adjacent cell is one in both metrics only when it is
-          -- along a single axis; the point of having both is that a diagonal
-          -- costs one and two respectively.
-          testProperty "every Moore neighbour is one Chebyshev step away" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
+        , testProperty "every Moore neighbour is one Chebyshev step away" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
               all (\n -> coordDistance c n == 1) (neighbours c)
         , testProperty "every von Neumann neighbour is one Manhattan step away" $ \(c :: Coord '[Clamped 5, Periodic 5]) ->
               all (\n -> coordManhattan c n == 1) (vonNeumannNeighbours 1 c)
         ]
 
--- | 'stepsWithin' is now exported too: it is the general primitive both
--- neighbourhood functions are one-liners over, and the one a BFS-shaped
--- consumer wants because it carries the distances.
+-- | The general primitive both neighbourhood functions are built from.
 stepsWithinTests :: TestTree
 stepsWithinTests =
     testGroup
@@ -418,14 +350,8 @@ stepsWithinTests =
               [n | (s, n) <- stepsWithin 2 c, s > 0] === mooreNeighbours 2 c
         ]
 
--- | Tests for 'centreCoord' and the odd-extent precondition it carries
--- (@sized-grid-hk6@).
---
--- The precondition itself is a compile error, not a runtime one, so it is
--- demonstrated rather than tested here --- the same choice
--- "Test.Invariant" makes for the cases 'takeGrid' and 'splitHigherDim' now
--- reject at compile time (sized-grid-cti has the harness that would pin it
--- down as a real test):
+-- | The odd-extent precondition on 'centreCoord' is a compile error, not a
+-- runtime one, so it is demonstrated here rather than tested:
 --
 -- >  centreCoord :: Coord '[Clamped 4]
 -- >    error: Dimension '4' must be odd to have a centre coordinate
@@ -471,9 +397,6 @@ centredTests =
                      (axisDistance c (peOf 8 :: Periodic 9))
         ]
 
--- | Tests for 'PuncturedCoord', 'puncturedToCoord' and 'allPunctured'
--- (sized-grid-meg), the type-precise index 'partitionFocus' hands its
--- neighbours out through in place of Chris Penner's @Grid window (Maybe a)@.
 puncturedTests :: TestTree
 puncturedTests =
     testGroup
@@ -505,14 +428,7 @@ puncturedTests =
                   (map puncturedToCoord (allPunctured @'[Clamped 3, Periodic 5]))
         ]
 
--- | Seven axes: one past the ceiling the old @CoordDiff@ family imposed.
---
--- @CoordDiff@ was an open family with one hand-written @type instance@ per
--- arity, and it stopped at six. A seven-axis coord therefore had no @Diff@ at
--- all, so no 'AffineSpace' instance and no 'offsetCoord'; the only fix
--- available to a caller was an orphan instance plus a seven-tuple. 'MapDiff'
--- recurses, so this now works for the same reason two axes do, and no arity is
--- special (@sized-grid-iet@).
+-- | Seven axes: one past the old six-axis ceiling.
 type Seven
      = '[ Clamped 3, Clamped 3, Clamped 3, Clamped 3, Clamped 3, Clamped 3, Clamped 3]
 
@@ -521,7 +437,6 @@ sevenOf n =
     let c = hwOf n
     in c :| c :| c :| c :| c :| c :| c :| EmptyCoord
 
--- | The displacement for 'Seven': a coord again, of the axes' 'Diff's.
 sevenD :: Int -> Diff (Coord Seven)
 sevenD d = d :| d :| d :| d :| d :| d :| d :| EmptyCoord
 
@@ -546,9 +461,7 @@ arityTests =
               assertEqual "" (sevenOf 1) (sevenOf 1 .+^ zeroV)
         ]
 
--- | The tuple bridge kept for call sites that used to write a tuple literal
--- directly. It is arity-generic, so the same function covers a pair and a
--- seven-axis coord.
+-- | Arity-generic: the same function covers a pair and a seven-axis coord.
 tupleBridgeTests :: TestTree
 tupleBridgeTests =
     testGroup

@@ -2,11 +2,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Tests for 'gridTiles' and 'zipLowerDim'.
---
--- The 4x4 board here is the stand-in that found the original defect: rows came
--- out right, but columns were built with 'mapLowerDim' in the list applicative,
--- which is a cartesian product -- 256 results instead of 4, and 9^9 on the real
--- 9x9 sudoku board this API exists to slice.
 module Test.Tiling
   ( tilingTests
   ) where
@@ -39,9 +34,8 @@ squares b = do
     band :: Grid '[ Ordinal 2, Ordinal 4] Int <- gridTiles b
     zipLowerDim gridTiles band
 
--- | The same shapes at the size that matters: on a 9x9 board the buggy
--- combinator produced 387,420,489 results, so a test that merely forces the
--- length is a sufficient regression test -- it would not terminate before.
+-- | On a 9x9 board the buggy combinator produced 387,420,489 results, so
+-- merely forcing the length is a sufficient regression test.
 nineColumns :: [Grid '[ Ordinal 9, Ordinal 1] Int]
 nineColumns = zipLowerDim gridTiles nineByNine
 
@@ -95,8 +89,7 @@ tilingTests =
                     ]
                     (map toList (squares fourByFour))
               ]
-          -- Pins the distinction the bug turned on, so that anyone tempted to
-          -- "simplify" zipLowerDim back into mapLowerDim sees what changes.
+          -- Pins the distinction the bug turned on.
         , testCase "mapLowerDim in the list applicative is a cartesian product" $
           assertEqual
               "4^4"

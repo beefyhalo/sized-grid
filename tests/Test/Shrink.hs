@@ -24,11 +24,8 @@ focusCenter =
             numToOrdinal (1 :: Int)
      in shrinkGrid c exampleGrid
 
--- | A window that is genuinely smaller than its source, and where the number of
--- positions differs from the source size: x = 3 positions, y = 5 source, z = 3
--- window. The old @z <= x - y + 1@ constraint rejected this outright (3 - 5
--- truncates to 0 in Nat, leaving @z <= 1@), which is how the transposed
--- constraint went unnoticed -- every existing case had x == y.
+-- | A window genuinely smaller than its source, with the number of positions
+-- (3) differing from the source size (5).
 sourceOfFive :: Grid '[ Ordinal 5] Int
 sourceOfFive = fromJust $ gridFromList [1, 2, 3, 4, 5]
 
@@ -38,27 +35,17 @@ windowAt n =
       c = fromJust (numToOrdinal n) :| EmptyCoord
    in shrinkGrid c sourceOfFive
 
--- | What the four cases above check one offset at a time, stated once for every
--- offset and every source.
---
--- A window is a slice: @shrinkGrid@ at offset @n@ must hand back exactly the
--- cells @drop n@ then @take z@ would. The example-based cases pin down three
--- specific slices of one specific grid, which leaves the contents free to be
--- transposed, reversed or read from the wrong end as long as those three
--- happen to come out right.
+-- | A window is a slice: @shrinkGrid@ at offset @n@ must hand back exactly the
+-- cells @drop n@ then @take z@ would.
 windowIsSlice :: Grid '[ Ordinal 5] Int -> Ordinal 3 -> Property
 windowIsSlice src o =
   let win = shrinkGrid (o :| EmptyCoord) src :: Grid '[ Ordinal 3] Int
    in toList win === take 3 (drop (ordinalToNum o) (toList src))
 
 -- | The same law in two dimensions, where a window is a submatrix rather than a
--- slice and both axes have to be offset independently.
---
--- This is the shape the @x + z <= y + 1@ constraint was got wrong for: with a
--- 4x4 source, a 2x2 window and 3x3 offsets, the two axes carry different
--- numbers so a transposed index cannot pass by coincidence. It also fixes the
--- orientation, which nothing else does -- @collapseGrid@ produces rows, so the
--- first coordinate has to be the one that selects among them.
+-- slice and both axes have to be offset independently. Also fixes the
+-- orientation: @collapseGrid@ produces rows, so the first coordinate has to be
+-- the one that selects among them.
 windowIsSubmatrix ::
      Grid '[ Ordinal 4, Ordinal 4] Int
   -> Coord '[ Ordinal 3, Ordinal 3]

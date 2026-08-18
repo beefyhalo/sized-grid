@@ -34,11 +34,8 @@ flipTileState :: TileState -> TileState
 flipTileState Alive = Dead
 flipTileState Dead  = Alive
 
--- | Unboxed as a single byte, so a 'UGrid' can hold a board of these without a
--- pointer per tile. See "Data.Grid.Sized.Unboxed" for what that buys the bulk
--- operations below, and what it costs: 'applyRule' can no longer be written
--- with 'Control.Comonad.extend', because 'duplicate' would need a grid of
--- grids, and a grid is never an unboxed element.
+-- | Unboxed as a single byte, so a 'UGrid' can hold a board of these without
+-- a pointer per tile.
 instance VU.IsoUnbox TileState Word8 where
     toURepr Dead  = 0
     toURepr Alive = 1
@@ -64,11 +61,8 @@ gameOfLife = Rule $ \here neigh ->
           | here == Dead && aliveNeigh == 3 -> Alive
           | otherwise -> Dead
 
--- | One tick, as a bulk pass over the unboxed grid rather than a comonadic
--- 'Control.Comonad.extend': for every coordinate, read its neighbours back out
--- of the *old* grid and decide the new tile. Non-comonadic because the old
--- grid, not a focused view of it, is what 'runRule' reads from -- there is no
--- @duplicate@ here to build a grid of grids out of.
+-- | One tick, as a bulk pass over the unboxed grid: for every coordinate,
+-- read its neighbours back out of the old grid and decide the new tile.
 applyRule ::
        IsCoordList cs
     => Rule n

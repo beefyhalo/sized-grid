@@ -47,7 +47,6 @@ instance Random Spin where
          else (Down, g')
 
 type GridType = '[Periodic 60, Periodic 60]
---type GridType = '[Periodic (AsPeano 1), Periodic (AsPeano 1)]
 
 gridSize :: Integer
 gridSize = GHC.natVal (Proxy :: Proxy (MaxCoordSize GridType))

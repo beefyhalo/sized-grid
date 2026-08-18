@@ -1,5 +1,5 @@
--- | sized-grid-cti. 'takeGrid' needs @n <= m@; taking 9 from a 3-grid does not
--- typecheck. Compiled by Test.CompileFail, never by the test suite proper.
+-- | 'takeGrid' needs @n <= m@; taking 9 from a 3-grid does not typecheck.
+-- Compiled by Test.CompileFail, never by the test suite proper.
 module TakeGridTooBig where
 
 import Data.Grid.Sized

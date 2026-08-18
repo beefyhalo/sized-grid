@@ -1,86 +1,6 @@
--- AllowAmbiguousTypes is for the axis-list recursion helpers below
--- ('nestByShape', 'flattenByShape', 'nestedToJSON', 'nestedParseJSON'). They
--- mention @cs@ only under the non-injective 'CollapseGrid' family, or not at
--- all, so nothing in an argument pins it down; every call site supplies it with
--- @\@cs@. GHC2024 plus the default-extensions in grid-sized.cabal cover
--- everything else this module used to list.
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- |
--- Module      :  Data.Grid.Sized.Internal.Grid
--- License     :  MIT -style (see the file LICENSE)
---
--- The `GridOf` representation and everything defined over it.
---
--- This module is hidden. It exists so that the `Grid` constructor can be shared
--- with "Data.Grid.Sized.Unsafe" without also being shared with the world: the
--- one invariant this library exists to enforce is that a @Grid cs a@ holds
--- exactly @MaxCoordSize cs@ elements, and an exported constructor is a licence
--- to break it. "Data.Grid.Sized" re-exports the safe half of what is here.
---
--- Everything below is free to use the constructor directly. The obligation that
--- comes with that is on each function in turn: it must not change the length of
--- the vector except in step with the type.
---
--- == Why the vector is a parameter (sized-grid-up6)
---
--- The grid used to be a @newtype Grid cs a = Grid (V.Vector a)@ -- boxed, and
--- only boxed. For the numeric workloads this library is aimed at that is the
--- wrong representation: an unboxed grid measures 2-3.5x faster on every
--- operation that touches the whole vector, and identical on indexed reads. See
--- "Data.Grid.Sized.Unboxed" for the table.
---
--- The obvious way to get that was a second, separate module with its own
--- monomorphic unboxed API. What killed it is what such a module would have had
--- to contain: 'dropGrid', 'takeGrid', 'sliceGrid', 'splitGrid', 'combineGrid',
--- 'splitHigherDim', 'mapLowerDim', 'gridTiles', 'ShrinkableGrid' -- the whole
--- shape algebra, including the 'Data.Grid.Sized.Internal.Type.windowFits' proof
--- and the @off + len <= m@ restatement that took all of sized-grid-wrc to get
--- right. Two copies of this library's hardest and most safety-critical code,
--- certain to drift apart.
---
--- Parameterising over the vector writes that code once. The shape algebra turns
--- out to be almost entirely /element-agnostic/ -- it moves whole sub-vectors
--- about and never looks inside one -- so most of it needs no element constraint
--- at all, and the rest needs only @'VG.Vector' v a@.
---
--- Three things do not generalise, and all three are element-polymorphic by
--- nature rather than by accident:
---
---   * `Functor`, `Foldable` and `Traversable` need @v@ itself to have them, so
---     they hold for the boxed grid and not the unboxed one. They are stated
---     that way -- @Functor v => Functor (GridOf v cs)@ -- rather than pinned to
---     "Data.Vector", so any boxed-like vector gets them.
---
---   * `Applicative`, `Monad`, `Distributive` and `Representable` must work at
---     /every/ element type, which no unboxed vector can. They are given at
---     @'GridOf' V.Vector@ concretely.
---
---   * The bulk operations an unboxed grid actually wants -- 'mapGrid',
---     'zipWithGrid', 'foldlGrid'' and friends -- cannot be class methods,
---     because a class method may not carry a constraint on the element. They
---     are plain functions taking @'VG.Vector' v a@, and they work for both
---     representations.
---
--- == The pragmas are load-bearing
---
--- Every generic function below carries an @INLINE@ or @INLINABLE@ pragma, and
--- they are not decoration. Without them each one is compiled once,
--- polymorphically, and reached across a module boundary through a
--- @'VG.Vector' v a@ dictionary that GHC has no licence to specialise away. The
--- element operations then stay behind a dictionary call, nothing fuses, and the
--- unboxed representation gives most of its advantage back: measured on the
--- 300x300 summed-area build, 53.6 ms without the pragmas against 13.1 ms with
--- them.
---
--- The boxed path gains at least as much, because it is the same code -- that
--- build was 93.3 ms unspecialised and is 28.1 ms now, and @mapGrid@ followed by
--- a fold went from 7.74 ms and 15 MB to 318 us and 27 bytes once the two could
--- fuse. So the pragmas are not a tax the vector parameter imposes; they are
--- what any @Data.Vector.Generic@-style API needs, and this one was leaving the
--- same speedup on the table before it had a parameter at all.
---
--- If a function is added here, give it a pragma.
+-- | The `GridOf` representation and everything defined over it.
 module Data.Grid.Sized.Internal.Grid
   ( -- * Representation
     GridOf(..)
@@ -146,30 +66,13 @@ import qualified GHC.Generics                  as GHC
 import           GHC.TypeLits
 import qualified GHC.TypeLits                  as GHC
 
--- | A multi dimensional sized grid over the vector type @v@.
---
--- The constructor is called @Grid@ rather than @GridOf@ so that a pattern match
--- in this module reads as it always did, and so that the derived `Show` output
--- is unchanged. That it collides with the `Grid` type synonym below is not a
--- problem: one lives in the data namespace and the other in the type namespace,
--- exactly as they did when @Grid@ was a single type with a single constructor.
---
--- The field is called @unGrid@ rather than @gridVector@ for the same reason. It
--- is not exported as a field anywhere: a record field in scope permits record
--- update syntax, and @g { unGrid = V.empty }@ is exactly the unsound
--- construction the constructor is being hidden to prevent. Use `gridVector` to
--- read it.
+-- | The @unGrid@ field is not exported: a record field in scope would permit
+-- record-update syntax, which could break the length invariant.
 newtype GridOf v (cs :: [Type]) a = Grid
   { unGrid :: v a
   } deriving stock (GHC.Generic)
 
--- | The boxed grid: what @Grid@ meant before the vector became a parameter, and
--- what it still means everywhere it appears unqualified.
---
--- Declared with no parameters of its own so that it stays saturated. @Grid cs@
--- is therefore still partially applicable -- @'Functor' ('Grid' cs)@,
--- @'Representable' ('Grid' cs)@ -- which a synonym written @type Grid cs a =
--- GridOf V.Vector cs a@ would not be.
+-- | Kept nullary so it stays partially applicable, e.g. @'Functor' ('Grid' cs)@.
 type Grid = GridOf V.Vector
 
 deriving stock instance Eq (v a) => Eq (GridOf v cs a)
@@ -184,45 +87,22 @@ deriving newtype instance Functor v => Functor (GridOf v cs)
 
 deriving newtype instance Foldable v => Foldable (GridOf v cs)
 
--- | Written out rather than derived. @GeneralizedNewtypeDeriving@ coerces under
--- the applicative @f@, whose role it must assume is nominal, so it cannot do
--- this one. The body is the coercion it would have written.
+-- | Written by hand: @GeneralizedNewtypeDeriving@ can't coerce under the
+-- applicative parameter.
 instance Traversable v => Traversable (GridOf v cs) where
   traverse f (Grid v) = Grid <$> traverse f v
 
--- | The escape hatch, re-exported from "Data.Grid.Sized.Unsafe".
---
--- Asserts what `gridFromVector` checks: that the vector holds exactly
--- @MaxCoordSize cs@ elements. Nothing verifies it, and a grid that fails it
--- makes `Data.Functor.Rep.index` throw on positions its own type calls valid.
---
--- Only construction needs to be unsafe. Reading the vector back out cannot
--- invalidate anything, so that direction is `gridVector`, which is public. A
--- bidirectional pattern synonym would have covered both at once, but it would
--- also have dragged the safe direction into the unsafe import -- and naming a
--- pattern synonym in an import list requires the importing module to enable
--- @PatternSynonyms@, which is a poor toll to charge for reading a vector.
---
--- The name is deliberately alarming. The constructor it stands for is spelled
--- @Grid@, which reads as ordinary code at a use site and gives no hint that the
--- library's central invariant is being asserted rather than established.
+-- | Asserts, rather than checks, that the vector holds exactly
+-- @MaxCoordSize cs@ elements. Re-exported from "Data.Grid.Sized.Unsafe".
 unsafeGridFromVector :: v a -> GridOf v cs a
 unsafeGridFromVector = Grid
 {-# INLINE unsafeGridFromVector #-}
 
--- | Read a grid's elements in row-major order.
---
--- Safe in the direction that matters: reading a vector out cannot invalidate
--- anything. The result always has @MaxCoordSize cs@ elements.
+-- | Elements in row-major order.
 gridVector :: GridOf v cs a -> v a
 gridVector = unGrid
 {-# INLINE gridVector #-}
 
--- | Build a grid from a vector, checking that its length is the one the type
--- claims. `Nothing` if it is not.
---
--- This is the safe counterpart to `unsafeGridFromVector`, and the reason the
--- constructor no longer needs to be public.
 gridFromVector ::
        forall v cs a. (VG.Vector v a, AllSizedKnown cs)
     => v a
@@ -234,24 +114,10 @@ gridFromVector v =
 {-# INLINABLE gridFromVector #-}
 
 -- $bulk
---
--- The operations that carry an element constraint, and so cannot be the class
--- methods their boxed counterparts are. On a boxed grid each is the obvious
--- thing -- 'mapGrid' is `fmap`, 'tabulateGrid' is `Data.Functor.Rep.tabulate` --
--- and on an unboxed grid they are the entire point, because the classes are out
--- of reach there.
---
--- These are also where the representation actually pays. A measured spike found
--- the win to be wholly in operations that touch the vector wholesale; a single
--- indexed read is the same to within noise either way, because its cost is the
--- coordinate arithmetic rather than the vector access.
+-- Operations that carry an element constraint and so cannot be class methods.
 
--- | Build a grid from a function of the coordinate. `Data.Functor.Rep.tabulate`
--- for grids whose element type cannot support `Representable`.
---
--- 'VG.fromListN' rather than 'VG.fromList': a list of statically unknown length
--- makes the vector grow by doubling, so it is allocated and copied several
--- times over, and the length is known --- it is 'coordSpaceSize'.
+-- | `tabulate` for grids that cannot be `Representable`. Uses `VG.fromListN`,
+-- not `VG.fromList`, since the length is known up front.
 tabulateGrid ::
        forall v cs a. (VG.Vector v a, IsCoordList cs)
     => (Coord cs -> a)
@@ -259,8 +125,6 @@ tabulateGrid ::
 tabulateGrid func = Grid $ VG.fromListN (coordSpaceSize @cs) $ map func allCoord
 {-# INLINABLE tabulateGrid #-}
 
--- | Read the element at a coordinate. `Data.Functor.Rep.index` for grids whose
--- element type cannot support `Representable`.
 indexGrid ::
        forall v cs a. (VG.Vector v a, IsCoordList cs)
     => GridOf v cs a
@@ -269,7 +133,6 @@ indexGrid ::
 indexGrid (Grid v) c = v VG.! coordPosition c
 {-# INLINE indexGrid #-}
 
--- | `fmap` for grids whose element type cannot support `Functor`.
 mapGrid ::
        (VG.Vector v a, VG.Vector v b)
     => (a -> b)
@@ -278,12 +141,8 @@ mapGrid ::
 mapGrid f (Grid v) = Grid (VG.map f v)
 {-# INLINE mapGrid #-}
 
--- | `Control.Lens.Indexed.imap` for grids whose element type cannot support
--- `FunctorWithIndex`.
---
--- The coordinate list is walked alongside the vector rather than materialised;
--- see the note on the `FunctorWithIndex` instance below, which is the same
--- trick and the same reason.
+-- | Walks the coordinate list alongside the vector rather than materialising
+-- it; see the `FunctorWithIndex` instance below.
 imapGrid ::
        forall v cs a b. (VG.Vector v a, VG.Vector v b, IsCoordList cs)
     => (Coord cs -> a -> b)
@@ -356,20 +215,12 @@ instance (IsCoordList cs, AllSizedKnown cs) =>
   tabulate = tabulateGrid
   index = indexGrid
 
--- | @V.fromList allCoord@ looks like it materialises the whole coordinate list
--- on every traversal, and that is what @sized-grid-uvd@ was raised about, but
--- it does not: 'V.zipWith' fuses with it, so the coordinates are produced and
--- consumed one at a time and die in the nursery. Replacing it with anything the
--- simplifier cannot see through --- a vector built by a recursive function, or
--- the same list under 'V.fromListN' --- forces 90,000 coordinates to be live at
--- once and made @imap@ 23% more allocation and 59% slower, measured. Leave it
--- alone.
---
--- The cost that /was/ real is in `coordPosition`, which these traversals'
--- callers almost always apply to the coordinate they are handed. That one is
--- now gone too: the fold moved into `IsCoordList`, so it unrolls and
--- constant-folds at a concrete axis list. `ifoldl'` over this grid went from
--- 30 MB to 2.7 MB, and `imap` from 35 MB to 7.6 MB, measured.
+-- | @V.fromList allCoord@ looks like it materialises the whole coordinate
+-- list on every traversal, but it does not: 'V.zipWith' fuses with it, so
+-- coordinates are produced and consumed one at a time and die in the
+-- nursery. Replacing it with anything the simplifier cannot see through
+-- forces all of them to be live at once -- measured 23% more allocation and
+-- 59% slower. Leave it alone.
 instance (IsCoordList cs) => FunctorWithIndex (Coord cs) (Grid cs) where
   imap func (Grid v) = Grid $ V.zipWith func (V.fromList allCoord) v
 
@@ -410,70 +261,27 @@ splitVectorBySize n v
 
 -- $recursion
 --
--- The four operations below -- 'collapseGrid', 'gridFromList' and the two JSON
--- instances -- are the only ones here that recurse /down the axis list/, and
--- that makes them the one place where the vector parameter costs something if
--- it is handled naively.
+-- 'collapseGrid', 'gridFromList' and the two JSON instances all recurse
+-- /down the axis list/. A naive recursion keeping the grid generic in @v@
+-- needs a fresh @'VG.Vector' v a@ dictionary at each level, which GHC will
+-- not specialise through (an @INLINABLE@ pragma does not help, measured),
+-- leaving every 'VG.take'\/'VG.drop'\/'VG.concat' as an indirect call --
+-- 60-300% slower than a monomorphic version. So the recursion here is
+-- monomorphic on boxed "Data.Vector" ('splitBoxedBySize'), converting at
+-- the boundary with 'VG.convert'; plain-list recursion and closure-passing
+-- were both measured and are worse.
 --
--- The naive version keeps the grid in the recursion: chunk the vector, wrap
--- each chunk back up, recurse at the tail of @cs@. Every level then needs the
--- @'VG.Vector' v a@ dictionary, and because the recursive call is at a
--- /different/ @cs@ each time, GHC will not specialise through it -- an
--- @INLINABLE@ pragma does not help, measured. Every 'VG.take', 'VG.drop' and
--- 'VG.concat' inside stays an indirect call that cannot reach its fast path,
--- and the whole group ran 60-300% slower than the monomorphic original.
+-- 'collapseGrid' and 'gridFromList' get the boxed case back for free via a
+-- RULE matching @v ~ "Data.Vector".Vector@, bypassing 'VG.convert' entirely
+-- (GHC's own fusion turns a boxed-to-boxed 'VG.convert' into a 'clone', not
+-- a no-op, so this has to be done explicitly). The same trick can't reach
+-- 'toJSON'\/'parseJSON': as class methods, a RULE only sees the opaque
+-- 'ToJSON'\/'FromJSON' dictionary at the call site, with no way to recover
+-- the underlying @'VG.Vector' v a@ from it.
 --
--- The fix is to make the recursion /monomorphic/: it works on a boxed
--- "Data.Vector" through 'splitBoxedBySize', and the generic function converts
--- at the boundary with 'VG.convert'. The helpers carry no @'VG.Vector'@
--- constraint, so they compile to exactly the code they did when the grid was
--- boxed.
---
--- Two other shapes were measured and are worse. Recursing on plain lists loses
--- the O(1) chunk -- 'V.take' and 'V.drop' share one array where @splitAt@
--- copies cells -- and left 'collapseGrid' 83% and 'toJSON' 68% above baseline.
--- Passing the vector operations in as arguments, so the recursion carries
--- closures instead of a dictionary, fixes the two plain functions but not the
--- two class methods: an @INLINABLE@ function specialises at its call site and
--- an instance method does not, so JSON went to 74% and 56% above baseline.
---
--- What remains is one 'VG.convert' per call. For a boxed grid that is a copy
--- between a type and itself, and it costs 'toJSON' about 19% and 'collapseGrid'
--- about 9%; 'gridFromList' and 'parseJSON' come out level with the boxed-only
--- original. An unboxed grid pays the same copy. Both alternative shapes above
--- cost more elsewhere, and JSON and nested-list conversion are boundary
--- operations, not what anyone reaches for either representation to speed up
--- -- so this is where it was left (sized-grid-2g0).
---
--- 'collapseGrid' and 'gridFromList' were later given the boxed case back for
--- free (still 2g0): each already carries its own @'VG.Vector' v a@ as a
--- genuine function argument, so a RULE stated at @v ~ "Data.Vector".Vector@
--- can match the whole call and replace it with the boxed helper directly, no
--- 'VG.convert' involved. GHC does not do this on its own -- @VG.convert@'s
--- definition is @unstream . stream@, and the fusion rules in "Data.Vector"
--- turn @unstream (stream v)@ into @clone v@, not @v@, so even a fully
--- specialised, fully inlined boxed-to-boxed 'VG.convert' still allocates.
--- Confirmed by measurement to be back to the boxed-only baseline
--- (collapseGrid/boxed and gridFromList/boxed below).
---
--- The same trick does not reach 'toJSON' and 'parseJSON'. Both are class
--- methods, so the only dictionary a RULE sees at the call site is the single
--- opaque @'ToJSON' (GridOf v cs a)@ (or @'FromJSON'@) dictionary; the
--- @'AllSizedKnown' cs@ and element dictionaries the instance was built from
--- are not projectable back out of it, and a RULE pragma has no syntax for
--- adding its own class context to supply them separately (tried; parse error
--- on @=>@). Reaching them needs a real constraint -- an internal
--- @v@-to-boxed-conversion class with @'VG.Vector' v a@ as its only other
--- instance, dispatched instead of 'VG.convert' -- and that constraint would
--- have to sit in the 'ToJSON'\/'FromJSON' instance context, which is exactly
--- the leak the class-based angle in 2g0 was passed over for: any function
--- written the way 'collapseGrid' is, polymorphic in @v@ and calling 'toJSON'
--- internally, would need the new constraint threaded through it too, or stop
--- compiling. Left as the residual cost.
---
--- Keep it this way. If one of these grows a @'VG.Vector' v a@ constraint on the
--- recursive helper, or reaches for the exported generic 'splitVectorBySize',
--- the regression comes straight back.
+-- Keep it this way: growing a @'VG.Vector' v a@ constraint on the recursive
+-- helper, or switching to the exported generic 'splitVectorBySize', brings
+-- the regression straight back.
 
 -- | 'splitVectorBySize' at a boxed vector, for the recursions below.
 --
@@ -689,14 +497,12 @@ takeGrid n (Grid v) =
 --
 -- > sliceGrid 1 2 g   -- elements 1 and 2 of a 3-grid
 --
--- This is @takeGrid len . dropGrid off@ with the intermediate size fused away,
--- and the fusion is the entire point (sized-grid-wrc). Composed, the two state
--- the window bound as @len <= m - off@ over GHC's /truncating/ subtraction;
--- when @off@ is an existential -- exactly the case in 'shrinkGrid', where it
--- comes from 'reifyCoord' -- that is out of reach of ghc-typelits-natnormalise,
--- and it used to be supplied by an @unsafeCoerce@ axiom. Written @off + len <= m@
--- the same fact is ordinary linear arithmetic, the solver discharges it, and
--- the axiom is gone without taking on another type-checker plugin.
+-- This is @takeGrid len . dropGrid off@ with the intermediate size fused
+-- away. Composed, the two state the window bound as @len <= m - off@ over
+-- GHC's truncating subtraction, out of reach of ghc-typelits-natnormalise
+-- once @off@ is an existential (as it is in 'shrinkGrid', from
+-- 'reifyCoord'). Written @off + len <= m@ instead, it's ordinary linear
+-- arithmetic the solver discharges directly.
 --
 -- @off + len <= m@ is also precisely 'VG.slice'\'s own precondition, so the
 -- bounds check it performs can never fire here.
@@ -872,13 +678,10 @@ mapAxisHere f (Grid v) =
 --
 -- > mapAxis 1 f g   -- rather than mapAxis (Proxy @1) f g
 --
--- sized-grid-e6h. This is the piece the summed-area-table build-up in
--- @aoc\/src\/2018\/11.hs@ got by without: @'transposeGrid' . rowPrefix .
--- 'transposeGrid' . rowPrefix@ reaches the second axis by physically rotating
--- the whole 2D grid, because there was no way to name it instead. That trick
--- stops working past two dimensions, since there is no 'transposeGrid' for an
--- arbitrary pair of axes, while @mapAxis 1@ reaches the second axis of a grid
--- of any dimension the same way regardless.
+-- Lets a caller reach an axis by name instead of physically rotating the
+-- grid to bring it to the front (@transposeGrid . f . transposeGrid@), a
+-- trick that stops working past two dimensions since there is no
+-- 'transposeGrid' for an arbitrary pair of axes.
 mapAxis ::
      forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
   => (GridOf v '[c] x -> GridOf v '[c] y)
@@ -896,8 +699,6 @@ mapAxis n = mapAxisImpl @n
 -- transpose trick 'mapAxis' retires:
 --
 -- > sat = scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid power
---
--- sized-grid-e6h.
 scanAxis ::
      forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
   => (a -> a -> a)
