@@ -4,8 +4,9 @@ module Main
 
 import           Test.Tasty
 import           Test.CubeMap
+import           Test.Klein
 import           Test.Mobius
 import           Test.Tiles
 
 main :: IO ()
-main = defaultMain (testGroup "grid-atlas" [tilesTests, cubeMapTests, mobiusTests])
+main = defaultMain (testGroup "grid-atlas" [tilesTests, cubeMapTests, mobiusTests, kleinTests])
