@@ -68,6 +68,13 @@ plainStepGrid = tabulate coordPosition
 plainStepGridPeriodic :: Grid StepPeriodic Int
 plainStepGridPeriodic = tabulate coordPosition
 
+-- | 'plainStepGrid' in the other representation, the way 'ubigGrid' is to
+-- 'bigGrid': splits the iterated stencil step's allocation between the
+-- neighbour lists 'stencilStep' builds and the boxed-'Int' thunk chains
+-- 'iterate' builds on top of them.
+uPlainStepGrid :: UGrid Step Int
+uPlainStepGrid = tabulateGrid coordPosition
+
 -- | The tables the iterated stencil benchmarks share. Top level because that is
 -- where a real consumer would put them: built once for the grid type, reused
 -- for every generation.
@@ -104,11 +111,15 @@ iterateExtend n fg = iterate (extend neighbourSum) fg !! n
 -- | The same neighbourhood fold as 'neighbourSum', written against a
 -- precomputed `Data.Grid.Sized.Stencil.Stencil` rather than against `neighbours`.
 --
--- A plain `Grid`, not a 'FocusedGrid': `Data.Grid.Sized.Stencil.stencilGrid` is
+-- A plain grid, not a 'FocusedGrid': `Data.Grid.Sized.Stencil.stencilGrid` is
 -- already the bulk step, so there is no focus to carry and no @extend@ to build
 -- one with. That is part of what is being measured --- the comonadic version
 -- pays for a focus per cell that the rule never reads.
-stencilStep :: Stencil cs -> Grid cs Int -> Grid cs Int
+--
+-- Polymorphic in the vector, like 'Data.Grid.Sized.Stencil.stencilGrid'
+-- itself, so the same function drives both the boxed and unboxed iterated
+-- benchmarks below.
+stencilStep :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
 stencilStep s = stencilGrid s (\_ ns -> total ns)
 
 -- | The loop `Data.Grid.Sized.Stencil.stencilGrid` literally replaces, and what
@@ -131,8 +142,19 @@ iterateNeighbourStep n g = iterate neighbourStep g !! n
 -- The stencil is built once, outside the loop, which is the entire claim the
 -- API makes: the neighbourhood is a fact about the type, so a hundred
 -- generations should consult the axis list once rather than a hundred times.
-iterateStencil :: Stencil cs -> Int -> Grid cs Int -> Grid cs Int
+iterateStencil :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencil s n g = iterate (stencilStep s) g !! n
+
+-- | 'stencilStep', against `Data.Grid.Sized.Stencil.stencilFoldGrid` instead of
+-- `Data.Grid.Sized.Stencil.stencilGrid` (@sized-grid-adr.13@): the same
+-- neighbour-sum rule, folded straight out of the table with no list in
+-- between.
+stencilFoldStep :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilFoldStep s = stencilFoldGrid s (+) id
+
+-- | 'stencilFoldStep' iterated, the counterpart of 'iterateStencil'.
+iterateStencilFold :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilFold s n g = iterate (stencilFoldStep s) g !! n
 
 -- | Repeated coordinate offset. Recursive rather than a fold so the
 -- intermediate 'Coord's cannot be fused away.
@@ -289,6 +311,7 @@ main = do
     _ <- evaluate (total midGrid)
     _ <- evaluate (total (focusedGrid stepGrid))
     _ <- evaluate (total (focusedGrid stepGridPeriodic))
+    _ <- evaluate (totalG uPlainStepGrid)
     defaultMain
         [ bgroup
               "coord arithmetic"
@@ -388,6 +411,25 @@ main = do
                 whnf (total . iterateStencil stepStencil 100) plainStepGrid
               , bench "stencilStep x100, 50x50, Periodic" $
                 whnf (total . iterateStencil stepStencilPeriodic 100) plainStepGridPeriodic
+              , -- sized-grid-adr.13: splits the boxed figure above between the
+                -- neighbour lists 'stencilGrid' builds per pass and the boxed
+                -- 'Int' thunk chains 'iterate' builds across passes, deciding
+                -- whether a fold-shaped 'stencilFoldGrid' is worth writing.
+                bench "stencilStep x100, 50x50, unboxed" $
+                whnf (totalG . iterateStencil stepStencil 100) uPlainStepGrid
+              , -- The fold-shaped counterparts of the four 'stencilStep'
+                -- benchmarks just above, same grids and same rule, against
+                -- 'stencilFoldGrid' instead of 'stencilGrid' (sized-grid-adr.13).
+                bench "stencilFoldStep 50x50, table already built" $
+                whnf (total . stencilFoldStep stepStencil) plainStepGrid
+              , bench "stencilFoldStep 50x50, Periodic, table already built" $
+                whnf (total . stencilFoldStep stepStencilPeriodic) plainStepGridPeriodic
+              , bench "stencilFoldStep x100, 50x50" $
+                whnf (total . iterateStencilFold stepStencil 100) plainStepGrid
+              , bench "stencilFoldStep x100, 50x50, Periodic" $
+                whnf (total . iterateStencilFold stepStencilPeriodic 100) plainStepGridPeriodic
+              , bench "stencilFoldStep x100, 50x50, unboxed" $
+                whnf (totalG . iterateStencilFold stepStencil 100) uPlainStepGrid
               ]
         , bgroup
               "collapse round trip"

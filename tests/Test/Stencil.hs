@@ -59,6 +59,22 @@ agreesWithVonNeumann name r =
                  (\c x -> (x, map (indexGrid g) (vonNeumannNeighbours r c)))
                  g)
 
+-- | 'stencilFoldGrid' against 'stencilGrid' composed with a strict left fold
+-- (@sized-grid-adr.13@): the whole claim of the fold-shaped variant is that it
+-- computes the same thing 'stencilGrid' does without building the list, so it
+-- is checked against 'stencilGrid' rather than against the neighbourhood loop
+-- a second time.
+foldGridAgreesWithStencilGrid ::
+       forall cs.
+       (IsCoordList cs, AllSizedKnown cs)
+    => String
+    -> Int
+    -> TestTree
+foldGridAgreesWithStencilGrid name r =
+    testProperty name $ \(g :: Grid cs Int) ->
+        gridVector (stencilFoldGrid (mooreStencil r) (+) id g) ===
+        gridVector (stencilGrid (mooreStencil r) (\x ns -> foldl' (+) x ns) g)
+
 -- | 'stencilAt' against the same loop, one cell at a time.
 --
 -- Stated separately from 'agreesWithNeighbours' rather than derived from it:
@@ -123,6 +139,32 @@ stencilTests =
               , agreesWithVonNeumann @'[ Periodic 5, Periodic 4] "torus, radius 1" 1
               , agreesWithVonNeumann @'[ Clamped 4, Periodic 4] "mixed, radius 2" 2
               ]
+        , testGroup
+              "stencilFoldGrid agrees with stencilGrid (sized-grid-adr.13)"
+              [ foldGridAgreesWithStencilGrid @'[ Clamped 5, Clamped 4] "bounded" 1
+              , foldGridAgreesWithStencilGrid @'[ Periodic 5, Periodic 4] "torus" 1
+              , foldGridAgreesWithStencilGrid @'[ Periodic 5, Clamped 4] "cylinder" 1
+              , foldGridAgreesWithStencilGrid @'[ Reflective 3, Clamped 4] "reflecting, radius 2" 2
+              , foldGridAgreesWithStencilGrid @'[ Clamped 1, Clamped 1] "one-cell grid" 1
+              , foldGridAgreesWithStencilGrid @'[ Clamped 5, Clamped 5] "radius zero" 0
+              ]
+        , -- Same shape as "runs on an unboxed grid" above: nothing in
+          -- 'stencilFoldGrid''s body distinguishes 'v', but nothing here would
+          -- catch it if that drifted either.
+          testCase "stencilFoldGrid runs on an unboxed grid" $
+              let g :: UGrid '[ Clamped 4, Periodic 4] Int
+                  g = tabulateGrid coordPosition
+                  s = mooreStencil 1
+               in assertEqual
+                      ""
+                      (VG.toList
+                           (gridVector
+                                (imapGrid
+                                     (\c x ->
+                                          x + sum (map (indexGrid g) (mooreNeighbours 1 c)))
+                                     g)))
+                      (VG.toList
+                           (gridVector (stencilFoldGrid s (+) id g)))
         , testGroup
               "stencilAt reads one cell"
               [ readsOneCellLikeTheLoop @'[ Clamped 5, Clamped 4] "bounded" 1
