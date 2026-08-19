@@ -11,6 +11,7 @@
 module Test.Utils
   ( eq1Laws
   , aesonLaws
+  , jsonKeyLaws
   , semigroupLaws
   , monoidLaws
   , additiveGroupLaws
@@ -39,6 +40,7 @@ import           Data.AffineSpace
 import           Data.Distributive
 import           Data.Functor.Classes
 import           Data.Functor.Compose
+import           Data.Map              (Map)
 -- 'Data.Functor.Identity' is not imported: 'Data.Functor.Rep' re-exports it.
 import           Data.Functor.Rep
 import           Data.Proxy
@@ -66,6 +68,19 @@ aesonLaws =
   let encodeDecode :: a -> Property
       encodeDecode a = Just a === decode (encode a)
   in testGroup "Aeson Laws" [testProperty "Encode decode" encodeDecode]
+
+-- | 'ToJSONKey'\/'FromJSONKey' round-trip. Key encoding is a different code
+-- path from 'ToJSON'\/'FromJSON' -- aeson only takes it via a 'Map', so that
+-- is what this routes the round trip through.
+jsonKeyLaws ::
+     forall a. (Show a, Ord a, ToJSONKey a, FromJSONKey a, Arbitrary a)
+  => TestTree
+jsonKeyLaws =
+  let encodeDecode :: Map a Int -> Property
+      encodeDecode m = Just m === decode (encode m)
+  in testGroup
+       "JSON Key Laws"
+       [testProperty "Encode decode via Map key" encodeDecode]
 
 semigroupLaws ::
      forall a. (Show a, Eq a, Semigroup a, Arbitrary a)
