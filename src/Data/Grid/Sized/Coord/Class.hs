@@ -5,6 +5,7 @@ module Data.Grid.Sized.Coord.Class
   , IsCoordLifted(..)
   , IsCoordList(..)
   , IsCoordListF
+  , Boundaryless
   , MapDiff
   , AllDiffSame
   , Extremum(..)
@@ -20,7 +21,8 @@ import           Data.Grid.Sized.Internal.Error (type (?!))
 import           Data.Grid.Sized.Ordinal
 
 import           Control.Lens
-import           Data.AffineSpace   (Diff)
+import           Data.AffineSpace   (AffineSpace, Diff)
+import           Data.Group         (Group)
 import           Data.Kind          (Constraint, Type)
 import           Data.Maybe         (isJust)
 import           Data.Type.Bool     (Not)
@@ -136,6 +138,23 @@ class ( x ~ (CoordContainer x) (CoordNat x)
 instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
   type CoordContainer (c n) = c
   type CoordNat (c n) = n
+
+-- | An axis with no walls: the translation action is total and associative.
+-- At kind @Type@, not @Nat -> Type@, mirroring the 'IsCoord' \/ 'IsCoordLifted'
+-- split -- a marker class has no method with @n@ quantified, so it needs no
+-- container-level twin.
+--
+-- Laws, none checkable by GHC, stated here and tested for every instance:
+--
+--   1. @'axisBoundaryIsCoord' x == 'Nothing'@ -- no value is at an end.
+--   2. @'offsetIsCoord' x d == 'Just' (x '.+^' d)@ -- the action is total.
+--   3. @(p '.+^' u) '.+^' v == p '.+^' (u + v)@ -- and associative.
+--   4. @p '<>' q == p '.+^' (q '.-.' 'zeroPosition')@ -- the group op IS
+--      translation, which is what earns 'Group' its place as a superclass
+--      rather than leaving this and 'Group' as two overlapping markers: a
+--      boundaryless axis is a Z-torsor, and 'zeroPosition' is the origin
+--      that turns the torsor into the group.
+class (IsCoordLifted x, AffineSpace x, Diff x ~ Int, Group x) => Boundaryless x
 
 type Even (n :: Nat) = Mod n 2 == 0
 
