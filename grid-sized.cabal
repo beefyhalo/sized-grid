@@ -138,19 +138,20 @@ library
   import:          lang
   hs-source-dirs:  src
 
-  -- sized-grid-6os. 'unsafeOrdinal' is the single unchecked way to build an
-  -- Ordinal, and it states its precondition with Control.Exception.assert --
-  -- but -fignore-asserts is implied by -O, and cabal builds this component at
-  -- -O1 by default. Because unsafeOrdinal is INLINE, that stripping happens
-  -- once, here, when this module's unfolding is written to its interface: no
-  -- flag on a downstream component (the test suite included) can bring the
-  -- check back, since it links against the already-stripped unfolding. This
-  -- has to be set where unsafeOrdinal is defined, which makes the check live
-  -- for every consumer, not just this package's own test suite. That is
-  -- intentional: an out-of-range Ordinal indexes a vector out of bounds or
-  -- silently reads the wrong cell, so a few comparisons on coord arithmetic
-  -- (Clamped's Semigroup and AffineSpace instances, Periodic's Semigroup and
-  -- toEnum) are cheap insurance against that everywhere, not just in CI.
+  -- sized-grid-6os, closed by sized-grid-adr.14. 'unsafeOrdinal' is the single
+  -- unchecked way to build an Ordinal. It used to state its precondition with
+  -- Control.Exception.assert, which needed -fno-ignore-asserts here -- and
+  -- only here, since unsafeOrdinal is INLINE and the stripping happens once,
+  -- when this module's unfolding is written to its interface, so no flag on a
+  -- downstream component could bring the check back.
+  --
+  -- The check is now a plain guard in the source (see the note on
+  -- 'unsafeOrdinal'), which is both faster and stronger: it does not depend on
+  -- any flag, so neither -O2 written after -fno-ignore-asserts below nor an
+  -- -O2 appended by a `package grid-sized` stanza in someone's cabal.project
+  -- can strip it. The flag is kept anyway so that an assert added to this
+  -- library later is live rather than quietly ignored, and it stays last on
+  -- the line for the reason recorded under sized-grid-sxy below.
   --
   -- sized-grid-adr.6. The optimisation flags below, and the order they are in.
   -- What this library sells is a per-axis fold written as a class method (see
@@ -195,9 +196,15 @@ library
   -- check. So -fno-ignore-asserts is last on the line below and MUST stay
   -- last, after any optimisation flag added here later. The same trap is open
   -- to a `package grid-sized` stanza in someone's cabal.project, whose
-  -- ghc-options are appended after these: an -O2 there strips the check again
-  -- and nothing in this file can stop it. The 'downstream' test suite states
-  -- this as a check, which is the only place it can be stated from.
+  -- ghc-options are appended after these, and nothing in this file can stop
+  -- that one.
+  --
+  -- sized-grid-adr.14 took unsafeOrdinal itself out of the blast radius by
+  -- making its check a guard rather than an assert, so the specific failure
+  -- above can no longer happen. The rule still stands for anything asserted
+  -- here in future, and the 'downstream' test suite still checks the
+  -- consequence -- that an out-of-range Ordinal fails in a consumer -- which
+  -- is the only place it can be checked from.
   ghc-options:
     -O2 -fexpose-all-unfoldings -fspecialise-aggressively -fno-ignore-asserts
 
