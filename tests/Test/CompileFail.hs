@@ -14,6 +14,15 @@ import           Test.Tasty.HUnit
 
 -- | @-isrc@ compiles straight from source, bypassing cabal's own flag
 -- plumbing, so the extensions and plugins are spelled out explicitly here.
+--
+-- The invocation goes through @cabal exec ghc --@ rather than a bare @ghc@:
+-- a bare @ghc@ only sees the ambient package environment (whatever's on
+-- PATH), which does not necessarily include every one of the library's
+-- build-depends -- 'groups' (sized-grid-yyq) was on the library's
+-- build-depends but missing from the ambient env, so every snippet failed
+-- with a "Could not find module" error instead of the diagnostic under
+-- test. @cabal exec@ resolves the same package set cabal itself gives the
+-- library, so this can't drift from build-depends again.
 ghcFlags :: [String]
 ghcFlags =
   [ "-fno-code"
@@ -38,7 +47,10 @@ ghcFlags =
 assertCompileFails :: FilePath -> String -> Assertion
 assertCompileFails file expectedSubstring = do
   (code, _out, err) <-
-    readProcessWithExitCode "ghc" (ghcFlags ++ ["tests/compile-fail/" ++ file]) ""
+    readProcessWithExitCode
+      "cabal"
+      (["exec", "ghc", "--"] ++ ghcFlags ++ ["tests/compile-fail/" ++ file])
+      ""
   case code of
     ExitSuccess ->
       assertFailure (file ++ " was expected to fail to compile, but it compiled cleanly")
