@@ -1,4 +1,4 @@
-grid-sized
+grid-sized [![CI](https://github.com/beefyhalo/sized-grid/actions/workflows/ci.yml/badge.svg)](https://github.com/beefyhalo/sized-grid/actions/workflows/ci.yml)
 ===========
 
 A way of working with grids in Haskell with size encoded at the type level.
