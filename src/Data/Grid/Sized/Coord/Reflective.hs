@@ -7,6 +7,7 @@ module Data.Grid.Sized.Coord.Reflective
 import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Ordinal
 
+import           Control.DeepSeq       (NFData)
 import           Control.Lens          (iso)
 import           Data.Aeson
 import           Data.AffineSpace
@@ -22,6 +23,8 @@ newtype Reflective (n :: Nat) = Reflective
     } deriving (Eq, Ord)
 
 deriving instance KnownNat n => Show (Reflective n)
+
+deriving instance NFData (Reflective n)
 
 deriving instance (KnownNat n, 1 <= n) => Random (Reflective n)
 deriving instance (KnownNat n, 1 <= n) => Enum (Reflective n)

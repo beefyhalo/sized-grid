@@ -5,6 +5,7 @@ module Data.Grid.Sized.Coord.Clamped
 import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Ordinal
 
+import           Control.DeepSeq       (NFData)
 import           Control.Lens          (iso)
 import           Data.Aeson
 import           Data.AffineSpace
@@ -18,6 +19,8 @@ newtype Clamped (n :: Nat) = Clamped
     } deriving (Eq, Ord)
 
 deriving instance KnownNat n => Show (Clamped n)
+
+deriving instance NFData (Clamped n)
 
 deriving instance (KnownNat n, 1 <= n) => Random (Clamped n)
 deriving instance (KnownNat n, 1 <= n) => Enum (Clamped n)

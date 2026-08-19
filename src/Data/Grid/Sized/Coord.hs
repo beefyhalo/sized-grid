@@ -78,6 +78,7 @@ import           Data.Grid.Sized.Internal.Type (requiring)
 import           Data.Grid.Sized.Ordinal
 
 import           Control.Applicative   (empty)
+import           Control.DeepSeq       (NFData (..))
 import           Control.Lens          hiding (from, to)
 import           Control.Monad         (foldM)
 import           Control.Monad.State
@@ -164,6 +165,11 @@ instance All Semigroup cs => Semigroup (Coord cs) where
 instance (All Semigroup cs, All Monoid cs) => Monoid (Coord cs) where
   mappend = (<>)
   mempty = Coord $ hcpure (Proxy :: Proxy Monoid) (pure mempty)
+
+instance All NFData cs => NFData (Coord cs) where
+    rnf (Coord a) =
+        foldr seq () $
+        hcollapse $ hcliftA (Proxy :: Proxy NFData) (\(I x) -> K (rnf x)) a
 
 instance (All AdditiveGroup cs) => AdditiveGroup (Coord cs) where
     zeroV = Coord $ hcpure (Proxy :: Proxy AdditiveGroup) (pure zeroV)
