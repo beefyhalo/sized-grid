@@ -33,9 +33,9 @@ import           Test.QuickCheck       (Arbitrary (..), Property, property,
 import           Test.QuickCheck.Classes (applicativeLaws,
                                           commutativeMonoidLaws, enumLaws,
                                           eqLaws, foldableLaws, functorLaws,
-                                          jsonLaws, monadLaws, ordLaws,
-                                          semigroupMonoidLaws, showLaws,
-                                          traversableLaws)
+                                          genericLaws, jsonLaws, monadLaws,
+                                          ordLaws, semigroupMonoidLaws,
+                                          showLaws, traversableLaws)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
@@ -341,6 +341,8 @@ main =
              [ aesonLaws @(Grid '[ Periodic 10, Periodic 11] Int)
              , lawsToTest $
                jsonLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
+             , lawsToTest $
+               genericLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
              ])
        , testGroup
