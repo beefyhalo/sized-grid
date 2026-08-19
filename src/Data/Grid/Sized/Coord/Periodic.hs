@@ -33,6 +33,18 @@ deriving instance KnownNat n => FromJSONKey (Periodic n)
 instance (1 <= n, KnownNat n) => Enum (Periodic n) where
     toEnum x = Periodic $ unsafeOrdinal $ x `mod` ordinalSize @n
     fromEnum (Periodic o) = ordinalToInt o
+    -- Overridden because the default 'enumFrom'/'enumFromThen' count up in
+    -- Int forever: 'toEnum' wraps instead of erroring, so the walk-off-the-
+    -- end that stops 'Ordinal's default never happens here, and the list
+    -- would repeat silently. A torus has no natural end to stop at, so each
+    -- lands after exactly one lap around the axis.
+    enumFrom a = take (ordinalSize @n) (iterate succ a)
+    enumFromThen a b =
+        take (ordinalSize @n) (iterate (\x -> toEnum (fromEnum x + step)) a)
+      where
+        step = fromEnum b - fromEnum a
+    enumFromTo a b = map toEnum [fromEnum a .. fromEnum b]
+    enumFromThenTo a b c = map toEnum [fromEnum a,fromEnum b .. fromEnum c]
 
 instance IsCoord Periodic where
   asOrdinal = iso unPeriodic Periodic

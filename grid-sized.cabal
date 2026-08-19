@@ -253,6 +253,7 @@ test-suite tests
     Test.Neighbours
     Test.Ordinal
     Test.Path
+    Test.Periodic
     Test.Ray
     Test.Reflective
     Test.Shrink

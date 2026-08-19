@@ -12,6 +12,7 @@ import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
 import           Test.Path
+import           Test.Periodic
 import           Test.Ray
 import           Test.Reflective
 import           Test.Shrink
@@ -341,5 +342,6 @@ main =
        , focusedTests
        , invariantTests
        , ordinalTests
+       , periodicTests
        , compileFailTests
        ]
