@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -17,10 +18,11 @@ module Test.Arbitrary
 import           Data.Grid.Sized
 
 import           Data.Proxy
-import           Generics.SOP    hiding (S, Z)
+import           Generics.SOP     hiding (S, Z)
+import qualified GHC.Generics     as GHC
 import           GHC.TypeLits
-import           Test.QuickCheck (Arbitrary (..), Arbitrary1 (..), Gen,
-                                  chooseInt)
+import           Test.QuickCheck  (Arbitrary (..), Arbitrary1 (..), Gen,
+                                   chooseInt)
 
 -- | Pick one position on an axis, in constant time -- rather than
 -- materialising the whole domain to draw a single sample.
@@ -57,6 +59,18 @@ instance AllSizedKnown cs => Arbitrary1 (Grid cs) where
 
 instance (AllSizedKnown cs, Arbitrary a) => Arbitrary (Grid cs a) where
   arbitrary = liftArbitrary arbitrary
+
+-- | 'quickcheck-classes'' 'genericLaws' draws from the generic
+-- representation directly, not from @a@; routing through the already-tested
+-- 'Arbitrary' for 'Grid' and 'GHC.from' is simpler than matching the
+-- generated 'M1'\/'K1' structure by hand.
+--
+-- The head is the bare type variable @r@, with the concrete 'GHC.Rep' pinned
+-- down by the equality constraint instead: 'GHC.Rep' is a type family, and
+-- GHC never accepts one directly in an instance head, ground or not.
+instance {-# OVERLAPPABLE #-} (r ~ GHC.Rep (Grid '[ Periodic 10, Periodic 11] Int) ()) =>
+         Arbitrary r where
+  arbitrary = GHC.from <$> (arbitrary :: Gen (Grid '[ Periodic 10, Periodic 11] Int))
 
 -- | A grid and a focus drawn independently: the comonad laws have to hold for
 -- every focus, not just a canonical one.

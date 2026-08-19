@@ -30,9 +30,12 @@ import           Data.Proxy
 import           GHC.TypeLits
 import           Test.QuickCheck       (Arbitrary (..), Property, property,
                                         (.&&.), (===))
-import           Test.QuickCheck.Classes (applicativeLaws, foldableLaws,
-                                          functorLaws, monadLaws,
-                                          traversableLaws)
+import           Test.QuickCheck.Classes (applicativeLaws,
+                                          commutativeMonoidLaws, enumLaws,
+                                          eqLaws, foldableLaws, functorLaws,
+                                          genericLaws, jsonLaws, monadLaws,
+                                          ordLaws, semigroupMonoidLaws,
+                                          showLaws, traversableLaws)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty)
@@ -220,20 +223,36 @@ coordCreationTests _genC _gen =
 
 main :: IO ()
 main =
-  let ordinal = [isCoordLaws @Ordinal @10]
+  let ordinal =
+        [ isCoordLaws @Ordinal @10
+        , lawsToTest $ showLaws (Proxy @(Ordinal 10))
+        , jsonKeyLaws @(Ordinal 10)
+        ]
       periodic =
         [ semigroupLaws @(Periodic 10)
         , monoidLaws @(Periodic 10)
+        , lawsToTest $ commutativeMonoidLaws (Proxy @(Periodic 10))
+        , lawsToTest $ semigroupMonoidLaws (Proxy @(Periodic 10))
+        -- No 'boundedEnumLaws' here: 'Periodic' has no 'Bounded' instance
+        -- (see sized-grid-95u). 'enumLaws' alone still checks toEnum/fromEnum
+        -- round-trip and succ/pred against the wrapping 'Enum'.
+        , lawsToTest $ enumLaws (Proxy @(Periodic 10))
         , additiveGroupLaws @(Periodic 10)
         , affineSpaceLaws @(Periodic 10)
         , aesonLaws @(Periodic 10)
+        , lawsToTest $ jsonLaws (Proxy @(Periodic 10))
+        , jsonKeyLaws @(Periodic 10)
         , isCoordLaws @Periodic @10
         ]
       clamped =
         [ semigroupLaws @(Clamped 10)
         , monoidLaws @(Clamped 10)
+        , lawsToTest $ commutativeMonoidLaws (Proxy @(Clamped 10))
+        , lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10))
         , affineSpaceLaws @(Clamped 10)
         , aesonLaws @(Clamped 10)
+        , lawsToTest $ jsonLaws (Proxy @(Clamped 10))
+        , jsonKeyLaws @(Clamped 10)
         , isCoordLaws @Clamped @10
         ]
       -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance;
@@ -241,32 +260,52 @@ main =
       reflective =
         [ affineSpaceLaws @(Reflective 10)
         , aesonLaws @(Reflective 10)
+        , lawsToTest $ jsonLaws (Proxy @(Reflective 10))
+        , jsonKeyLaws @(Reflective 10)
         , isCoordLaws @Reflective @10
         ]
       reflect101 =
         [ affineSpaceLaws @(Reflect101 10)
         , aesonLaws @(Reflect101 10)
+        , lawsToTest $ jsonLaws (Proxy @(Reflect101 10))
+        , jsonKeyLaws @(Reflect101 10)
         , isCoordLaws @Reflect101 @10
         ]
       coord =
         [ semigroupLaws @(Coord '[ Clamped 10, Periodic 20])
         , monoidLaws @(Coord '[ Clamped 10, Periodic 20])
+        , lawsToTest $
+          commutativeMonoidLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+        , lawsToTest $
+          semigroupMonoidLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , affineSpaceLaws @(Coord '[ Clamped 10, Periodic 20])
         , aesonLaws @(Coord '[ Clamped 10, Periodic 20])
+        , lawsToTest $ jsonLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , isoLaws
             "_WrappedCoord"
             (_WrappedCoord @'[ Clamped 10, Periodic 20])
+        , lawsToTest $ eqLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+        , lawsToTest $ ordLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+        , lawsToTest $ showLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         ]
       coord2 =
         [ semigroupLaws @(Coord '[ Periodic 10, Periodic 20])
         , monoidLaws @(Coord '[ Periodic 10, Periodic 20])
+        , lawsToTest $
+          commutativeMonoidLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , lawsToTest $
+          semigroupMonoidLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , affineSpaceLaws @(Coord '[ Periodic 10, Periodic 20])
         , additiveGroupLaws @(Coord '[ Periodic 10, Periodic 20])
         , aesonLaws @(Coord '[ Periodic 10, Periodic 20])
+        , lawsToTest $ jsonLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , lawsToTest $ eqLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , lawsToTest $ ordLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , lawsToTest $ showLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         ]
   in defaultMain $
      testGroup
@@ -300,6 +339,10 @@ main =
                , traversableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                ] ++
              [ aesonLaws @(Grid '[ Periodic 10, Periodic 11] Int)
+             , lawsToTest $
+               jsonLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
+             , lawsToTest $
+               genericLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
              ])
        , testGroup
