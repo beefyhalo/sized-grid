@@ -191,6 +191,7 @@ library
     , constraints  >=0.13 && <0.15
     , distributive >=0.6  && <0.7
     , generics-sop >=0.5  && <0.6
+    , groups       >=0.5  && <0.6
     , lens         >=5.2  && <5.4
     , mtl          >=2.3  && <2.4
     , random       >=1.2  && <1.4

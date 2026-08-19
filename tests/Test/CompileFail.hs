@@ -59,4 +59,8 @@ compileFailTests =
       assertCompileFails "SplitHigherDimWrongRemainder.hs" "Couldn't match"
     , testCase "shrinkGrid with a window that does not fit" $
       assertCompileFails "ShrinkGridWindowTooBig.hs" "Cannot satisfy: 6 <= 4"
+    , testCase "walkPathTotal on a coord with a walled axis" $
+      assertCompileFails
+        "WalkPathTotalNotBoundaryless.hs"
+        "No instance for \8216Boundaryless (Clamped 5)\8217"
     ]

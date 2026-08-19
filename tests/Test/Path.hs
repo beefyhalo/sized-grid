@@ -80,6 +80,16 @@ collapseTests =
             (front, back) = splitAt k xs
          in back ++ front
 
+totalTests :: TestTree
+totalTests =
+    testGroup
+        "walkPathTotal agrees with walkPath, on an all-Boundaryless coord"
+        [ testProperty "any sequence of steps" $
+              \(c :: Coord '[Periodic 5, Periodic 7]) (steps :: [(Int, Int)]) ->
+                  let p = Path (map (uncurry d2) steps)
+                   in walkPath c p === Just (walkPathTotal c p)
+        ]
+
 wallTests :: TestTree
 wallTests =
     testGroup
@@ -111,4 +121,4 @@ pathTests :: TestTree
 pathTests =
     testGroup
         "Path"
-        [emptyPathTests, singleStepTests, collapseTests, wallTests]
+        [emptyPathTests, singleStepTests, collapseTests, totalTests, wallTests]

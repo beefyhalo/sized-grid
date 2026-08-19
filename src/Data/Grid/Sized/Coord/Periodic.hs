@@ -9,6 +9,7 @@ import           Control.Lens
 import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
+import           Data.Group          (Group (..))
 import           GHC.TypeLits
 import           System.Random
 
@@ -69,3 +70,14 @@ instance (1 <= n, KnownNat n) => AffineSpace (Periodic n) where
         let size = ordinalSize @n
             offset = b `mod` size
         in Periodic $ unsafeOrdinal $ (ordinalToInt a + offset) `mod` size
+
+-- | Periodic n IS Z/nZ: the monoid operation already inherited from
+-- 'AdditiveGroup' is its own inverse under negation.
+instance (1 <= n, KnownNat n) => Group (Periodic n) where
+    invert = negateV
+
+-- | A torus has no edges: 'offsetIsCoord' never refuses, and the monoid
+-- operation ('<>' via 'AdditiveGroup') is exactly '.+^'. See
+-- 'Data.Grid.Sized.Coord.Class.Boundaryless' for the laws this instance
+-- promises.
+instance (1 <= n, KnownNat n) => Boundaryless (Periodic n)

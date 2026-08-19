@@ -42,6 +42,7 @@ module Data.Grid.Sized.Coord
     -- * Paths
   , Path(..)
   , walkPath
+  , walkPathTotal
   , pathOffset
     -- * Distance
   , axisDistance
@@ -73,6 +74,7 @@ module Data.Grid.Sized.Coord
   ) where
 
 import           Data.Grid.Sized.Coord.Class
+import           Data.Grid.Sized.Internal.Type (requiring)
 import           Data.Grid.Sized.Ordinal
 
 import           Control.Applicative   (empty)
@@ -399,6 +401,21 @@ walkPath c (Path ds) = foldM offsetCoord c ds
 -- | The single displacement a 'Path'\'s steps sum to, forgetting their order.
 pathOffset :: All AdditiveGroup (MapDiff cs) => Path cs -> Diff (Coord cs)
 pathOffset (Path ds) = foldl' (^+^) zeroV ds
+
+-- | The total counterpart of 'walkPath': on a coord where every axis is
+-- 'Boundaryless', a step can never leave the grid, so there is no 'Maybe'
+-- for the caller to discharge. Agrees with 'walkPath' wherever both
+-- typecheck: @walkPath c p == Just (walkPathTotal c p)@.
+walkPathTotal ::
+       forall cs.
+       ( All Boundaryless cs
+       , AffineCoordList cs
+       , All AdditiveGroup (MapDiff cs)
+       )
+    => Coord cs
+    -> Path cs
+    -> Coord cs
+walkPathTotal c p = requiring @(All Boundaryless cs) $ c .+^ pathOffset p
 
 -- | Every coordinate within @r@ steps on each axis, paired with its total step count; the centre is the only entry with total zero.
 stepsWithin ::
