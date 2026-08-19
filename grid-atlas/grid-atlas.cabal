@@ -39,6 +39,17 @@ common lang-base
     -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
     -Wredundant-constraints -Werror
 
+  -- As in grid-sized.cabal, and for the same reason: GHC 9.14 deprecates the
+  -- 'pattern' namespace specifier that Klein's and Mobius's export lists use
+  -- for Twisted/Rolled and Wrapped/Straight, in favour of 'data' -- which is
+  -- a parse error on 9.10/9.12, so 'pattern' remains the only spelling every
+  -- supported GHC accepts. This stanza was copied from grid-sized.cabal
+  -- without it, and -Werror then made the deprecation a build failure on
+  -- 9.14 (sized-grid-8hx). The gloss solver conflict had been masking it:
+  -- 9.14 never reached compilation to report it.
+  if impl(ghc >= 9.14)
+    ghc-options: -Wno-pattern-namespace-specifier
+
 common lang
   import: lang-base
   build-depends:
