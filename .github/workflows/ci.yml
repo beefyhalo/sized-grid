@@ -31,6 +31,20 @@ jobs:
       # flake.lock. gc-max-store-size keeps the store under GitHub's 10 GB
       # per-repo cache limit -- the full closure is multi-GB, so an unbounded
       # cache would thrash.
+      #
+      # sized-grid-se6: `nix store gc --max N` treats N as bytes to free, not
+      # a target store size, so cache-nix-action computes and passes it
+      # correctly -- the value here really is "keep the store at or under
+      # 6G". The bug was that the store this GC ran against also held the
+      # `devShells` closure (haskell-language-server, ormolu, hlint,
+      # stylish-haskell, ...), which `nix flake check` below used to build.
+      # That closure is unrelated to what this job checks and, alongside two
+      # GHC toolchains, pushed the pre-GC store past 10G -- so a plain
+      # mark-and-sweep GC to fit under 6G had no reason to spare GHC over
+      # anything else, and it didn't. Restricting the build below to just the
+      # `checks` derivations keeps HLS out of the store entirely, so 6G is
+      # comfortably enough for both GHC closures rather than a tight squeeze
+      # that gets whichever paths GC visits first.
       - uses: nix-community/cache-nix-action@v6
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
@@ -40,10 +54,16 @@ jobs:
           purge-prefixes: nix-${{ runner.os }}-
           purge-created: 0
           purge-primary-key: never
-      # Builds the library + tests + haddock on ghc912 (see flake.nix's
-      # `checks`). Deliberately does not cover the gloss/GLUT examples --
-      # see the cabal matrix job below.
-      - run: nix flake check --print-build-logs
+      # `nix flake check` also builds `devShells.<system>.default/ghc914`
+      # (see flake.nix) to verify they're valid derivations, which pulls the
+      # whole haskell-language-server toolchain into the store for no benefit
+      # here -- this job never enters a devShell. --no-build keeps that
+      # verification to evaluation only, then the second command builds just
+      # what this job actually needs: the library + tests + haddock on
+      # ghc912/ghc914 (see flake.nix's `checks`). Deliberately does not cover
+      # the gloss/GLUT examples -- see the cabal matrix job below.
+      - run: nix flake check --no-build --print-build-logs
+      - run: nix build --print-build-logs .#checks.x86_64-linux.ghc912 .#checks.x86_64-linux.ghc914
 
   cabal:
     runs-on: ubuntu-latest
