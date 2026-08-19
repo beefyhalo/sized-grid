@@ -190,6 +190,12 @@ cornerReads g =
 -- than @length@, whose @foldr@-with-accumulator form allocates a closure
 -- per element. The window size is an argument, not a literal, so full
 -- laziness can't float the displacement list out as a CAF.
+--
+-- This allocates ~35 MB against 'checkedCornerReadsFlat''s ~60 bytes for the
+-- identical 360,000 'offsetCoord' calls -- see that function's note.
+-- 'checkedCornerReadsFlat' is the fair reading of what 'offsetCoord' itself
+-- costs; this one is kept because the second generator is closer to how a
+-- caller iterating a runtime list of offsets would actually write the loop.
 checkedCornerReads :: Int -> Int
 checkedCornerReads k =
     total
@@ -204,9 +210,48 @@ checkedCornerReads k =
                ]
         ]
 
+-- | sized-grid-2xv. The same 360,000 'offsetCoord' calls as
+-- 'checkedCornerReads', on the same four displacements with @k@ still a
+-- runtime argument (so full laziness still can't float anything out as a
+-- CAF) -- but written as four flat arithmetic arms, the way 'cornerReads'
+-- writes its four corners, instead of a second @d <-@ generator over a
+-- list.
+--
+-- That is the only difference, and it is worth 35 MB: this allocates ~60
+-- bytes for the same 360,000 calls 'checkedCornerReads' pays ~35 MB for.
+-- @-ddump-simpl@ shows why. 'cornerReads' and this one each compile to a
+-- single @joinrec@ -- GHC's zero-allocation loop form -- over 'allCoord',
+-- with the four displacements' bounds checks inlined straight into it.
+-- 'checkedCornerReads' compiles to a @letrec@-bound (not @join@) worker
+-- that takes the next arm as an explicit @(Int -> Int)@ continuation, and
+-- building that continuation is a real heap closure, allocated four times
+-- per cell -- because the second generator is the fused @concatMap@ over a
+-- 4-element runtime list, and GHC's list-fusion rewrite for that shape
+-- comes out CPS'd rather than as a join point.
+--
+-- So the 35 MB this issue (sized-grid-2xv) went looking for was never in
+-- 'offsetCoord', 'onBoundary' or 'coordDistance' -- all three fold straight
+-- down to the same unrolled comparisons this flat form reaches, confirmed
+-- by 'onBoundarySweepFlat' and 'axisDistanceSweepFlat' below reproducing
+-- the same ~99% drop. It is what a *caller* pays for driving repeated
+-- per-cell offset checks off a runtime list rather than a fixed number of
+-- literal arms, which checkedCornerReads/onBoundarySweep/axisDistanceSweep
+-- exist to measure honestly rather than hide.
+checkedCornerReadsFlat :: Int -> Int
+checkedCornerReadsFlat k =
+    total
+        [ (if isJust (offsetCoord c (0 :| 0 :| EmptyCoord)) then 1 else 0) +
+          (if isJust (offsetCoord c (k :| k :| EmptyCoord)) then 1 else 0) +
+          (if isJust (offsetCoord c (0 :| k :| EmptyCoord)) then 1 else 0) +
+          (if isJust (offsetCoord c (k :| 0 :| EmptyCoord)) then 1 else 0)
+        | c <- allCoord @Big
+        ]
+
 -- | 'onBoundary' at the same four displacements as 'checkedCornerReads',
 -- over 'Big'. Reaches 'axisBoundaryIsCoord''s default,
--- 'axisBoundaryByPosition', which nothing else here exercises.
+-- 'axisBoundaryByPosition', which nothing else here exercises. Allocates for
+-- the same reason 'checkedCornerReads' does -- see 'checkedCornerReadsFlat'
+-- and this function's own flat counterpart, 'onBoundarySweepFlat'.
 onBoundarySweep :: Int -> Int
 onBoundarySweep k =
     total
@@ -221,8 +266,25 @@ onBoundarySweep k =
                ]
         ]
 
+-- | sized-grid-2xv. 'onBoundarySweep' rewritten as flat arms, exactly as
+-- 'checkedCornerReadsFlat' is to 'checkedCornerReads'. ~35 MB drops to ~60
+-- bytes for the same 360,000 'onBoundary' calls, confirming the allocation
+-- in 'onBoundarySweep' is the second generator's, not 'onBoundary''s or
+-- 'axisBoundaryIsCoord''s.
+onBoundarySweepFlat :: Int -> Int
+onBoundarySweepFlat k =
+    total
+        [ (if onBoundary (c .+^ (0 :| 0 :| EmptyCoord)) then 1 else 0) +
+          (if onBoundary (c .+^ (k :| k :| EmptyCoord)) then 1 else 0) +
+          (if onBoundary (c .+^ (0 :| k :| EmptyCoord)) then 1 else 0) +
+          (if onBoundary (c .+^ (k :| 0 :| EmptyCoord)) then 1 else 0)
+        | c <- allCoord @Big
+        ]
+
 -- | 'coordDistance' at the same four displacements, over 'Big'. Reaches
--- 'axisDistance' and so 'axisDistanceIsCoord''s default.
+-- 'axisDistance' and so 'axisDistanceIsCoord''s default. Allocates for the
+-- same reason 'checkedCornerReads' does -- see 'checkedCornerReadsFlat' and
+-- this function's own flat counterpart, 'axisDistanceSweepFlat'.
 axisDistanceSweep :: Int -> Int
 axisDistanceSweep k =
     total
@@ -233,6 +295,21 @@ axisDistanceSweep k =
                , 0 :| k :| EmptyCoord
                , k :| 0 :| EmptyCoord
                ]
+        ]
+
+-- | sized-grid-2xv. 'axisDistanceSweep' rewritten as flat arms, exactly as
+-- 'checkedCornerReadsFlat' is to 'checkedCornerReads'. ~35 MB drops to
+-- ~100 bytes for the same 360,000 'coordDistance' calls, confirming the
+-- allocation in 'axisDistanceSweep' is the second generator's, not
+-- 'coordDistance''s or 'axisDistanceIsCoord''s.
+axisDistanceSweepFlat :: Int -> Int
+axisDistanceSweepFlat k =
+    total
+        [ coordDistance c (c .+^ (0 :| 0 :| EmptyCoord)) +
+          coordDistance c (c .+^ (k :| k :| EmptyCoord)) +
+          coordDistance c (c .+^ (0 :| k :| EmptyCoord)) +
+          coordDistance c (c .+^ (k :| 0 :| EmptyCoord))
+        | c <- allCoord @Big
         ]
 
 -- | The same 360,000 offsets as 'cornerReads', on a bare axis instead of a
@@ -324,10 +401,16 @@ main = do
                 whnf cornerReads bigGrid
               , bench "offsetCoord x360000, checked, over Clamped 300x300" $
                 whnf checkedCornerReads 3
+              , bench "offsetCoord x360000, checked, flat arms (sized-grid-2xv)" $
+                whnf checkedCornerReadsFlat 3
               , bench "onBoundary x360000, over Clamped 300x300" $
                 whnf onBoundarySweep 3
+              , bench "onBoundary x360000, flat arms (sized-grid-2xv)" $
+                whnf onBoundarySweepFlat 3
               , bench "coordDistance x360000, over Clamped 300x300" $
                 whnf axisDistanceSweep 3
+              , bench "coordDistance x360000, flat arms (sized-grid-2xv)" $
+                whnf axisDistanceSweepFlat 3
               , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
                 whnf axisOffsets 1200
               , bench "toEnum/fromEnum x300, Clamped 300" $
