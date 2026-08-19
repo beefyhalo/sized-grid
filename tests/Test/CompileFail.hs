@@ -1,10 +1,13 @@
 -- | Compile-fail harness: each case under @tests\/compile-fail@ is a
 -- deliberately ill-typed use of the API, and 'assertCompileFails' shells out
 -- to GHC to check that it is rejected with the expected diagnostic.
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Test.CompileFail
   ( compileFailTests
   ) where
 
+import           Control.Exception     (IOException, try)
 import           Data.List             (isInfixOf)
 import           System.Exit           (ExitCode (..))
 import           System.Process        (readProcessWithExitCode)
@@ -44,13 +47,20 @@ ghcFlags =
 -- | Requires @expectedSubstring@ in the diagnostic, not just any failure, so a
 -- typo that breaks the snippet in an unrelated way cannot pass for the
 -- precondition actually firing.
+--
+-- Tries @cabal exec ghc --@ first, which resolves the same package set cabal
+-- gives the library. Nix's sandboxed check build has no @cabal@ on PATH at
+-- all (sized-grid-jz3), so on a spawn failure this falls back to a bare
+-- @ghc@ -- inside that sandbox GHC_PACKAGE_PATH is already pinned to the
+-- derivation's exact package set, so it sees the same packages either way.
 assertCompileFails :: FilePath -> String -> Assertion
 assertCompileFails file expectedSubstring = do
-  (code, _out, err) <-
-    readProcessWithExitCode
-      "cabal"
-      (["exec", "ghc", "--"] ++ ghcFlags ++ ["tests/compile-fail/" ++ file])
-      ""
+  let args = ["exec", "ghc", "--"] ++ ghcFlags ++ ["tests/compile-fail/" ++ file]
+  cabalResult <- try (readProcessWithExitCode "cabal" args "")
+  (code, _out, err) <- case cabalResult of
+    Right result -> pure result
+    Left (_ :: IOException) ->
+      readProcessWithExitCode "ghc" (ghcFlags ++ ["tests/compile-fail/" ++ file]) ""
   case code of
     ExitSuccess ->
       assertFailure (file ++ " was expected to fail to compile, but it compiled cleanly")
