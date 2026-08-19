@@ -54,16 +54,20 @@ jobs:
           purge-prefixes: nix-${{ runner.os }}-
           purge-created: 0
           purge-primary-key: never
+      # Builds the library + tests + haddock on ghc912/ghc914 (see
+      # flake.nix's `checks`). Deliberately does not cover the gloss/GLUT
+      # examples -- see the cabal matrix job below.
+      - run: nix build --print-build-logs .#checks.x86_64-linux.ghc912 .#checks.x86_64-linux.ghc914
       # `nix flake check` also builds `devShells.<system>.default/ghc914`
       # (see flake.nix) to verify they're valid derivations, which pulls the
       # whole haskell-language-server toolchain into the store for no benefit
       # here -- this job never enters a devShell. --no-build keeps that
-      # verification to evaluation only, then the second command builds just
-      # what this job actually needs: the library + tests + haddock on
-      # ghc912/ghc914 (see flake.nix's `checks`). Deliberately does not cover
-      # the gloss/GLUT examples -- see the cabal matrix job below.
+      # verification to evaluation only -- run *after* the build above so
+      # that `callCabal2nix`'s import-from-derivation (in `packages` and
+      # `checks`, which devShells also reference) is already realized;
+      # --no-build refuses to realize it itself and fails outright if the
+      # checks build hasn't already put it in the store.
       - run: nix flake check --no-build --print-build-logs
-      - run: nix build --print-build-logs .#checks.x86_64-linux.ghc912 .#checks.x86_64-linux.ghc914
 
   cabal:
     runs-on: ubuntu-latest
