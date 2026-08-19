@@ -22,6 +22,7 @@ module Data.Grid.Sized
       -- * Type-level machinery
     , CollapseGrid
       -- * Rearranging
+    , permuteGrid
     , transposeGrid
     , splitGrid
     , combineGrid

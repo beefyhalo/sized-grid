@@ -24,6 +24,7 @@ module Data.Grid.Sized.Internal.Grid
     -- * Type-level machinery
   , CollapseGrid
     -- * Rearranging
+  , permuteGrid
   , transposeGrid
   , splitGrid
   , combineGrid
@@ -426,8 +427,51 @@ nestedParseJSON val =
              "Grid: expected " ++
              show expected ++ " elements, got " ++ show (length vals)
 
+-- | @tabulate (index g . f)@ for a coordinate endomorphism-or-relabelling @f@
+-- is a permutation of the underlying vector: which source position feeds
+-- which target position depends only on @cs@, @ds@ and @f@, never on @g@'s
+-- elements. So it can be computed once as a table of positions and applied
+-- with 'VG.unsafeBackpermute', a tight loop with no @Coord@ built, permuted
+-- or destroyed per cell -- unlike @tabulateGrid (indexGrid g . f)@, which is
+-- exactly that per cell. 'transposeGrid' is this at a fixed @f@.
+--
+-- INLINE, not just INLINABLE. An offered-but-declined unfolding leaves @f@,
+-- @cs@ and @ds@ opaque to whichever module actually calls 'permuteGrid' --
+-- this library's own benchmark executable among them -- and the coordinate
+-- machinery behind 'coordPosition' and 'allCoord' only unrolls into flat
+-- arithmetic when the axis list is known at the point that inlines it.
+-- Measured at INLINABLE: 22-29 ms and 85-92 MB for 'transposeGrid' at
+-- 300x300, an order of magnitude worse than the per-cell 'tabulateGrid' this
+-- is meant to beat, and unchanged by raising the whole project to -O2 -- so
+-- it was not an optimisation-level problem, it was this unfolding never
+-- being offered anywhere the coordinate machinery could use it. Forcing it
+-- with INLINE dropped the same benchmark to 873 μs / 704 KB boxed and
+-- 368 μs / 703 KB unboxed -- 82% under the per-cell baseline on both, per
+-- @bench/baseline-ghc9.12.3-aarch64-darwin.csv@.
+--
+-- 'VG.unsafeBackpermute': every entry of the table is @coordPosition (f c)@
+-- for some real @Coord cs@ @c@, so by the same argument as 'indexGrid' it
+-- lands in @[0, MaxCoordSize ds)@ -- which is @VG.length@ of the source
+-- vector, by the `GridOf` size invariant. The bounds check
+-- 'VG.backpermute' would do can never fire.
+--
+-- A caller cannot supply a bad permutation: they supply a coordinate
+-- function, and @Coord ds@ is only inhabited by in-range coordinates, so
+-- whatever @f@ returns is safe to look up.
+permuteGrid ::
+       forall v cs ds a.
+       (VG.Vector v a, VG.Vector v Int, IsCoordList cs, IsCoordList ds)
+    => (Coord cs -> Coord ds)
+    -> GridOf v ds a
+    -> GridOf v cs a
+permuteGrid f (Grid v) = Grid (VG.unsafeBackpermute v idx)
+  where
+    idx = VG.fromListN (coordSpaceSize @cs) $ map (coordPosition . f) allCoord
+{-# INLINE permuteGrid #-}
+
 transposeGrid ::
      ( VG.Vector v a
+     , VG.Vector v Int
      , IsCoord h
      , IsCoord w
      , GHC.KnownNat x
@@ -437,7 +481,7 @@ transposeGrid ::
      )
   => GridOf v '[ w x, h y] a
   -> GridOf v '[ h y, w x] a
-transposeGrid g = tabulateGrid (indexGrid g . tranposeCoord)
+transposeGrid g = permuteGrid tranposeCoord g
 {-# INLINABLE transposeGrid #-}
 
 -- | The outer grid holds grids, and a grid is never an unboxed element, so the
