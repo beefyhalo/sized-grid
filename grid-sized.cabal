@@ -147,6 +147,14 @@ library
   -- silently reads the wrong cell, so a few comparisons on coord arithmetic
   -- (Clamped's Semigroup and AffineSpace instances, Periodic's Semigroup and
   -- toEnum) are cheap insurance against that everywhere, not just in CI.
+  --
+  -- sized-grid-sxy. GUARD: -O implies -fignore-asserts, and the last
+  -- occurrence of a GHC flag on the command line wins. If an optimisation
+  -- flag (-O1/-O2/...) is ever added to this library stanza, or to a
+  -- `package grid-sized` stanza in cabal.project (project ghc-options are
+  -- appended after the .cabal's), -fno-ignore-asserts MUST be restated
+  -- *after* it or this assert goes silently dead again. Do not just add -O2
+  -- above this line.
   ghc-options:     -fno-ignore-asserts
 
   exposed-modules:
