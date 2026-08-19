@@ -152,14 +152,54 @@ library
   -- (Clamped's Semigroup and AffineSpace instances, Periodic's Semigroup and
   -- toEnum) are cheap insurance against that everywhere, not just in CI.
   --
+  -- sized-grid-adr.6. The optimisation flags below, and the order they are in.
+  -- What this library sells is a per-axis fold written as a class method (see
+  -- the long note on 'IsCoordList') that unrolls into literal arithmetic once
+  -- the dictionary is known. For a downstream package that happens at
+  -- specialisation, which needs the unfoldings to be in the interface file --
+  -- so whether they are there is the whole question, and it was measured.
+  --
+  -- The answer is: a little, in two places, and nowhere else. Against the
+  -- benchmark suite, which is a separate component and so reads these .hi
+  -- files exactly as a downstream package does, two of forty-eight benchmarks
+  -- move and none regress:
+  --
+  --   imap 300x300      2.0x, allocation to 0.64x
+  --   ifoldl' 300x300   1.5x, allocation to essentially nothing
+  --
+  -- Everything else is inside the noise, and ../aoc -- the real consumer --
+  -- does not move at all: two of its grid puzzles land within a percent of
+  -- where they were, because their time is in parsing and list building rather
+  -- than in coord arithmetic.
+  --
+  -- Be careful measuring this. The first pass at it put the flags in a
+  -- `package grid-sized` stanza in a cabal.project, which applies to every
+  -- component of the package and so rebuilt the benchmark itself with -O2 and
+  -- -fspecialise-aggressively. That reported sixteen moved benchmarks and a
+  -- 27x on toEnum/fromEnum -- all of it the benchmark's own compilation, not
+  -- this library's unfoldings. The honest experiment changes only the library
+  -- stanza and leaves the benchmark at -O1 on both sides; the allocation
+  -- column is what gives the difference away, since it does not drift.
+  --
+  -- The cost is small enough to keep the two wins for: this component builds
+  -- 5% slower, its .hi files grow 10%, and a downstream recompile against them
+  -- does not change (8.1s either way). Bigger unfoldings usually mean slower
+  -- downstream compiles; at this size they do not.
+  --
   -- sized-grid-sxy. GUARD: -O implies -fignore-asserts, and the last
-  -- occurrence of a GHC flag on the command line wins. If an optimisation
-  -- flag (-O1/-O2/...) is ever added to this library stanza, or to a
-  -- `package grid-sized` stanza in cabal.project (project ghc-options are
-  -- appended after the .cabal's), -fno-ignore-asserts MUST be restated
-  -- *after* it or this assert goes silently dead again. Do not just add -O2
-  -- above this line.
-  ghc-options:     -fno-ignore-asserts
+  -- occurrence of a GHC flag on the command line wins. That is not
+  -- hypothetical -- it was measured on the way in: with -O2 written after
+  -- -fno-ignore-asserts, a consumer forcing an out-of-range
+  -- 'unsafeOrdinal 99 :: Ordinal 5' printed 99 rather than failing, and the
+  -- 8% those flags appeared to buy that consumer was entirely the missing
+  -- check. So -fno-ignore-asserts is last on the line below and MUST stay
+  -- last, after any optimisation flag added here later. The same trap is open
+  -- to a `package grid-sized` stanza in someone's cabal.project, whose
+  -- ghc-options are appended after these: an -O2 there strips the check again
+  -- and nothing in this file can stop it. The 'downstream' test suite states
+  -- this as a check, which is the only place it can be stated from.
+  ghc-options:
+    -O2 -fexpose-all-unfoldings -fspecialise-aggressively -fno-ignore-asserts
 
   exposed-modules:
     Data.Grid.Sized
