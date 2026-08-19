@@ -42,10 +42,18 @@
 -- also a `Data.Grid.Sized.Focused.FocusedGrid` the rule never reads:
 --
 -- * the loop, one pass: 3.3 ms, 16 MB
--- * building the table: 5.7 ms, 14 MB
+-- * building the table: 4.1 ms, 25 MB
 -- * one pass with the table already built: 0.28 ms, 2.4 MB
 --
--- So a single pass through a stencil is about 1.9x slower than not bothering,
+-- (Building used to be 5.7 ms and 14 MB: @sized-grid-adr.15@ found the build
+-- paying two GHC minor GCs to hold 2,500 coordinate rows live just to learn
+-- their longest length before laying out the table. Asking 'neighbourhood'
+-- twice per cell instead --- once for a length, once for a row that dies in
+-- the nursery as soon as it is written --- allocates more in total but copies
+-- 40x less, which is the resource GC time actually tracks. Net: 28% faster,
+-- for 73% more allocated. See 'stencilFor'.)
+--
+-- So a single pass through a stencil is about 1.2x slower than not bothering,
 -- the second pass is where it breaks even, and from there each one is 12x
 -- cheaper and allocates a seventh as much. Which is what an automaton does:
 --
@@ -135,14 +143,20 @@ stencilFor ::
        forall cs. IsCoordList cs
     => (Coord cs -> [Coord cs])
     -> Stencil cs
-stencilFor neighbourhood = Stencil w (VU.fromListN (n * w) (concatMap pad rows))
+stencilFor neighbourhood = Stencil w (VU.fromListN (n * w) (concatMap padRow (allCoord @cs)))
   where
     n = coordSpaceSize @cs
-    -- Held live across the width pass rather than computed twice: the second
-    -- pass would be the coordinate work this whole module exists to do once.
-    rows = [map coordPosition (neighbourhood c) | c <- allCoord @cs]
-    w = maximum (0 : map length rows)
-    pad ps = take w (ps ++ repeat (-1))
+    -- Two passes over 'allCoord' rather than one over a list of lists held
+    -- live across a width pass (sized-grid-adr.15): 'neighbourhood' runs
+    -- twice per cell, but each row dies in the nursery as 'padRow' produces
+    -- it instead of 2,500 rows being retained at once to find their maximum.
+    -- Measured cheaper: see the module Haddock.
+    w = maximum (0 : [length (neighbourhood c) | c <- allCoord @cs])
+    padRow c = go w (map coordPosition (neighbourhood c))
+      where
+        go 0 _      = []
+        go k []     = (-1) : go (k - 1) []
+        go k (p:ps) = p : go (k - 1) ps
 {-# INLINABLE stencilFor #-}
 
 -- | The Moore neighbourhood at the given radius: `Data.Grid.Sized.Coord.mooreNeighbours`
