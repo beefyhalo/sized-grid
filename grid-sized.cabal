@@ -36,7 +36,11 @@ extra-source-files:
   bench/baseline-ghc9.12.3-aarch64-darwin.csv
   README.lhs
   tests/compile-fail/*.hs
+-- bench/README.md ships because the baseline CSV above ships: the numbers in
+-- it are meaningless without the architecture, compiler and refresh procedure
+-- that README records.
 extra-doc-files:
+  bench/README.md
   ChangeLog.md
   README.md
 

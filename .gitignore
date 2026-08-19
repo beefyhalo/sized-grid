@@ -33,6 +33,13 @@ result-*
 # cabal
 dist-newstyle/
 
+# tasty-bench output. The `bench` CI job writes both of these to the repo root,
+# and comparing runs locally tends to leave more of them around. The one CSV
+# that is meant to be tracked lives at bench/baseline-*.csv and is named for
+# the GHC and architecture that produced it -- see bench/README.md.
+/bench-results.csv
+/bench-baseline.csv
+
 # Editor
 .vscode/
 

@@ -4,6 +4,19 @@ on:
   push:
     branches: [master]
   pull_request:
+  # The documented escape hatch for the benchmark gate. An intended slowdown
+  # (or an intended speedup past --fail-if-faster) makes the `bench` job red
+  # and keeps it red, because a failing run deliberately does not record a new
+  # baseline. Dispatch this workflow on master with `refresh-baseline` set to
+  # record the current numbers as the new normal instead of gating against the
+  # old ones. That is the only way the baseline moves without a green run, and
+  # it leaves an audit trail in the Actions log saying who moved it.
+  workflow_dispatch:
+    inputs:
+      refresh-baseline:
+        description: Record a new benchmark baseline instead of gating against the cached one
+        type: boolean
+        default: false
 
 jobs:
   flake-check:
@@ -81,3 +94,125 @@ jobs:
       # warning -- this doesn't depend on dist-newstyle being cold, since GHC
       # only needs to be compiling the file to enforce it (sized-grid-ior).
       - run: cabal build all --enable-tests --enable-benchmarks
+
+  # sized-grid-adr.11. This library's performance is a property of what GHC
+  # does with the source, not of the source itself: the wins recorded in
+  # `IsCoordList` depend on folds unrolling and methods inlining, and a fold
+  # stops unrolling for reasons invisible in a diff. Building the benchmarks,
+  # which the matrix job above already does, notices none of that. This job
+  # runs them and compares.
+  #
+  # The baseline is CI's own, not the `bench/baseline-*.csv` in the tree. That
+  # file is aarch64-darwin timings from a laptop, and a GitHub runner is
+  # neither that architecture nor that machine; gating against it would need a
+  # threshold so loose it would catch nothing. Instead every green run on
+  # master saves its CSV to the Actions cache and every pull request restores
+  # it, so the comparison is this runner class against itself. Caches written
+  # on the default branch are readable from branches based on it, which is what
+  # makes the master -> PR direction work. See bench/README.md.
+  bench:
+    # Pinned rather than `ubuntu-latest`, unlike the jobs above: this one
+    # compares timings against timings, so the runner image is part of the
+    # measurement and a silent image rollover would read as a regression across
+    # the whole suite at once.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # One GHC, not the matrix: a baseline is per-compiler, and three of them
+      # would triple the runtime to gate the same code three times. 9.12.3 is
+      # the middle of the supported range and the version the checked-in
+      # baseline was recorded on.
+      #
+      # No GLUT/OpenGL apt step, unlike the matrix job: those are needed to
+      # *configure* gameOfLife and ising-example, and a single-component
+      # benchmark target never configures them. The solver still reads the
+      # whole cabal.project, but resolving a package is not building it.
+      - uses: haskell-actions/setup@v2
+        id: setup-haskell
+        with:
+          ghc-version: "9.12.3"
+          cabal-version: latest
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.setup-haskell.outputs.cabal-store }}
+            dist-newstyle
+          key: bench-${{ runner.os }}-ghc9.12.3-${{ hashFiles('**/*.cabal', 'cabal.project') }}
+          restore-keys: |
+            bench-${{ runner.os }}-ghc9.12.3-
+
+      # Keyed by run id rather than commit sha so a re-run, or a manual
+      # refresh of the same commit, writes a new entry -- cache keys are
+      # immutable, so a sha-keyed save would silently no-op the second time.
+      # The restore-keys prefix then picks the most recently created match,
+      # which is the newest baseline master recorded.
+      - name: Restore benchmark baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: bench-baseline.csv
+          key: bench-baseline-ghc9.12.3-ubuntu-24.04-${{ github.run_id }}
+          restore-keys: |
+            bench-baseline-ghc9.12.3-ubuntu-24.04-
+
+      - run: cabal update
+
+      # 25% is deliberately loose: the recorded `2*Stdev` column is 5-10% on
+      # most of these, a shared runner is worse than a laptop, and a gate
+      # tighter than the noise is a gate that gets switched off within a month.
+      # Tighten it once there is a run history showing what this runner's
+      # spread actually is. tasty-bench absorbs some of the noise on its own --
+      # it reports "same as baseline" whenever the difference is inside
+      # max(2*stdev, the baseline's own 2*stdev) -- so the threshold only has
+      # to cover what is left.
+      #
+      # --fail-if-faster is set far wider, and note that its scale is not the
+      # other one's: tasty-bench turns it into a lower bound of
+      # `1 - percent/100` on the new/old ratio, so 90 means "fail below 0.1x",
+      # i.e. more than ten times faster, and any value >= 100 is a lower bound
+      # below zero -- an option that can never fire. Ten times is the point of
+      # it: a genuine optimisation should not have to fight the gate, but a
+      # benchmark that got *orders* faster usually means it stopped doing work
+      # -- an argument floated out of the loop, a result no longer forced --
+      # and that is a bug these numbers would otherwise report as a triumph.
+      #
+      # A benchmark absent from the baseline compares as "same", so adding one
+      # never fails the gate; it starts being watched from the next master run.
+      - name: Run benchmarks
+        run: |
+          set -euo pipefail
+          opts="--csv bench-results.csv"
+          if [ "${{ inputs.refresh-baseline }}" = "true" ]; then
+            echo "::notice::refresh-baseline requested -- recording numbers without gating."
+          elif [ -f bench-baseline.csv ]; then
+            opts="$opts --baseline bench-baseline.csv --fail-if-slower 25 --fail-if-faster 90"
+          else
+            echo "::notice::No cached baseline for this runner and GHC -- recording one instead of gating."
+          fi
+          cabal bench grid-sized:bench:benchmarks --benchmark-options="$opts"
+
+      # `always()`, so a run that failed the gate still hands over the numbers
+      # that failed it, rather than only the percentages in the log.
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-ghc9.12.3-ubuntu-24.04
+          path: bench-results.csv
+          if-no-files-found: warn
+
+      # Only from master, and only from a run that passed the gate: a
+      # regression must not install itself as the new normal just by being
+      # merged. Pull requests read the baseline and never write it, which also
+      # stops one PR's numbers from becoming every other PR's baseline.
+      - name: Promote results to baseline
+        if: success() && github.ref == 'refs/heads/master'
+        run: cp -f bench-results.csv bench-baseline.csv
+
+      - name: Save benchmark baseline
+        if: success() && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v4
+        with:
+          path: bench-baseline.csv
+          key: bench-baseline-ghc9.12.3-ubuntu-24.04-${{ github.run_id }}
