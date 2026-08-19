@@ -393,10 +393,21 @@ main = do
               "coord arithmetic"
               [ bench "(.+^) x10000, Periodic 300x300" $
                 whnf (`walk` zeroCoord) 10000
-              , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
+              , -- sized-grid-hb4. 'nf f x' passes x as an argument, but that alone
+                -- does not stop GHC floating 'f x' out of the benchmark loop when
+                -- x is itself a statically-known value (a literal, or a top-level
+                -- CAF like 'bigGrid' below): full laziness only needs x to be
+                -- loop-invariant, not written as a literal. It floated here for one
+                -- library build and not another, changing nothing in this file --
+                -- see the note on tasty-bench's own 'funcToBench'. 'env' pushes x
+                -- through 'withResource'/'unsafePerformIO', which GHC does not see
+                -- through, so the benchmark keeps measuring real work regardless of
+                -- how much the library's cross-module inlining shifts underneath it.
+                env (pure zeroCoord) $ \o ->
+                bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 nf
-                    (\o -> [view coordHead (c .-. o) | c <- allCoord @Mid])
-                    zeroCoord
+                    (\o' -> [view coordHead (c .-. o') | c <- allCoord @Mid])
+                    o
               , bench "(.+^) x360000, four corner reads over Clamped 300x300" $
                 whnf cornerReads bigGrid
               , bench "offsetCoord x360000, checked, over Clamped 300x300" $
@@ -413,10 +424,12 @@ main = do
                 whnf axisDistanceSweepFlat 3
               , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
                 whnf axisOffsets 1200
-              , bench "toEnum/fromEnum x300, Clamped 300" $
+              , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+                env (pure 299) $ \n ->
+                bench "toEnum/fromEnum x300, Clamped 300" $
                 nf
-                    (\n -> [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n]])
-                    299
+                    (\n' -> [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n']])
+                    n
               ]
         , bgroup
               "indexed vs unindexed (the gap is coordPosition, not allCoord)"
@@ -426,13 +439,17 @@ main = do
                 nf (\x -> pure x :: Grid Big Int) 1
               , bench "imap 300x300      [coordPosition per cell]" $
                 nf (imap (\c x -> coordPosition c + x)) bigGrid
-              , bench "fmap 300x300      [no coord at all]" $
-                nf (fmap (+ 1)) bigGrid
+              , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+                env (pure bigGrid) $ \g ->
+                bench "fmap 300x300      [no coord at all]" $
+                nf (fmap (+ 1)) g
               ]
         , bgroup
               "grid access"
-              [ bench "index x90000, 300x300 (coord list shared)" $
-                nf (\g -> map (index g) (allCoord @Big)) bigGrid
+              [ -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+                env (pure bigGrid) $ \g ->
+                bench "index x90000, 300x300 (coord list shared)" $
+                nf (\g' -> map (index g') (allCoord @Big)) g
               ]
         , bgroup
               "indexed traversals"
@@ -525,10 +542,17 @@ main = do
                 nf (\f -> tabulateGrid f :: Grid Big Int) coordPosition
               , bench "tabulateGrid 300x300    unboxed" $
                 nf (\f -> tabulateGrid f :: UGrid Big Int) coordPosition
-              , bench "mapGrid then sum 300x300   boxed" $
-                nf (mapGrid (+ 1)) bigGrid
-              , bench "mapGrid then sum 300x300 unboxed" $
-                nf (mapGrid (+ 1)) ubigGrid
+              , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+                -- This pair is the clearest evidence for it: the unboxed
+                -- benchmark's time was identical whether floated or not (an
+                -- already-realised unboxed vector is nearly free to re-force),
+                -- so only its allocation column exposed the sharing.
+                env (pure bigGrid) $ \g ->
+                bench "mapGrid then sum 300x300   boxed" $
+                nf (mapGrid (+ 1)) g
+              , env (pure ubigGrid) $ \g ->
+                bench "mapGrid then sum 300x300 unboxed" $
+                nf (mapGrid (+ 1)) g
               , bench "foldlGrid' 300x300         boxed" $
                 whnf (foldlGrid' (+) 0) bigGrid
               , bench "foldlGrid' 300x300       unboxed" $
