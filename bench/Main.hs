@@ -84,7 +84,11 @@ stepStencil = mooreStencil 1
 stepStencilPeriodic :: Stencil StepPeriodic
 stepStencilPeriodic = mooreStencil 1
 
--- | Total a grid, forcing every element on the way.
+-- | Sum: the actual computed quantity in the benchmarks below that reduce a
+-- per-cell rule (a neighbourhood, a corner-read window, an offset sweep) to
+-- a single 'Int'. Not a forcing helper -- 'nf' handles forcing now that
+-- 'Grid'\/'FocusedGrid' have real 'NFData' instances, so every use left here
+-- is one where the sum itself is part of what is being measured.
 total :: (Foldable f) => f Int -> Int
 total = sum
 
@@ -257,11 +261,6 @@ axisOffsets k =
 -- the benchmark and that claim stops being checked.
 --------------------------------------------------------------------------------
 
--- | Total, without going through 'Foldable', which the unboxed grid does not
--- have.
-totalG :: VG.Vector v Int => GridOf v cs Int -> Int
-totalG = foldlGrid' (+) 0
-
 -- | Prefix-sum each row independently: @scanl1Grid@ lifted through the
 -- outermost axis, which is how the consumer builds a summed-area table.
 rowPrefix :: VG.Vector v Int => GridOf v Big Int -> GridOf v Big Int
@@ -307,19 +306,19 @@ main :: IO ()
 main = do
     -- Force the shared inputs once, so their construction is not charged to
     -- whichever benchmark happens to run first.
-    _ <- evaluate (total bigGrid)
-    _ <- evaluate (total midGrid)
-    _ <- evaluate (total (focusedGrid stepGrid))
-    _ <- evaluate (total (focusedGrid stepGridPeriodic))
-    _ <- evaluate (totalG uPlainStepGrid)
+    _ <- evaluate (rnf bigGrid)
+    _ <- evaluate (rnf midGrid)
+    _ <- evaluate (rnf stepGrid)
+    _ <- evaluate (rnf stepGridPeriodic)
+    _ <- evaluate (rnf uPlainStepGrid)
     defaultMain
         [ bgroup
               "coord arithmetic"
               [ bench "(.+^) x10000, Periodic 300x300" $
                 whnf (`walk` zeroCoord) 10000
               , bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
-                whnf
-                    (\o -> total [view coordHead (c .-. o) | c <- allCoord @Mid])
+                nf
+                    (\o -> [view coordHead (c .-. o) | c <- allCoord @Mid])
                     zeroCoord
               , bench "(.+^) x360000, four corner reads over Clamped 300x300" $
                 whnf cornerReads bigGrid
@@ -332,46 +331,44 @@ main = do
               , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
                 whnf axisOffsets 1200
               , bench "toEnum/fromEnum x300, Clamped 300" $
-                whnf
-                    (\n -> total [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n]])
+                nf
+                    (\n -> [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n]])
                     299
               ]
         , bgroup
               "indexed vs unindexed (the gap is coordPosition, not allCoord)"
               [ bench "tabulate 300x300  [coordPosition per cell]" $
-                whnf (\f -> total (tabulate f :: Grid Big Int)) coordPosition
+                nf (\f -> tabulate f :: Grid Big Int) coordPosition
               , bench "pure 300x300      [no coord at all]" $
-                whnf (\x -> total (pure x :: Grid Big Int)) 1
+                nf (\x -> pure x :: Grid Big Int) 1
               , bench "imap 300x300      [coordPosition per cell]" $
-                whnf (total . imap (\c x -> coordPosition c + x)) bigGrid
+                nf (imap (\c x -> coordPosition c + x)) bigGrid
               , bench "fmap 300x300      [no coord at all]" $
-                whnf (total . fmap (+ 1)) bigGrid
+                nf (fmap (+ 1)) bigGrid
               ]
         , bgroup
               "grid access"
               [ bench "index x90000, 300x300 (coord list shared)" $
-                whnf (\g -> total (map (index g) (allCoord @Big))) bigGrid
+                nf (\g -> map (index g) (allCoord @Big)) bigGrid
               ]
         , bgroup
               "indexed traversals"
               [ bench "ifoldl' 300x300" $
                 whnf (ifoldl' (\c acc x -> acc + coordPosition c + x) 0) bigGrid
               , bench "itraverse 100x100" $
-                whnf
-                    (maybe 0 total . itraverse (const Just))
-                    midGrid
+                nf (itraverse (const Just)) midGrid
               ]
         , bgroup
               "comonad"
               [ bench "extract 50x50" $ whnf extract stepGrid
               , bench "extend neighbourSum 50x50" $
-                whnf (total . focusedGrid . extend neighbourSum) stepGrid
+                nf (extend neighbourSum) stepGrid
               , bench "extend neighbourSum 50x50, Periodic" $
-                whnf (total . focusedGrid . extend neighbourSum) stepGridPeriodic
+                nf (extend neighbourSum) stepGridPeriodic
               , bench "iterate (extend neighbourSum) x100, 50x50" $
-                whnf (total . focusedGrid . iterateExtend 100) stepGrid
+                nf (iterateExtend 100) stepGrid
               , bench "iterate (extend neighbourSum) x100, 50x50, Periodic" $
-                whnf (total . focusedGrid . iterateExtend 100) stepGridPeriodic
+                nf (iterateExtend 100) stepGridPeriodic
               ]
         , -- The same workload as the four above, through a precomputed
           -- neighbourhood, split into the three costs that make up the trade.
@@ -392,78 +389,77 @@ main = do
           bgroup
               "stencil (the same neighbourhood, precomputed)"
               [ bench "imapGrid over neighbours 50x50 (what it replaces)" $
-                whnf (total . neighbourStep) plainStepGrid
+                nf neighbourStep plainStepGrid
               , bench "imapGrid over neighbours 50x50, Periodic" $
-                whnf (total . neighbourStep) plainStepGridPeriodic
+                nf neighbourStep plainStepGridPeriodic
               , bench "imapGrid over neighbours x100, 50x50" $
-                whnf (total . iterateNeighbourStep 100) plainStepGrid
+                nf (iterateNeighbourStep 100) plainStepGrid
               , bench "mooreStencil r, 50x50 (building the table)" $
                 whnf (\r -> VG.length (stencilPositions (mooreStencil @Step r))) 1
               , bench "mooreStencil r, 50x50, Periodic" $
                 whnf (\r -> VG.length (stencilPositions (mooreStencil @StepPeriodic r))) 1
               , bench "stencilStep 50x50, table already built" $
-                whnf (total . stencilStep stepStencil) plainStepGrid
+                nf (stencilStep stepStencil) plainStepGrid
               , bench "stencilStep 50x50, Periodic, table already built" $
-                whnf (total . stencilStep stepStencilPeriodic) plainStepGridPeriodic
+                nf (stencilStep stepStencilPeriodic) plainStepGridPeriodic
               , bench "stencilStep 50x50, table built for this one pass" $
-                whnf (\r -> total (stencilStep (mooreStencil r) plainStepGrid)) 1
+                nf (\r -> stencilStep (mooreStencil r) plainStepGrid) 1
               , bench "stencilStep x100, 50x50" $
-                whnf (total . iterateStencil stepStencil 100) plainStepGrid
+                nf (iterateStencil stepStencil 100) plainStepGrid
               , bench "stencilStep x100, 50x50, Periodic" $
-                whnf (total . iterateStencil stepStencilPeriodic 100) plainStepGridPeriodic
+                nf (iterateStencil stepStencilPeriodic 100) plainStepGridPeriodic
               , -- sized-grid-adr.13: splits the boxed figure above between the
                 -- neighbour lists 'stencilGrid' builds per pass and the boxed
                 -- 'Int' thunk chains 'iterate' builds across passes, deciding
                 -- whether a fold-shaped 'stencilFoldGrid' is worth writing.
                 bench "stencilStep x100, 50x50, unboxed" $
-                whnf (totalG . iterateStencil stepStencil 100) uPlainStepGrid
+                nf (iterateStencil stepStencil 100) uPlainStepGrid
               , -- The fold-shaped counterparts of the four 'stencilStep'
                 -- benchmarks just above, same grids and same rule, against
                 -- 'stencilFoldGrid' instead of 'stencilGrid' (sized-grid-adr.13).
                 bench "stencilFoldStep 50x50, table already built" $
-                whnf (total . stencilFoldStep stepStencil) plainStepGrid
+                nf (stencilFoldStep stepStencil) plainStepGrid
               , bench "stencilFoldStep 50x50, Periodic, table already built" $
-                whnf (total . stencilFoldStep stepStencilPeriodic) plainStepGridPeriodic
+                nf (stencilFoldStep stepStencilPeriodic) plainStepGridPeriodic
               , bench "stencilFoldStep x100, 50x50" $
-                whnf (total . iterateStencilFold stepStencil 100) plainStepGrid
+                nf (iterateStencilFold stepStencil 100) plainStepGrid
               , bench "stencilFoldStep x100, 50x50, Periodic" $
-                whnf (total . iterateStencilFold stepStencilPeriodic 100) plainStepGridPeriodic
+                nf (iterateStencilFold stepStencilPeriodic 100) plainStepGridPeriodic
               , bench "stencilFoldStep x100, 50x50, unboxed" $
-                whnf (totalG . iterateStencilFold stepStencil 100) uPlainStepGrid
+                nf (iterateStencilFold stepStencil 100) uPlainStepGrid
               ]
         , bgroup
               "collapse round trip"
-              [ bench "collapseGrid 100x100" $
-                whnf (total . map total . collapseGrid) midGrid
+              [ bench "collapseGrid 100x100" $ nf collapseGrid midGrid
               , bench "gridFromList . collapseGrid 100x100" $
-                whnf
-                    (\g -> maybe 0 total (gridFromList (collapseGrid g) :: Maybe (Grid Mid Int)))
+                nf
+                    (\g -> gridFromList (collapseGrid g) :: Maybe (Grid Mid Int))
                     midGrid
               ]
         , bgroup
               "boxed vs unboxed (same code, different vector)"
               [ bench "tabulateGrid 300x300      boxed" $
-                whnf (\f -> totalG (tabulateGrid f :: Grid Big Int)) coordPosition
+                nf (\f -> tabulateGrid f :: Grid Big Int) coordPosition
               , bench "tabulateGrid 300x300    unboxed" $
-                whnf (\f -> totalG (tabulateGrid f :: UGrid Big Int)) coordPosition
+                nf (\f -> tabulateGrid f :: UGrid Big Int) coordPosition
               , bench "mapGrid then sum 300x300   boxed" $
-                whnf (totalG . mapGrid (+ 1)) bigGrid
+                nf (mapGrid (+ 1)) bigGrid
               , bench "mapGrid then sum 300x300 unboxed" $
-                whnf (totalG . mapGrid (+ 1)) ubigGrid
-              , bench "foldlGrid' 300x300         boxed" $ whnf totalG bigGrid
-              , bench "foldlGrid' 300x300       unboxed" $ whnf totalG ubigGrid
-              , bench "transposeGrid 300x300      boxed" $
-                whnf (totalG . transposeGrid) bigGrid
-              , bench "transposeGrid 300x300    unboxed" $
-                whnf (totalG . transposeGrid) ubigGrid
+                nf (mapGrid (+ 1)) ubigGrid
+              , bench "foldlGrid' 300x300         boxed" $
+                whnf (foldlGrid' (+) 0) bigGrid
+              , bench "foldlGrid' 300x300       unboxed" $
+                whnf (foldlGrid' (+) 0) ubigGrid
+              , bench "transposeGrid 300x300      boxed" $ nf transposeGrid bigGrid
+              , bench "transposeGrid 300x300    unboxed" $ nf transposeGrid ubigGrid
               , bench "summed-area build 300x300  boxed" $
-                whnf (\s -> totalG (satBuild s :: Grid Big Int)) 18
+                nf (\s -> satBuild s :: Grid Big Int) 18
               , bench "summed-area build 300x300 unboxed" $
-                whnf (\s -> totalG (satBuild s :: UGrid Big Int)) 18
+                nf (\s -> satBuild s :: UGrid Big Int) 18
               , bench "summed-area build (scanAxis) 300x300  boxed" $
-                whnf (\s -> totalG (satBuildAxis s :: Grid Big Int)) 18
+                nf (\s -> satBuildAxis s :: Grid Big Int) 18
               , bench "summed-area build (scanAxis) 300x300 unboxed" $
-                whnf (\s -> totalG (satBuildAxis s :: UGrid Big Int)) 18
+                nf (\s -> satBuildAxis s :: UGrid Big Int) 18
                 -- The pair that reports no difference, deliberately kept.
               , bench "indexGrid x90000           boxed" $
                 whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid
@@ -472,14 +468,16 @@ main = do
               ]
         , bgroup
               "json"
-              [ bench "toJSON 100x100" $ whnf (jsonSize . toJSON) midGrid
+              [ bench "toJSON 100x100" $ nf toJSON midGrid
               , bench "fromJSON . toJSON 100x100" $
                 whnf (roundTrips . toJSON) midGrid
               ]
         ]
   where
-    jsonSize v = rnf v `seq` (1 :: Int)
+    -- 'Result' has no 'NFData' instance, so this stays a manual force rather
+    -- than 'nf'; 'rnf' on the decoded 'Grid' is still the direct deep force,
+    -- not a 'total'-style Foldable sum.
     roundTrips v =
         case fromJSON v :: Result (Grid Mid Int) of
-            Success g -> total g
+            Success g -> rnf g `seq` (1 :: Int)
             Error _   -> -1
