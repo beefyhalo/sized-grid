@@ -50,6 +50,7 @@ import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Internal.Type (requiring, windowFits)
 
 import           Control.Applicative           (ZipList (..))
+import           Control.DeepSeq               (NFData)
 import           Control.Lens                  hiding (index)
 import           Data.Aeson
 import           Data.Aeson.Types              (Parser)
@@ -78,6 +79,8 @@ type Grid = GridOf V.Vector
 deriving stock instance Eq (v a) => Eq (GridOf v cs a)
 
 deriving stock instance Show (v a) => Show (GridOf v cs a)
+
+deriving newtype instance NFData (v a) => NFData (GridOf v cs a)
 
 deriving newtype instance Eq1 v => Eq1 (GridOf v cs)
 

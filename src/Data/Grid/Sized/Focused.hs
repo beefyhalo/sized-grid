@@ -15,6 +15,7 @@ import           Data.Grid.Sized.Internal.Grid (Grid)
 
 import           Control.Comonad
 import           Control.Comonad.Store
+import           Control.DeepSeq       (NFData (..))
 import           Data.AffineSpace (Diff)
 import           Data.Functor.Rep
 import           Generics.SOP
@@ -31,6 +32,9 @@ data FocusedGrid cs a = FocusedGrid
 deriving instance (All Eq cs, Eq a) => Eq (FocusedGrid cs a)
 
 deriving instance (All Show cs, Show a) => Show (FocusedGrid cs a)
+
+instance (NFData (Grid cs a), NFData (Coord cs)) => NFData (FocusedGrid cs a) where
+    rnf (FocusedGrid g p) = rnf g `seq` rnf p
 
 instance ( AllSizedKnown cs
          , IsCoordList cs

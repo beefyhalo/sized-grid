@@ -7,6 +7,7 @@ module Data.Grid.Sized.Coord.Reflect101
 import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Ordinal
 
+import           Control.DeepSeq       (NFData)
 import           Control.Lens          (iso)
 import           Data.Aeson
 import           Data.AffineSpace
@@ -21,6 +22,8 @@ newtype Reflect101 (n :: Nat) = Reflect101
     } deriving (Eq, Ord)
 
 deriving instance KnownNat n => Show (Reflect101 n)
+
+deriving instance NFData (Reflect101 n)
 
 deriving instance (KnownNat n, 1 <= n) => Random (Reflect101 n)
 deriving instance (KnownNat n, 1 <= n) => Enum (Reflect101 n)

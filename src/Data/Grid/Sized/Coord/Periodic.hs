@@ -5,6 +5,7 @@ module Data.Grid.Sized.Coord.Periodic
 import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Ordinal
 
+import           Control.DeepSeq     (NFData)
 import           Control.Lens
 import           Data.AdditiveGroup
 import           Data.Aeson
@@ -19,6 +20,8 @@ newtype Periodic (n :: Nat) = Periodic
     } deriving (Eq, Ord)
 
 deriving instance KnownNat n => Show (Periodic n)
+
+deriving instance NFData (Periodic n)
 
 deriving instance (1 <= n, KnownNat n) => Random (Periodic n)
 

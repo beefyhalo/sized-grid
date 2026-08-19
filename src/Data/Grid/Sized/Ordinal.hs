@@ -19,6 +19,7 @@ module Data.Grid.Sized.Ordinal
 
 import           Data.Grid.Sized.Internal.Type (requiring)
 
+import           Control.DeepSeq         (NFData (..))
 import           Control.Exception       (assert)
 import           Control.Lens            (Prism', prism')
 import           Control.Monad           (unless)
@@ -100,6 +101,9 @@ weakenOrdinal = numToOrdinal . ordinalToInt
 
 _Ordinal :: (KnownNat n, Integral a) => Prism' a (Ordinal n)
 _Ordinal = prism' ordinalToNum numToOrdinal
+
+instance NFData (Ordinal m) where
+    rnf = rnf . ordinalToInt
 
 instance KnownNat m => Show (Ordinal m) where
     show o =
