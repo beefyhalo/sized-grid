@@ -1,58 +1,58 @@
 Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
-"All.coord arithmetic.(.+^) x10000, Periodic 300x300",666941015,60918876,2677553,155744,20971520
-"All.coord arithmetic.(.-.) x10000, Clamped 100x100 (coord list shared)",132590136,7337534,1040020,275,20971520
-"All.coord arithmetic.(.+^) x360000, four corner reads over Clamped 300x300",2327846875,151806304,33,1,20971520
-"All.coord arithmetic.offsetCoord x360000, checked, over Clamped 300x300",6752053125,451699706,36720397,9685,20971520
-"All.coord arithmetic.offsetCoord x360000, checked, flat arms (sized-grid-2xv)",1777819531,115653628,82,6,20971520
-"All.coord arithmetic.onBoundary x360000, over Clamped 300x300",7044750000,421498812,36720405,9544,20971520
-"All.coord arithmetic.onBoundary x360000, flat arms (sized-grid-2xv)",2828831250,241313660,154,13,20971520
-"All.coord arithmetic.coordDistance x360000, over Clamped 300x300",8589381250,847246156,36720675,9438,20971520
-"All.coord arithmetic.coordDistance x360000, flat arms (sized-grid-2xv)",2595462500,209645348,148,13,20971520
-"All.coord arithmetic.(.+^) x360000, one Clamped 300 axis (no Coord)",2334471875,220595092,96188,304,20971520
-"All.coord arithmetic.toEnum/fromEnum x300, Clamped 300",7471612,455646,57616,14,20971520
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).tabulate 300x300  [coordPosition per cell]",6449753125,472921388,10080916,6698862,38797312
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).pure 300x300      [no coord at all]",412307031,32209860,720777,192,38797312
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).imap 300x300      [coordPosition per cell]",2387726562,229965616,5040892,1794271,38797312
-"All.indexed vs unindexed (the gap is coordPosition, not allCoord).fmap 300x300      [no coord at all]",1484283593,127808754,4320832,1177175,38797312
-"All.grid access.index x90000, 300x300 (coord list shared)",1427810156,113476956,7920082,1874,38797312
-All.indexed traversals.ifoldl' 300x300,657846093,53686594,52,3,38797312
-All.indexed traversals.itraverse 100x100,543625390,53662136,3204049,231263,38797312
-All.comonad.extract 50x50,10561,804,0,0,38797312
-All.comonad.extend neighbourSum 50x50,3491146875,234476184,16642378,449421,38797312
-"All.comonad.extend neighbourSum 50x50, Periodic",3658464062,216206810,17060626,434165,38797312
-"All.comonad.iterate (extend neighbourSum) x100, 50x50",387283500000,18814275962,1664218835,57063233,74448896
-"All.comonad.iterate (extend neighbourSum) x100, 50x50, Periodic",399336800000,23253318110,1706037168,54960500,78643200
-"All.stencil (the same neighbourhood, precomputed).imapGrid over neighbours 50x50 (what it replaces)",3295171875,226821144,16382036,276347,78643200
-"All.stencil (the same neighbourhood, precomputed).imapGrid over neighbours 50x50, Periodic",3463851562,251033568,16800212,278427,78643200
-"All.stencil (the same neighbourhood, precomputed).imapGrid over neighbours x100, 50x50",358884600000,24022972708,1638205691,43702856,78643200
-"All.stencil (the same neighbourhood, precomputed).mooreStencil r, 50x50 (building the table)",5765378125,471712514,14308960,5139456,78643200
-"All.stencil (the same neighbourhood, precomputed).mooreStencil r, 50x50, Periodic",6131101562,437710306,14580276,5340340,78643200
-"All.stencil (the same neighbourhood, precomputed).stencilStep 50x50, table already built",275626757,26293888,2482881,64811,78643200
-"All.stencil (the same neighbourhood, precomputed).stencilStep 50x50, Periodic, table already built",279982421,26928896,2540096,66384,78643200
-"All.stencil (the same neighbourhood, precomputed).stencilStep 50x50, table built for this one pass",6184729687,146647626,16791599,5353949,78643200
-"All.stencil (the same neighbourhood, precomputed).stencilStep x100, 50x50",67874900000,4244392430,248296323,49914429,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilStep x100, 50x50, Periodic",66102975000,3749662390,254018904,50712310,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilStep x100, 50x50, unboxed",24674912500,1836873940,261339471,1578396,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilFoldStep 50x50, table already built",93398144,6566702,490548,10511,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilFoldStep 50x50, Periodic, table already built",94706250,6613868,500084,10645,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilFoldStep x100, 50x50",41297200000,3519962308,49064290,45518425,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilFoldStep x100, 50x50, Periodic",45773775000,3982660674,50018913,45665054,84934656
-"All.stencil (the same neighbourhood, precomputed).stencilFoldStep x100, 50x50, unboxed",18939084375,466276074,155722710,1646939,84934656
-All.collapse round trip.collapseGrid 100x100,296841406,26587372,2510585,635,84934656
-All.collapse round trip.gridFromList . collapseGrid 100x100,873688281,68114472,4128329,747193,84934656
-"All.boxed vs unboxed (same code, different vector).tabulateGrid 300x300      boxed",6556800000,591936106,10080927,6632850,84934656
-"All.boxed vs unboxed (same code, different vector).tabulateGrid 300x300    unboxed",2159709375,172330962,10080105,590839,84934656
-"All.boxed vs unboxed (same code, different vector).mapGrid then sum 300x300   boxed",1474642871,43599394,4320768,1172540,84934656
-"All.boxed vs unboxed (same code, different vector).mapGrid then sum 300x300 unboxed",88061938,3945764,720050,115,84934656
-"All.boxed vs unboxed (same code, different vector).foldlGrid' 300x300         boxed",310244726,28419026,32,1,84934656
-"All.boxed vs unboxed (same code, different vector).foldlGrid' 300x300       unboxed",86623095,6608192,20,0,84934656
-"All.boxed vs unboxed (same code, different vector).transposeGrid 300x300      boxed",812283984,61691018,720793,115,84934656
-"All.boxed vs unboxed (same code, different vector).transposeGrid 300x300    unboxed",428041601,39223776,720064,111,84934656
-"All.boxed vs unboxed (same code, different vector).summed-area build 300x300  boxed",15895518750,874554136,20202685,14279089,84934656
-"All.boxed vs unboxed (same code, different vector).summed-area build 300x300 unboxed",5407196875,470426776,20198877,2422539,88080384
-"All.boxed vs unboxed (same code, different vector).summed-area build (scanAxis) 300x300  boxed",38609281250,1844336818,53378469,46775086,94371840
-"All.boxed vs unboxed (same code, different vector).summed-area build (scanAxis) 300x300 unboxed",10469168750,481006172,59125055,3933534,94371840
-"All.boxed vs unboxed (same code, different vector).indexGrid x90000           boxed",789637500,67604370,49,2,94371840
-"All.boxed vs unboxed (same code, different vector).indexGrid x90000         unboxed",775694140,67831470,52,2,94371840
-All.json.toJSON 100x100,660147656,53256850,3870657,283344,94371840
-All.json.fromJSON . toJSON 100x100,3121881250,292624432,12316564,2281400,94371840
+"All.coord arithmetic.(.+^) x10000, Periodic 300x300",333356835,33243168,2677537,156032,24117248
+"All.coord arithmetic.(.-.) x10000, Clamped 100x100 (coord list shared)",66176245,4137162,1040018,274,24117248
+"All.coord arithmetic.(.+^) x360000, four corner reads over Clamped 300x300",1078019921,60868216,49,3,24117248
+"All.coord arithmetic.offsetCoord x360000, checked, over Clamped 300x300",3464525000,281339276,36720282,9677,24117248
+"All.coord arithmetic.offsetCoord x360000, checked, flat arms (sized-grid-2xv)",959291406,52561572,49,3,24117248
+"All.coord arithmetic.onBoundary x360000, over Clamped 300x300",3704203125,326990002,36720288,9532,24117248
+"All.coord arithmetic.onBoundary x360000, flat arms (sized-grid-2xv)",1467977343,146595218,82,6,24117248
+"All.coord arithmetic.coordDistance x360000, over Clamped 300x300",4373062500,289990064,36720209,9375,24117248
+"All.coord arithmetic.coordDistance x360000, flat arms (sized-grid-2xv)",1343965820,46123268,32,1,24117248
+"All.coord arithmetic.(.+^) x360000, one Clamped 300 axis (no Coord)",1126968261,52134884,96064,489,24117248
+"All.coord arithmetic.toEnum/fromEnum x300, Clamped 300",3835711,230574,57616,14,24117248
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).tabulate 300x300  [coordPosition per cell]",2523025000,210099548,7920892,4797722,42991616
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).pure 300x300      [no coord at all]",208647949,13147816,720769,276,42991616
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).imap 300x300      [coordPosition per cell]",1224487109,67097760,5040793,1787636,42991616
+"All.indexed vs unindexed (the gap is coordPosition, not allCoord).fmap 300x300      [no coord at all]",738975000,57966568,4320793,1173702,42991616
+"All.grid access.index x90000, 300x300 (coord list shared)",709100000,57809344,7920052,1869,42991616
+All.indexed traversals.ifoldl' 300x300,339756835,26334940,32,1,42991616
+All.indexed traversals.itraverse 100x100,282587109,27013622,3204032,231477,42991616
+All.comonad.extract 50x50,5453,410,0,0,42991616
+All.comonad.extend neighbourSum 50x50,1742743750,114629928,16502338,340892,42991616
+"All.comonad.extend neighbourSum 50x50, Periodic",1844778125,147325434,16920520,343620,42991616
+"All.comonad.iterate (extend neighbourSum) x100, 50x50",189415500000,14317543258,1650214907,43411695,57671680
+"All.comonad.iterate (extend neighbourSum) x100, 50x50, Periodic",196769700000,16109080922,1692032771,42530076,66060288
+"All.stencil (the same neighbourhood, precomputed).imapGrid over neighbours 50x50 (what it replaces)",1690555468,105993114,16381970,292939,66060288
+"All.stencil (the same neighbourhood, precomputed).imapGrid over neighbours 50x50, Periodic",1782635156,110182248,16800152,295780,66060288
+"All.stencil (the same neighbourhood, precomputed).imapGrid over neighbours x100, 50x50",184682500000,16967283812,1638204912,43709762,66060288
+"All.stencil (the same neighbourhood, precomputed).mooreStencil r, 50x50 (building the table)",2137867187,113305756,24777594,131692,66060288
+"All.stencil (the same neighbourhood, precomputed).mooreStencil r, 50x50, Periodic",2199078125,105496988,25240186,131650,66060288
+"All.stencil (the same neighbourhood, precomputed).stencilStep 50x50, table already built",144880273,13450472,2482872,64732,66060288
+"All.stencil (the same neighbourhood, precomputed).stencilStep 50x50, Periodic, table already built",146486328,13748324,2540089,66339,66060288
+"All.stencil (the same neighbourhood, precomputed).stencilStep 50x50, table built for this one pass",2296167187,223613784,27260508,184504,66060288
+"All.stencil (the same neighbourhood, precomputed).stencilStep x100, 50x50",35348312500,1685156728,248296322,49869421,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilStep x100, 50x50, Periodic",35510537500,1832793116,254017971,50637227,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilStep x100, 50x50, unboxed",12846668750,936744776,261339011,1631124,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilFoldStep 50x50, table already built",48561230,3365456,490546,10508,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilFoldStep 50x50, Periodic, table already built",48592382,4003522,500082,10643,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilFoldStep x100, 50x50",19813275000,1782090276,49064338,45556482,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilFoldStep x100, 50x50, Periodic",20779212500,1778177156,50017984,45957465,84934656
+"All.stencil (the same neighbourhood, precomputed).stencilFoldStep x100, 50x50, unboxed",9787093750,872485772,155723013,1610240,84934656
+All.collapse round trip.collapseGrid 100x100,158280664,13216384,2510576,634,84934656
+All.collapse round trip.gridFromList . collapseGrid 100x100,447552148,30877826,4128312,749319,84934656
+"All.boxed vs unboxed (same code, different vector).tabulateGrid 300x300      boxed",2437614062,227652682,7920892,4635217,84934656
+"All.boxed vs unboxed (same code, different vector).tabulateGrid 300x300    unboxed",529197851,28685432,5040064,14846,84934656
+"All.boxed vs unboxed (same code, different vector).mapGrid then sum 300x300   boxed",757910546,58866236,4320795,1173904,84934656
+"All.boxed vs unboxed (same code, different vector).mapGrid then sum 300x300 unboxed",45425561,3345584,720050,115,84934656
+"All.boxed vs unboxed (same code, different vector).foldlGrid' 300x300         boxed",160466406,13240840,24,0,84934656
+"All.boxed vs unboxed (same code, different vector).foldlGrid' 300x300       unboxed",44707836,3279748,18,0,84934656
+"All.boxed vs unboxed (same code, different vector).transposeGrid 300x300      boxed",428255859,35357824,720778,114,84934656
+"All.boxed vs unboxed (same code, different vector).transposeGrid 300x300    unboxed",233157373,11346516,720052,110,84934656
+"All.boxed vs unboxed (same code, different vector).summed-area build 300x300  boxed",7099012500,428514476,18042410,13285381,84934656
+"All.boxed vs unboxed (same code, different vector).summed-area build 300x300 unboxed",1988381250,109371674,13862786,2164129,92274688
+"All.boxed vs unboxed (same code, different vector).summed-area build (scanAxis) 300x300  boxed",17790350000,1108866110,51218429,45196503,96468992
+"All.boxed vs unboxed (same code, different vector).summed-area build (scanAxis) 300x300 unboxed",5306681250,490271878,52789164,4250791,96468992
+"All.boxed vs unboxed (same code, different vector).indexGrid x90000           boxed",393201757,14841464,24,0,96468992
+"All.boxed vs unboxed (same code, different vector).indexGrid x90000         unboxed",393378515,33428342,32,1,96468992
+All.json.toJSON 100x100,350727148,30884814,3870642,284220,96468992
+All.json.fromJSON . toJSON 100x100,1631007031,108127862,12316498,2319194,96468992
