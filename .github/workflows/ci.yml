@@ -18,6 +18,19 @@ on:
         type: boolean
         default: false
 
+# sized-grid-3e9. Without this, every push queues a brand-new run rather than
+# cancelling the one it supersedes -- a burst of pushes (several worktree
+# merges in a short window) backs up shared-runner capacity for hours, with
+# older, already-stale runs holding slots newer ones are waiting on. Grouping
+# on github.ref keeps master's queue separate from each pull request's: a
+# push to master only cancels an earlier in-flight master run, and a PR only
+# cancels that same PR's own earlier run. A cancelled master run never wrote
+# its benchmark baseline (gated on success), which is fine -- the commit it
+# would have recorded is already superseded.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   flake-check:
     runs-on: ubuntu-latest
