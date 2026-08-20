@@ -9,6 +9,71 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **Breaking.** A `Coord cs` *is* its row-major position: one `Int` in
+  `[0, MaxCoordSize cs)` and nothing else, where it was an `NP I cs` — a
+  boxed heterogeneous cons list with a `:*` cell, an `I` box and the axis
+  newtype's own box per axis (sized-grid-adr.16).
+
+  Nothing about what the type *means* changes. The axis list still indexes
+  the type and still carries the boundary policy, so `Coord '[Clamped 5,
+  Periodic 3]` means what it meant; the role stays nominal, so `coerce ::
+  Coord '[Clamped 9] -> Coord '[Clamped 3]` is still rejected (now checked by
+  `tests/compile-fail/CoordCoerceAcrossSizes.hs`, since with the axis list
+  gone from the representation the annotation is the only thing shutting it);
+  and `(:|)`/`EmptyCoord` are still the interface and still `COMPLETE`. The
+  invariant moves to "the position is in range", maintained by the
+  constructors — the same trade `Ordinal` made when it stopped being a GADT.
+
+  What it buys, measured against the previous representation on the same
+  machine, nothing slower: `tabulate` 2.3x, `indexGrid` 2.4x, `ifoldl'` 2.1x,
+  a game-of-life step over `neighbours` 2.6x (16.4 MB to 2.6 MB), `extend`
+  2.5x, a checked `offsetCoord` sweep 2.6x, a torus walk 3.7x (2.68 MB to
+  20 bytes), `imap` 1.4x. `coordPosition` is now the identity, which is
+  what most of that is: `index`, `tabulate` and every stencil reached it
+  per cell.
+
+  Migration, all of it caught by the type checker:
+
+  - **Displacements are `Delta`, not `Coord`.** `Diff (Coord cs)` is now
+    `Delta (MapDiff cs)`, built with `:^`/`NoDelta` and `deltaFromTuple`
+    rather than `:|`/`EmptyCoord` and `coordFromTuple`. A displacement is
+    unbounded and signed, so it cannot be a position, and `MapDiff '[Clamped
+    5, Periodic 3]` is `'[Int, Int]` — a list with no sizes in it that
+    `MaxCoordSize` does not even reduce over. `Delta` is indexed by the diff
+    list, not the axis list, so it stays the *shared* difference space:
+    `Delta '[Int, Int]` is still one type usable at every two-axis grid, and
+    a direction table does not have to name a shape. See
+    `Data.Grid.Sized.Coord.Delta`.
+  - **`(:|)` carries `(IsCoordLifted c, IsCoordList cs)`.** That is what pays
+    for the `quotRem` one way and the multiply-add the other. Any caller with
+    `IsCoordList (c ': cs)` already has it.
+  - **`Coord(..)` no longer exports a constructor.** `unCoord` is still there
+    and still hands back an `NP I cs`, rebuilt, but now needs `IsCoordList
+    cs`. `unsafeCoordFromPosition` is the unchecked way in for a caller that
+    already holds an in-range index.
+  - **`IsCoordList`'s methods take positions.** `sizeAndPosition` splits into
+    `coordListSize` and `npToPosition`, with `npFromPosition` as the inverse;
+    `npOffset` and the rest become `posOffset` and friends over `Int`.
+  - Constraints *removed*, so nothing breaks: `coordPosition` and `indexGrid`
+    need no `IsCoordList` at all, `Eq`/`Ord`/`NFData` on `Coord` need no
+    per-axis constraints, and `permuteGrid` drops `IsCoordList ds`.
+
+  `IsCoord` is untouched. Every method it has was already stated per axis
+  through `asOrdinal`, so the fold converts at the edges and no boundary
+  policy changed — including `Reflective` and `Reflect101`, which adr.16
+  named as the gate and which turn out to compute from a bare index already.
+
+* `unsafeOrdinalUnchecked` is `unsafeOrdinal` without the guard, for callers
+  that have established the bound by arithmetic rather than by inspecting the
+  value (sized-grid-adr.16). This does not reopen sized-grid-adr.14's
+  decision that `unsafeOrdinal`'s own guard is unconditional: every
+  *construction* of an axis value still goes through the checked one. It is
+  for the other direction — decoding a position, where `p \`quot\` stride <
+  size` follows from `p < size * stride`, so the guard re-checks a bound
+  already proved. Leaving it in cost 2.08x against 1.78x on the `onBoundary`
+  sweep and 1.61x against 1.31x on `coordDistance`, because its cold branch
+  is what stops the enclosing fold fusing.
+
 * `mapAxis` and `scanAxis` name an axis by position and act along it,
   independently of the others, on a grid of any dimension (sized-grid-e6h).
 

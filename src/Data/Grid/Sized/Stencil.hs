@@ -265,12 +265,14 @@ stencilFoldGrid (Stencil w tbl) step seed g =
 -- and puts back one element; running 'stencilGrid' for that would compute every
 -- other cell to throw it away.
 --
--- Unlike 'stencilGrid' this does need @IsCoordList cs@, to turn the coordinate
--- into the row of the table it names. That single `coordPosition` is all that is
--- left of the axis-list work: what it saves is the per-neighbour coordinate
--- arithmetic and the boundary policy behind it, not the one position lookup.
+-- This used to need @IsCoordList cs@, to turn the coordinate into the row of
+-- the table it names. sized-grid-adr.16 removed even that: a coordinate /is/
+-- its row-major position, so `coordPosition` is a field read and the axis list
+-- has no work left to do here at all. What the table saves is what it always
+-- saved --- the per-neighbour coordinate arithmetic and the boundary policy
+-- behind it.
 stencilAt ::
-       forall v cs a. (VG.Vector v a, IsCoordList cs)
+       forall v cs a. VG.Vector v a
     => Stencil cs
     -> GridOf v cs a
     -> Coord cs

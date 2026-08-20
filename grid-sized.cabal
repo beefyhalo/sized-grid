@@ -214,6 +214,7 @@ library
     Data.Grid.Sized.Coord
     Data.Grid.Sized.Coord.Clamped
     Data.Grid.Sized.Coord.Class
+    Data.Grid.Sized.Coord.Delta
     Data.Grid.Sized.Coord.Periodic
     Data.Grid.Sized.Coord.Reflect101
     Data.Grid.Sized.Coord.Reflective

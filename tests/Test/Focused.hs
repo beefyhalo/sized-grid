@@ -20,8 +20,8 @@ import           Test.Tasty.QuickCheck (testProperty, (===))
 
 -- | A two-dimensional displacement, the shape a single 'Path' step or a
 -- 'traceOffset' argument takes on a two-axis grid.
-d2 :: Int -> Int -> Coord '[Int, Int]
-d2 a b = a :| b :| EmptyCoord
+d2 :: Int -> Int -> Delta '[Int, Int]
+d2 a b = a :^ b :^ NoDelta
 
 type FG = FocusedGrid '[ Clamped 5, Clamped 5] Int
 

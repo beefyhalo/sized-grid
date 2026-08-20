@@ -15,6 +15,9 @@ module Data.Grid.Sized.Coord.Class
   , maxCoordSize
   , allCoordLike
   , axisSteps
+  , axisStepsIx
+  , toAxisIndex
+  , unsafeFromAxisIndex
   ) where
 
 import           Data.Grid.Sized.Internal.Error (type (?!))
@@ -183,19 +186,58 @@ type OddC (x :: Type) =
 axisSteps :: forall x. IsCoordLifted x => Int -> x -> [(Int, x)]
 {-# INLINE axisSteps #-}
 axisSteps r c =
+    [(d, unsafeFromAxisIndex v) | (d, v) <- axisStepsIx @x r (toAxisIndex c)]
+
+-- | 'axisSteps' on the axis's index rather than on a value of the axis type:
+-- the form the row-major fold needs, since after sized-grid-adr.16 all it has
+-- to hand is a position it has divided its way into.
+--
+-- This is where the real definition lives and 'axisSteps' is the wrapper,
+-- rather than the other way round, because the fold is the hot caller: a
+-- neighbourhood enumeration reaches this once per axis per cell, and going
+-- via 'axisSteps' would build an axis value per reachable offset only for the
+-- caller to take its index again.
+axisStepsIx :: forall x. IsCoordLifted x => Int -> Int -> [(Int, Int)]
+{-# INLINE axisStepsIx #-}
+axisStepsIx r i =
     [(abs d, v) | (d, v) <- reachable, not (any (beats (d, v)) reachable)]
   where
-    reachable :: [(Int, x)]
+    -- Hoisted out of the comprehension: one axis value per call, not one per
+    -- offset tried.
+    c :: x
+    c = unsafeFromAxisIndex i
+    -- Already an 'Int', so -- as before -- no 'Eq' is needed on the axis type.
+    reachable :: [(Int, Int)]
     reachable =
-        [(d, v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
-    -- Compared as an 'Int' through 'asOrdinal', so no 'Eq' is needed on the
-    -- axis type itself.
-    key :: x -> Int
-    key v = ordinalToInt (v ^. asOrdinal)
+        [(d, toAxisIndex v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
     -- Fewer steps wins; an exact tie in distance goes to the lower offset, so
     -- the choice is total and the result does not depend on list order.
-    beats :: (Int, x) -> (Int, x) -> Bool
-    beats (d, v) (d', v') = key v' == key v && (abs d', d') < (abs d, d)
+    beats :: (Int, Int) -> (Int, Int) -> Bool
+    beats (d, v) (d', v') = v' == v && (abs d', d') < (abs d, d)
+
+-- | An axis value as its index, and an index back as an axis value.
+--
+-- Both are the identity at run time bar one branch: every axis type in this
+-- library is a newtype over 'Ordinal', which is a newtype over 'Int', so the
+-- wrapping is coercion the simplifier removes. What survives is
+-- 'unsafeOrdinal'\'s range check on the way in, which sized-grid-adr.14
+-- settled is not negotiable and sized-grid-adr.8 measured the price of.
+--
+-- These two are what let sized-grid-adr.16 change 'Coord'\'s representation
+-- without touching 'IsCoord' at all: a boundary policy still says what it
+-- means in terms of its own axis type, and the fold converts at the edges.
+toAxisIndex :: forall x. IsCoordLifted x => x -> Int
+toAxisIndex x = ordinalToInt (x ^. asOrdinal)
+{-# INLINE toAxisIndex #-}
+
+-- | __Precondition:__ @0 <= i < 'CoordNat' x@, /unchecked/ -- see
+-- 'unsafeOrdinalUnchecked' for why this one is not guarded when every
+-- construction of an axis value still is. Every caller in this library
+-- obtains @i@ by dividing an in-range position, which establishes the bound
+-- by arithmetic.
+unsafeFromAxisIndex :: forall x. IsCoordLifted x => Int -> x
+unsafeFromAxisIndex i = review asOrdinal (unsafeOrdinalUnchecked i)
+{-# INLINE unsafeFromAxisIndex #-}
 
 -- | Apply 'Diff' to each element of a type level list: the displacement
 -- between two coords is itself coord-shaped, a
@@ -235,8 +277,29 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- has to reach all the way down through this library's polymorphic call
 -- sites -- also measured, and worse (584 bytes vs 320).
 --
--- Every fold here is per-axis: 'npOffset' offsets one axis at a time,
--- 'npStepsWithin' takes a cartesian product of per-axis steps. Axis @i@
+-- == Positions, not spines
+--
+-- sized-grid-adr.16 turned a @Coord@ into its row-major position, so every
+-- method below that used to take an @NP I cs@ now takes that @Int@ and
+-- divides its way in: at each axis, @'quotRem' ('coordListSize' \@xs)@
+-- splits the position into this axis's index and the rest, and the results
+-- are multiplied back out by the same stride. At a concrete axis list the
+-- strides are literals, so GHC turns the divisions into multiply-shift and
+-- the whole fold into flat arithmetic on one unboxed 'Int'.
+--
+-- What did /not/ change is 'IsCoord'. A boundary policy still says what it
+-- means in terms of its own axis type, and 'toAxisIndex' \/ 'unsafeFromAxisIndex'
+-- convert at the edges of each step -- both coercions bar 'unsafeOrdinal'\'s
+-- range check. That is what kept the port from touching
+-- 'Data.Grid.Sized.Coord.Clamped.Clamped',
+-- 'Data.Grid.Sized.Coord.Periodic.Periodic',
+-- 'Data.Grid.Sized.Coord.Reflective.Reflective' or
+-- 'Data.Grid.Sized.Coord.Reflect101.Reflect101' at all.
+--
+-- == Separability
+--
+-- Every fold here is per-axis: 'posOffset' offsets one axis at a time,
+-- 'posStepsWithin' takes a cartesian product of per-axis steps. Axis @i@
 -- never sees axis @j@ -- 'offsetIsCoord' is @c n -> Int -> Maybe (c n)@ and
 -- has nothing to reach a sibling axis with. That is exactly the class of
 -- boundary policy this can express: every 'IsCoord' instance in the
@@ -246,10 +309,38 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- separable and cannot be expressed by any @IsCoord@ instance, however
 -- written; that needs a coordinate layer above 'Data.Grid.Sized.Coord.Coord'
 -- entirely.
+--
+-- The position representation does not weaken that: a stride split is still
+-- one axis at a time, and nothing in a fold step can see a sibling's index
+-- except through the remainder it passes on.
 class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
-    -- | The product of the axis sizes, and the row-major position of the given
-    -- coordinate within them.
-    sizeAndPosition :: NP I cs -> (Int, Int)
+    -- | The product of the axis sizes: the size of the coordinate space, and
+    -- so the stride of the axis immediately to the left of this list.
+    --
+    -- This carries the whole shape after adr.16 -- it is what every other
+    -- method divides and multiplies by -- where it used to be the lesser
+    -- half of a @sizeAndPosition@ that also folded a coordinate.
+    coordListSize :: Int
+
+    -- | The row-major position of a coordinate given axis by axis. The
+    -- surviving half of the old @sizeAndPosition@, and now a /constructor/
+    -- rather than an accessor: 'Data.Grid.Sized.Coord.coordPosition' is
+    -- 'Data.Coerce.coerce'.
+    npToPosition :: NP I cs -> Int
+
+    -- | The inverse: a position back into one value per axis. The head is
+    -- @p \`div\` stride@ and the tail decodes the remainder, so the last
+    -- axis is the least significant.
+    --
+    -- This is what 'Data.Grid.Sized.Coord.unCoord' and the
+    -- @('Data.Grid.Sized.Coord.:|')@ pattern are built from, and what the
+    -- 'Show', JSON and 'System.Random.Random' instances rebuild an @NP@
+    -- with. adr.8 measured the cost of paying it per cell in the worst case
+    -- it could construct -- a @tabulate@ whose rule destructures its
+    -- coordinate -- and it came out at the same 2.24x as the
+    -- non-destructuring one: producing a coordinate costs more than decoding
+    -- one.
+    npFromPosition :: Int -> NP I cs
 
     -- | Offset each axis by its own displacement, or 'Nothing' if any axis
     -- refuses. The fold behind 'Data.Grid.Sized.Coord.offsetCoord'.
@@ -258,11 +349,11 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- than a class constraint, since a class constraint would be a
     -- dictionary the method takes at run time -- exactly the per-axis cost
     -- this fold exists to remove.
-    npOffset ::
+    posOffset ::
            AllDiffSame Int cs
-        => NP I cs
+        => Int
         -> NP I (MapDiff cs)
-        -> Maybe (NP I cs)
+        -> Maybe Int
 
     -- | Every combination of per-axis values reachable within @r@ steps on
     -- each axis, paired with the total number of steps across all axes. The
@@ -270,115 +361,170 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- neighbourhood in the library. @r@ is an argument rather than
     -- something an instance can fix, since it is the same radius on every
     -- axis.
-    npStepsWithin :: Int -> NP I cs -> [(Int, NP I cs)]
-
-    -- | The product of the axis sizes alone, with no coordinate to fold
-    -- over. Duplicates the size half of 'sizeAndPosition' rather than being
-    -- built from it, since that needs a value to fold over and this has
-    -- none.
-    coordListSize :: Int
+    posStepsWithin :: Int -> Int -> [(Int, Int)]
 
     -- | Where each axis sits relative to its own ends, first axis first. The
     -- fold behind 'Data.Grid.Sized.Coord.axisBoundaries', and so behind
     -- 'Data.Grid.Sized.Coord.onBoundary' and 'Data.Grid.Sized.Coord.isCorner'.
     -- A method rather than a @generics-sop@ @hcmap@ fold for the same
-    -- unrolling reason as 'sizeAndPosition' above.
-    npBoundaries :: NP I cs -> [Maybe Extremum]
+    -- unrolling reason as 'npToPosition' above.
+    posBoundaries :: Int -> [Maybe Extremum]
 
     -- | The per-axis distances between two coords, first axis first. The
     -- fold behind 'Data.Grid.Sized.Coord.axisDistances', and so behind
     -- 'Data.Grid.Sized.Coord.coordDistance' and
     -- 'Data.Grid.Sized.Coord.coordManhattan'.
-    npDistances :: NP I cs -> NP I cs -> [Int]
+    posDistances :: Int -> Int -> [Int]
 
     -- | Whether any axis is at one of its ends, and whether every axis is.
-    -- Fused counterparts of @'any' 'isJust' . 'npBoundaries'@ and @'all'
-    -- 'isJust' . 'npBoundaries'@, which built a @['Maybe' 'Extremum']@ per
+    -- Fused counterparts of @'any' 'isJust' . 'posBoundaries'@ and @'all'
+    -- 'isJust' . 'posBoundaries'@, which built a @['Maybe' 'Extremum']@ per
     -- call to answer a 'Bool': the 360,000-call
     -- 'Data.Grid.Sized.Coord.onBoundary' sweep allocated 123 MB, and 60 MB
-    -- once fused. Methods rather than folds over 'npBoundaries' for the
+    -- once fused. Methods rather than folds over 'posBoundaries' for the
     -- unrolling reason above.
     --
-    -- 'npAllBoundary' is the fold's identity on the empty axis list, so it
+    -- 'posAllBoundary' is the fold's identity on the empty axis list, so it
     -- is vacuously 'True' there; 'Data.Grid.Sized.Coord.isCorner' rejects
     -- that case itself.
-    npAnyBoundary :: NP I cs -> Bool
-    npAllBoundary :: NP I cs -> Bool
+    posAnyBoundary :: Int -> Bool
+    posAllBoundary :: Int -> Bool
 
     -- | The largest and the summed per-axis distance: the Chebyshev and
-    -- Manhattan metrics, without the @['Int']@ 'npDistances' would build to
+    -- Manhattan metrics, without the @['Int']@ 'posDistances' would build to
     -- feed them.
-    npMaxDistance :: NP I cs -> NP I cs -> Int
-    npSumDistance :: NP I cs -> NP I cs -> Int
+    posMaxDistance :: Int -> Int -> Int
+    posSumDistance :: Int -> Int -> Int
 
 instance IsCoordList '[] where
-    sizeAndPosition Nil = (1, 0)
-    npOffset Nil Nil = Just Nil
+    coordListSize = 1
+    npToPosition Nil = 0
+    -- The remainder at the end of a well-formed decode is always zero, so
+    -- there is nothing left to represent and nothing to check here.
+    -- 'Data.Grid.Sized.Coord.coordFromPosition' does the checking on the way
+    -- in, where a bad position can still be rejected.
+    npFromPosition _ = Nil
+    posOffset p Nil = Just p
     -- One way to take no steps at all, at a distance of zero. This is what
     -- makes the centre the only entry whose total is zero, which is how both
     -- neighbourhood functions exclude it without comparing coordinates.
-    npStepsWithin _ Nil = [(0, Nil)]
-    coordListSize = 1
-    npBoundaries Nil = []
-    npDistances Nil Nil = []
-    npAnyBoundary Nil = False
-    npAllBoundary Nil = True
-    npMaxDistance Nil Nil = 0
-    npSumDistance Nil Nil = 0
-    {-# INLINE sizeAndPosition #-}
-    {-# INLINE npOffset #-}
-    {-# INLINE npStepsWithin #-}
+    posStepsWithin _ _ = [(0, 0)]
+    posBoundaries _ = []
+    posDistances _ _ = []
+    posAnyBoundary _ = False
+    posAllBoundary _ = True
+    posMaxDistance _ _ = 0
+    posSumDistance _ _ = 0
     {-# INLINE coordListSize #-}
-    {-# INLINE npBoundaries #-}
-    {-# INLINE npDistances #-}
-    {-# INLINE npAnyBoundary #-}
-    {-# INLINE npAllBoundary #-}
-    {-# INLINE npMaxDistance #-}
-    {-# INLINE npSumDistance #-}
+    {-# INLINE npToPosition #-}
+    {-# INLINE npFromPosition #-}
+    {-# INLINE posOffset #-}
+    {-# INLINE posStepsWithin #-}
+    {-# INLINE posBoundaries #-}
+    {-# INLINE posDistances #-}
+    {-# INLINE posAnyBoundary #-}
+    {-# INLINE posAllBoundary #-}
+    {-# INLINE posMaxDistance #-}
+    {-# INLINE posSumDistance #-}
 
+-- | Each method splits the position by the stride of the axes to its right,
+-- handles this axis through its own 'IsCoord' instance, and multiplies back
+-- out. @stride@ is a literal wherever the axis list is concrete, which is
+-- what lets GHC turn the 'quotRem' into multiply-shift.
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
-    sizeAndPosition (I c :* cs) =
-        case sizeAndPosition cs of
-            (stride, rest) ->
-                ( ordinalSize @(CoordNat x) * stride
-                , ordinalToInt (c ^. asOrdinal) * stride + rest)
-    -- The coord drives the match, as it did in the @where@ helper this
-    -- replaced: matching ':*' on the first argument is what refines @xs@ far
-    -- enough for 'MapDiff' to reduce and the second to match.
-    npOffset (I x :* xs) (I dx :* dxs) =
-        (\y ys -> I y :* ys) <$> offsetIsCoord x dx <*> npOffset xs dxs
-    -- The first axis outermost, so results come out in the row-major order
-    -- 'sizeAndPosition' lays a grid out in.
-    npStepsWithin r (I x :* xs) =
-        [ (d + s, I v :* vs)
-        | (d, v) <- axisSteps r x
-        , (s, vs) <- npStepsWithin r xs
-        ]
     coordListSize = ordinalSize @(CoordNat x) * coordListSize @xs
+
+    npToPosition (I c :* cs) =
+        toAxisIndex c * coordListSize @xs + npToPosition cs
+
+    npFromPosition p =
+        case p `quotRem` coordListSize @xs of
+            (i, r) -> I (unsafeFromAxisIndex @x i) :* npFromPosition r
+
+    -- The displacement drives the match: ':*' on it is what refines @xs@ far
+    -- enough for 'MapDiff' to reduce, the job the coord's own ':*' used to do
+    -- when this took one.
+    posOffset p (I dx :* dxs) =
+        case p `quotRem` stride of
+            (i, r) ->
+                (\y r' -> toAxisIndex y * stride + r') <$>
+                offsetIsCoord (unsafeFromAxisIndex @x i) dx <*>
+                posOffset @xs r dxs
+      where
+        stride = coordListSize @xs
+
+    -- The first axis outermost, so results come out in the row-major order
+    -- 'npToPosition' lays a grid out in.
+    posStepsWithin r p =
+        case p `quotRem` stride of
+            (i, rest) ->
+                [ (d + s, v * stride + vs)
+                | (d, v) <- axisStepsIx @x r i
+                , (s, vs) <- posStepsWithin @xs r rest
+                ]
+      where
+        stride = coordListSize @xs
+
     -- 'x' unifies with @CoordContainer x (CoordNat x)@ via 'IsCoordLifted's
     -- superclass equality, so 'axisBoundaryIsCoord' and 'axisDistanceIsCoord'
-    -- apply to it directly, at the per-axis 'IsCoord' instance 'IsCoordLifted
-    -- x' resolves to --- no 'Data.Grid.Sized.Coord.axisBoundary'\/'Data.Grid.Sized.Coord.axisDistance'
-    -- indirection needed here, the same way 'npOffset' calls 'offsetIsCoord'
+    -- apply to an 'unsafeFromAxisIndex' of this axis's index directly, at the
+    -- per-axis 'IsCoord' instance @IsCoordLifted x@ resolves to --- no
+    -- 'Data.Grid.Sized.Coord.axisBoundary'\/'Data.Grid.Sized.Coord.axisDistance'
+    -- indirection needed here, the same way 'posOffset' calls 'offsetIsCoord'
     -- directly rather than through a lifted wrapper.
-    npBoundaries (I x :* xs) = axisBoundaryIsCoord x : npBoundaries xs
-    npDistances (I x :* xs) (I y :* ys) = axisDistanceIsCoord x y : npDistances xs ys
-    npAnyBoundary (I x :* xs) = isJust (axisBoundaryIsCoord x) || npAnyBoundary xs
-    npAllBoundary (I x :* xs) = isJust (axisBoundaryIsCoord x) && npAllBoundary xs
-    npMaxDistance (I x :* xs) (I y :* ys) =
-        max (axisDistanceIsCoord x y) (npMaxDistance xs ys)
-    npSumDistance (I x :* xs) (I y :* ys) =
-        axisDistanceIsCoord x y + npSumDistance xs ys
-    {-# INLINE sizeAndPosition #-}
-    {-# INLINE npOffset #-}
-    {-# INLINE npStepsWithin #-}
+    posBoundaries p =
+        case p `quotRem` coordListSize @xs of
+            (i, r) ->
+                axisBoundaryIsCoord (unsafeFromAxisIndex @x i) : posBoundaries @xs r
+
+    posDistances p q =
+        case (p `quotRem` stride, q `quotRem` stride) of
+            ((i, r), (j, s)) ->
+                axisDistanceIsCoord (unsafeFromAxisIndex @x i) (unsafeFromAxisIndex @x j) :
+                posDistances @xs r s
+      where
+        stride = coordListSize @xs
+
+    posAnyBoundary p =
+        case p `quotRem` coordListSize @xs of
+            (i, r) ->
+                isJust (axisBoundaryIsCoord (unsafeFromAxisIndex @x i)) ||
+                posAnyBoundary @xs r
+
+    posAllBoundary p =
+        case p `quotRem` coordListSize @xs of
+            (i, r) ->
+                isJust (axisBoundaryIsCoord (unsafeFromAxisIndex @x i)) &&
+                posAllBoundary @xs r
+
+    posMaxDistance p q =
+        case (p `quotRem` stride, q `quotRem` stride) of
+            ((i, r), (j, s)) ->
+                max
+                    (axisDistanceIsCoord (unsafeFromAxisIndex @x i) (unsafeFromAxisIndex @x j))
+                    (posMaxDistance @xs r s)
+      where
+        stride = coordListSize @xs
+
+    posSumDistance p q =
+        case (p `quotRem` stride, q `quotRem` stride) of
+            ((i, r), (j, s)) ->
+                axisDistanceIsCoord (unsafeFromAxisIndex @x i) (unsafeFromAxisIndex @x j) +
+                posSumDistance @xs r s
+      where
+        stride = coordListSize @xs
+
     {-# INLINE coordListSize #-}
-    {-# INLINE npBoundaries #-}
-    {-# INLINE npDistances #-}
-    {-# INLINE npAnyBoundary #-}
-    {-# INLINE npAllBoundary #-}
-    {-# INLINE npMaxDistance #-}
-    {-# INLINE npSumDistance #-}
+    {-# INLINE npToPosition #-}
+    {-# INLINE npFromPosition #-}
+    {-# INLINE posOffset #-}
+    {-# INLINE posStepsWithin #-}
+    {-# INLINE posBoundaries #-}
+    {-# INLINE posDistances #-}
+    {-# INLINE posAnyBoundary #-}
+    {-# INLINE posAllBoundary #-}
+    {-# INLINE posMaxDistance #-}
+    {-# INLINE posSumDistance #-}
 
 instance IsCoord Ordinal where
     asOrdinal = id

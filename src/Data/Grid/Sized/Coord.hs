@@ -1,13 +1,51 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Grid coordinates indexed by a type-level list of axes.
+--
+-- == The representation
+--
+-- A @'Coord' cs@ /is/ its row-major position: one 'Int' in
+-- @[0, 'MaxCoordSize' cs)@ and nothing else (sized-grid-adr.16). The axis list
+-- still indexes the type and still carries the boundary policy --
+-- @Coord '[Clamped 5, Periodic 3]@ means exactly what it meant -- but there is
+-- no longer a spine of boxes behind it, so 'coordPosition' is free and every
+-- operation that used to build a coordinate only to collapse it to an 'Int'
+-- now works on the 'Int' directly.
+--
+-- The invariant is that the position is in range, maintained by the
+-- constructors: the same trade 'Data.Grid.Sized.Ordinal.Ordinal' made when it
+-- stopped being a GADT, and the guard on every axis value is still paid on the
+-- way in.
+--
+-- @(':|')@ and 'EmptyCoord' are still the interface, and still @COMPLETE@;
+-- they carry the 'IsCoordList' evidence they need to divide and multiply by
+-- the axis strides.
+--
+-- == Displacements live elsewhere
+--
+-- @'Diff' ('Coord' cs)@ is 'Delta' @('MapDiff' cs)@, not a @Coord@ any more: a
+-- displacement is unbounded and signed and so cannot be a position. See
+-- "Data.Grid.Sized.Coord.Delta", which this module re-exports.
 module Data.Grid.Sized.Coord
   ( -- * Coordinates
-    Coord(..)
+    Coord
+  , unCoord
   , pattern (:|)
   , pattern EmptyCoord
   , coordSplit
   , _WrappedCoord
+    -- * Displacements
+  , Delta(..)
+  , pattern (:^)
+  , pattern NoDelta
+  , deltaSplit
+  , _WrappedDelta
+  , singleDelta
+  , appendDelta
+  , deltaFromTuple
+  , deltaToTuple
+  , deltaHead
+  , deltaTail
     -- * Building and taking apart
   , singleCoord
   , appendCoord
@@ -20,6 +58,7 @@ module Data.Grid.Sized.Coord
   , allCoord
   , coordPosition
   , coordFromPosition
+  , unsafeCoordFromPosition
   , coordSpaceSize
     -- * Centred coordinates
   , CentredAxis
@@ -74,6 +113,7 @@ module Data.Grid.Sized.Coord
   ) where
 
 import           Data.Grid.Sized.Coord.Class
+import           Data.Grid.Sized.Coord.Delta
 import           Data.Grid.Sized.Internal.Type (requiring)
 import           Data.Grid.Sized.Ordinal
 
@@ -100,18 +140,88 @@ type family Length cs where
   Length '[] = 0
   Length (c ': cs) = (GHC.+) 1 (Length cs)
 
-newtype Coord cs = Coord {unCoord :: NP I cs}
-  deriving (Generic)
+-- | A coordinate: its row-major position within @cs@, and nothing else.
+--
+-- __Invariant:__ the position is in @[0, 'MaxCoordSize' cs)@, maintained by
+-- every constructor in this module. The raw constructor is deliberately not
+-- exported; build one with @(':|')@, 'coordFromPosition', 'zeroCoord' or
+-- 'allCoord', and take one apart with @(':|')@ or 'unCoord'.
+--
+-- 'Eq' and 'Ord' come from the 'Int'. Two coordinates are equal exactly when
+-- every axis agrees, which is exactly when their positions do, so the
+-- @All Eq cs@ context the spine version needed is gone along with the
+-- per-axis dictionary fold behind it. 'Ord' is unchanged in meaning too:
+-- row-major position order /is/ lexicographic order on the axis indices, with
+-- the first axis most significant.
+-- The kind signature is not decoration: the old representation, @NP I cs@,
+-- pinned @cs@ to @[Type]@ on its own. An 'Int' mentions nothing, so without
+-- this GHC generalises @cs@ over any kind and @Coord '[]@ at two different
+-- kinds stops being one type.
+newtype Coord (cs :: [Type]) = Coord Int
+  deriving newtype (Eq, Ord, NFData)
 
-coordSplit:: Coord (c ': cs) -> (c, Coord cs)
-coordSplit (Coord (I x :* xs)) = (x, Coord xs)
+-- | Nominal, not the phantom role GHC would infer from a representation that
+-- no longer mentions @cs@. A phantom role would let
+-- @coerce :: Coord '[Clamped 9] -> Coord '[Clamped 3]@ forge an out-of-range
+-- coordinate --- exactly the hole
+-- 'Data.Grid.Sized.Ordinal.Ordinal'\'s own role annotation closes, and the one
+-- @tests\/compile-fail@ checks stays shut.
+type role Coord nominal
 
-pattern (:|) :: c -> Coord cs -> Coord (c ': cs)
-pattern (:|) a as <- (coordSplit -> (a,as))
-  where (:|) a (Coord as) = Coord (I a :* as)
+-- | The coordinate's value axis by axis, rebuilt.
+--
+-- Was a field accessor. It costs one 'quotRem' per axis now, which adr.8
+-- measured against the worst case it could construct and found repaid several
+-- times over: producing a coordinate costs more than decoding one.
+unCoord :: forall cs. IsCoordList cs => Coord cs -> NP I cs
+unCoord (Coord p) = npFromPosition p
+{-# INLINE unCoord #-}
 
+-- | Peel the first axis off a coordinate: a division by the stride of the
+-- axes to its right.
+coordSplit ::
+       forall c cs. (IsCoordLifted c, IsCoordList cs)
+    => Coord (c ': cs)
+    -> (c, Coord cs)
+coordSplit (Coord p) =
+    case p `quotRem` coordListSize @cs of
+        (i, r) -> (unsafeFromAxisIndex i, Coord r)
+{-# INLINE coordSplit #-}
+
+-- | Cons. A field read in each direction until sized-grid-adr.16; a 'quotRem'
+-- one way and a multiply-add the other now.
+--
+-- The @('IsCoordLifted' c, 'IsCoordList' cs)@ context is what pays for that
+-- arithmetic. Any caller that already has @'IsCoordList' (c ': cs)@ has it,
+-- since 'Data.Grid.Sized.Coord.Class.IsCoordListF' hands both halves back.
+--
+-- __The @INLINE@ is load-bearing and was measured.__ This is the first
+-- version of @(':|')@ to carry a context at all, and a pattern synonym with a
+-- required context compiles to a matcher that takes those dictionaries. Left
+-- to itself GHC does not inline it, so every match allocates the pair
+-- 'coordSplit' returns /and/ boxes the axis value inside it -- on
+-- @tabulate 300x300@ with a rule that destructures its coordinate, 9.20 ms
+-- and 36 MB against 1.13 ms and 4.8 MB with the pragma, i.e. 400 bytes a
+-- cell for a match that should cost a 'quotRem'. The same body reached
+-- through 'coordSplit' directly was 1.08 ms either way, which is how the
+-- matcher rather than the arithmetic was identified: nothing about the
+-- 'quotRem', 'unsafeOrdinal'\'s guard or the 'Control.Lens.Iso' costs
+-- anything measurable.
+--
+-- @tabulate 300x300  [rule destructures the coord]@ in @bench\/Main.hs@ is
+-- there to keep it that way.
+pattern (:|) ::
+        (IsCoordLifted c, IsCoordList cs) => c -> Coord cs -> Coord (c ': cs)
+pattern (:|) a as <- (coordSplit -> (a, as))
+  where (:|) = appendCoord
+{-# INLINE (:|) #-}
+
+-- | The coordinate with no axes. Its position is zero, the only 'Int' in
+-- @[0, 'MaxCoordSize' '[])@ = @[0, 1)@, so matching it is matching anything.
 pattern EmptyCoord :: Coord '[]
-pattern EmptyCoord = Coord Nil
+pattern EmptyCoord <- Coord _
+  where EmptyCoord = Coord 0
+{-# INLINE EmptyCoord #-}
 
 -- | Needed because GHC's coverage checker cannot see these view patterns are exhaustive.
 {-# COMPLETE (:|) #-}
@@ -120,226 +230,312 @@ pattern EmptyCoord = Coord Nil
 
 infixr 5 :|
 
-_WrappedCoord :: Iso' (Coord cs) (NP I cs)
-_WrappedCoord = dimap unCoord (fmap Coord)
+_WrappedCoord :: forall cs. IsCoordList cs => Iso' (Coord cs) (NP I cs)
+_WrappedCoord = iso unCoord (Coord . npToPosition @cs)
 
-instance All Eq cs => Eq (Coord cs) where
-    Coord a == Coord b =
-        and $
-        hcollapse $ hcliftA2 (Proxy :: Proxy Eq) (\(I x) (I y) -> K (x == y)) a b
-
--- | @All Eq cs@ does not follow from @All Ord cs@: superclass evidence must be resolved at instance-declaration time, so both constraints are required.
-instance (All Eq cs, All Ord cs) => Ord (Coord cs) where
-    compare (Coord a) (Coord b) =
-        mconcat $
-        hcollapse $
-        hcliftA2 (Proxy :: Proxy Ord) (\(I x) (I y) -> K (compare x y)) a b
-
-instance All Show cs => Show (Coord cs) where
-    show (Coord a) =
+instance (IsCoordList cs, All Show cs) => Show (Coord cs) where
+    show c =
         "Coord [" ++
         intercalate
             ", "
-            (hcollapse $ hcliftA (Proxy :: Proxy Show) (\(I x) -> K $ show x) a) ++
+            (hcollapse $
+             hcliftA (Proxy :: Proxy Show) (\(I x) -> K $ show x) (unCoord c)) ++
         "]"
 
-instance (All ToJSON cs) => ToJSON (Coord cs) where
-    toJSON (Coord a) =
+instance (IsCoordList cs, All ToJSON cs) => ToJSON (Coord cs) where
+    toJSON c =
         Array $
         V.fromList $
-        hcollapse $ hcmap (Proxy @ToJSON) (\(I x) -> K $ toJSON x) a
+        hcollapse $ hcmap (Proxy @ToJSON) (\(I x) -> K $ toJSON x) (unCoord c)
 
-instance All FromJSON cs => FromJSON (Coord cs) where
+-- | The annotation on 'SOP.fromList' is load-bearing: 'Coord' no longer
+-- mentions @cs@ in its field, so building one through 'npToPosition' leaves
+-- nothing to tie the parsed @NP@'s list to the instance head.
+instance forall cs. (IsCoordList cs, All FromJSON cs) => FromJSON (Coord cs) where
     parseJSON =
         withArray "Coord" $ \v ->
-            case SOP.fromList $ V.toList v of
+            case SOP.fromList (V.toList v) :: Maybe (NP (K Value) cs) of
                 Just a ->
-                    Coord <$>
+                    Coord . npToPosition <$>
                     hsequence
                         (hcmap (Proxy @FromJSON) (\(K x) -> parseJSON x) a)
                 Nothing -> empty
 
-instance All Semigroup cs => Semigroup (Coord cs) where
-  Coord a <> Coord b = Coord $ hcliftA2 (Proxy :: Proxy Semigroup) (liftA2 (<>)) a b
+instance (IsCoordList cs, All Semigroup cs) => Semigroup (Coord cs) where
+  a <> b =
+      Coord $
+      npToPosition $
+      hcliftA2 (Proxy :: Proxy Semigroup) (liftA2 (<>)) (unCoord a) (unCoord b)
 
-instance (All Semigroup cs, All Monoid cs) => Monoid (Coord cs) where
+instance forall cs. (IsCoordList cs, All Semigroup cs, All Monoid cs) =>
+         Monoid (Coord cs) where
   mappend = (<>)
-  mempty = Coord $ hcpure (Proxy :: Proxy Monoid) (pure mempty)
+  mempty = Coord $ npToPosition @cs $ hcpure (Proxy :: Proxy Monoid) (pure mempty)
 
-instance All NFData cs => NFData (Coord cs) where
-    rnf (Coord a) =
-        foldr seq () $
-        hcollapse $ hcliftA (Proxy :: Proxy NFData) (\(I x) -> K (rnf x)) a
+instance forall cs. (IsCoordList cs, All AdditiveGroup cs) =>
+         AdditiveGroup (Coord cs) where
+    zeroV =
+        Coord $ npToPosition @cs $ hcpure (Proxy :: Proxy AdditiveGroup) (pure zeroV)
+    a ^+^ b =
+        Coord $
+        npToPosition $
+        hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^+^)) (unCoord a) (unCoord b)
+    negateV a =
+        Coord $
+        npToPosition $
+        hcliftA (Proxy :: Proxy AdditiveGroup) (fmap negateV) (unCoord a)
+    a ^-^ b =
+        Coord $
+        npToPosition $
+        hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^-^)) (unCoord a) (unCoord b)
 
-instance (All AdditiveGroup cs) => AdditiveGroup (Coord cs) where
-    zeroV = Coord $ hcpure (Proxy :: Proxy AdditiveGroup) (pure zeroV)
-    Coord a ^+^ Coord b =
-        Coord $ hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^+^)) a b
-    negateV (Coord a) =
-        Coord $ hcliftA (Proxy :: Proxy AdditiveGroup) (fmap negateV) a
-    Coord a ^-^ Coord b =
-        Coord $ hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^-^)) a b
-
-instance (All Random cs) => Random (Coord cs) where
+-- | Per axis, not over the flat position: 'randomR' between two coordinates
+-- gives the box they span, which a flat range would not.
+instance forall cs. (IsCoordList cs, All Random cs) => Random (Coord cs) where
     random g =
         let (c, g') =
                 runState
                     (hsequence $ hcpure (Proxy :: Proxy Random) (state random))
                     g
-        in (Coord c, g')
-    randomR (Coord mi, Coord ma) g =
+        in (Coord (npToPosition @cs c), g')
+    randomR (mi, ma) g =
         let (c, g') =
                 runState
                     (hsequence $
                      hcliftA2
                          (Proxy :: Proxy Random)
                          (\(I a) (I b) -> state (randomR (a, b)))
-                         mi
-                         ma)
+                         (unCoord mi)
+                         (unCoord ma))
                     g
-        in (Coord c, g')
+        in (Coord (npToPosition c), g')
 
-coordHead :: Lens (Coord (a ': as)) (Coord (a' ': as)) a a'
-coordHead f (Coord (I a :* as)) = (\a' -> Coord (I a' :* as)) <$> f a
+-- | Changing the head axis keeps the tail's stride, so only the most
+-- significant digit is rewritten.
+coordHead ::
+       forall a a' as. (IsCoordLifted a, IsCoordLifted a', IsCoordList as)
+    => Lens (Coord (a ': as)) (Coord (a' ': as)) a a'
+coordHead f (Coord p) =
+    case p `quotRem` stride of
+        (i, r) ->
+            (\a' -> Coord (toAxisIndex a' * stride + r)) <$> f (unsafeFromAxisIndex @a i)
+  where
+    stride = coordListSize @as
 
-coordTail :: Lens (Coord (a ': as)) (Coord (a ': as')) (Coord as) (Coord as')
-coordTail f (Coord (a :* as)) = (\(Coord as') -> Coord (a :* as')) <$> f (Coord as)
+-- | Changing the tail changes the stride the head is multiplied by, so the
+-- head is decoded and re-encoded even though its value does not move.
+coordTail ::
+       forall a as as'. (IsCoordList as, IsCoordList as')
+    => Lens (Coord (a ': as)) (Coord (a ': as')) (Coord as) (Coord as')
+coordTail f (Coord p) =
+    case p `quotRem` coordListSize @as of
+        (i, r) ->
+            (\(Coord r') -> Coord (i * coordListSize @as' + r')) <$> f (Coord r)
 
-singleCoord :: a -> Coord '[a]
-singleCoord a = Coord (I a :* Nil)
+singleCoord :: forall a. IsCoordLifted a => a -> Coord '[a]
+singleCoord a = Coord (toAxisIndex a)
 
-appendCoord :: a -> Coord as -> Coord (a ': as)
-appendCoord a (Coord as) = Coord (I a :* as)
+appendCoord ::
+       forall a as. (IsCoordLifted a, IsCoordList as)
+    => a
+    -> Coord as
+    -> Coord (a ': as)
+appendCoord a (Coord as) = Coord (toAxisIndex a * coordListSize @as + as)
 
-coordFromTuple :: IsProductType t xs => t -> Coord xs
-coordFromTuple = Coord . productTypeFrom
+coordFromTuple :: (IsProductType t xs, IsCoordList xs) => t -> Coord xs
+coordFromTuple = Coord . npToPosition . productTypeFrom
 
-coordToTuple :: IsProductType t xs => Coord xs -> t
+coordToTuple :: (IsProductType t xs, IsCoordList xs) => Coord xs -> t
 coordToTuple = productTypeTo . unCoord
 
-instance Field1 (Coord (a ': cs)) (Coord (a' ': cs)) a a' where
+instance (IsCoordLifted a, IsCoordLifted a', IsCoordList cs) =>
+         Field1 (Coord (a ': cs)) (Coord (a' ': cs)) a a' where
   _1 = coordHead
 
-instance Field2 (Coord (a ': b ': cs)) (Coord (a ': b' ': cs)) b b' where
+instance (IsCoordLifted a, IsCoordLifted b, IsCoordLifted b', IsCoordList cs) =>
+         Field2 (Coord (a ': b ': cs)) (Coord (a ': b' ': cs)) b b' where
   _2 = coordTail . _1
 
-instance Field3 (Coord (a ': b ': c ': cs)) (Coord (a ': b ': c' ': cs)) c c' where
+instance ( IsCoordLifted a
+         , IsCoordLifted b
+         , IsCoordLifted c
+         , IsCoordLifted c'
+         , IsCoordList cs
+         ) =>
+         Field3 (Coord (a ': b ': c ': cs)) (Coord (a ': b ': c' ': cs)) c c' where
   _3 = coordTail . _2
 
-instance Field4 (Coord (a ': b ': c ': d ': cs)) (Coord (a ': b ': c ': d' ': cs)) d d' where
+instance ( IsCoordLifted a
+         , IsCoordLifted b
+         , IsCoordLifted c
+         , IsCoordLifted d
+         , IsCoordLifted d'
+         , IsCoordList cs
+         ) =>
+         Field4 (Coord (a ': b ': c ': d ': cs)) (Coord (a ': b ': c ': d' ': cs)) d d' where
   _4 = coordTail . _3
 
-instance Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d ': e' ': cs)) e e' where
+instance ( IsCoordLifted a
+         , IsCoordLifted b
+         , IsCoordLifted c
+         , IsCoordLifted d
+         , IsCoordLifted e
+         , IsCoordLifted e'
+         , IsCoordList cs
+         ) =>
+         Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d ': e' ': cs)) e e' where
   _5 = coordTail . _4
 
--- | A class, not a pair of @where@ helpers: a self-recursive fold cannot unroll per axis, so the dictionary would be carried at run time instead of resolved at compile time.
-class All AffineSpace cs => AffineCoordList cs where
-    npAdd :: NP I cs -> NP I (MapDiff cs) -> NP I cs
-    npSub :: NP I cs -> NP I cs -> NP I (MapDiff cs)
+-- | A class, not a pair of @where@ helpers: a self-recursive fold cannot
+-- unroll per axis, so the dictionary would be carried at run time instead of
+-- resolved at compile time.
+--
+-- 'IsCoordList' is a superclass because the fold now works on a position and
+-- so needs the axis strides, which is where they come from.
+class (IsCoordList cs, All AffineSpace cs) => AffineCoordList cs where
+    posAdd :: Int -> NP I (MapDiff cs) -> Int
+    posSub :: Int -> Int -> NP I (MapDiff cs)
 
 instance AffineCoordList '[] where
-    npAdd Nil Nil = Nil
-    npSub Nil Nil = Nil
-    {-# INLINE npAdd #-}
-    {-# INLINE npSub #-}
+    posAdd p Nil = p
+    posSub _ _ = Nil
+    {-# INLINE posAdd #-}
+    {-# INLINE posSub #-}
 
-instance (AffineSpace x, AffineCoordList xs) => AffineCoordList (x ': xs) where
-    -- Match the coord first so MapDiff reduces before the second pattern is checked.
-    npAdd (I x :* xs) (I y :* ys) = I (x .+^ y) :* npAdd xs ys
-    npSub (I x :* xs) (I y :* ys) = I (x .-. y) :* npSub xs ys
-    {-# INLINE npAdd #-}
-    {-# INLINE npSub #-}
+instance (IsCoordLifted x, AffineSpace x, AffineCoordList xs) =>
+         AffineCoordList (x ': xs) where
+    -- Match the displacement so MapDiff reduces before the recursive call.
+    posAdd p (I d :* ds) =
+        case p `quotRem` stride of
+            (i, r) -> toAxisIndex (unsafeFromAxisIndex @x i .+^ d) * stride + posAdd @xs r ds
+      where
+        stride = coordListSize @xs
+    posSub p q =
+        case (p `quotRem` stride, q `quotRem` stride) of
+            ((i, r), (j, s)) ->
+                I (unsafeFromAxisIndex @x i .-. unsafeFromAxisIndex @x j) :* posSub @xs r s
+      where
+        stride = coordListSize @xs
+    {-# INLINE posAdd #-}
+    {-# INLINE posSub #-}
 
 instance ( AffineCoordList cs
          , All AdditiveGroup (MapDiff cs)
          ) =>
          AffineSpace (Coord cs) where
-    type Diff (Coord cs) = Coord (MapDiff cs)
-    Coord a .-. Coord b = Coord (npSub a b)
-    Coord a .+^ Coord b = Coord (npAdd a b)
+    type Diff (Coord cs) = Delta (MapDiff cs)
+    Coord a .-. Coord b = Delta (posSub @cs a b)
+    Coord a .+^ Delta d = Coord (posAdd @cs a d)
 
--- | A separate class from 'AffineCoordList': the fold needs both '.+^' and 'Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord' obligations at once, which no single existing class states.
+-- | A separate class from 'AffineCoordList': the fold needs both '.+^' and
+-- 'Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord' obligations at once,
+-- which no single existing class states.
 class (AffineCoordList cs, All IsCoordLifted cs) => TransportCoordList cs where
-    npTransport ::
+    posTransport ::
            AllDiffSame Int cs
-        => NP I cs
+        => Int
         -> NP I (MapDiff cs)
-        -> (NP I cs, NP I (MapDiff cs))
+        -> (Int, NP I (MapDiff cs))
 
 instance TransportCoordList '[] where
-    npTransport Nil Nil = (Nil, Nil)
-    {-# INLINE npTransport #-}
+    posTransport p Nil = (p, Nil)
+    {-# INLINE posTransport #-}
 
 instance (AffineSpace x, IsCoordLifted x, TransportCoordList xs) =>
          TransportCoordList (x ': xs) where
-    -- Match the coord first, as in 'npAdd', so MapDiff reduces before the second pattern is checked.
-    npTransport (I x :* xs) (I d :* ds) =
-        (I (x .+^ d) :* ys, I d' :* ds')
+    -- Match the displacement, as in 'posAdd', so MapDiff reduces first.
+    posTransport p (I d :* ds) =
+        case p `quotRem` stride of
+            (i, r) ->
+                case posTransport @xs r ds of
+                    (r', ds') ->
+                        ( toAxisIndex (x .+^ d) * stride + r'
+                        , I (if axisFrameFlipsIsCoord x d
+                                 then negate d
+                                 else d) :*
+                          ds')
+              where
+                x = unsafeFromAxisIndex @x i
       where
-        (ys, ds') = npTransport xs ds
-        d' = if axisFrameFlipsIsCoord x d then negate d else d
-    {-# INLINE npTransport #-}
+        stride = coordListSize @xs
+    {-# INLINE posTransport #-}
 
+-- | Every coordinate, in row-major order --- which after sized-grid-adr.16 is
+-- just every position in range, so this is an 'Int' enumeration rather than a
+-- cartesian product of per-axis values built through @hsequence@.
+--
+-- The order is unchanged, and load-bearing: 'Data.Grid.Sized.permuteGrid'
+-- builds its table by zipping this against @[0 ..]@, so entry @k@ must be the
+-- coordinate whose 'coordPosition' is @k@.
 allCoord ::
        forall cs. (IsCoordList cs)
     => [Coord cs]
-allCoord =
-    Coord <$>
-    hsequence
-        (hcpure (Proxy :: Proxy IsCoordLifted) allCoordLike)
+allCoord = map Coord [0 .. coordListSize @cs - 1]
+{-# INLINE allCoord #-}
 
 type family MaxCoordSize (cs :: [k]) :: GHC.Nat where
   MaxCoordSize '[] = 1
   MaxCoordSize (c n ': cs) = n GHC.* MaxCoordSize cs
 
--- | Row-major: the first axis is most significant, so a step along the last axis moves one place in the vector.
-coordPosition :: forall cs. IsCoordList cs => Coord cs -> Int
-coordPosition (Coord a) = snd (sizeAndPosition a)
+-- | Row-major: the first axis is most significant, so a step along the last
+-- axis moves one place in the vector.
+--
+-- The identity after sized-grid-adr.16, which is the point of it: this used to
+-- be a fold over the axis list, and it is reached by 'Data.Grid.Sized.index',
+-- 'Data.Grid.Sized.tabulate' and every stencil.
+coordPosition :: Coord cs -> Int
+coordPosition (Coord p) = p
 {-# INLINE coordPosition #-}
 
--- | The product of axis sizes: the length of the vector inside a @'Grid' cs@. Needs only 'IsCoordList', not @KnownNat@, so it works in the indexed traversals too.
+-- | The product of axis sizes: the length of the vector inside a @'Grid' cs@.
+-- Needs only 'IsCoordList', not @KnownNat@, so it works in the indexed
+-- traversals too.
 coordSpaceSize :: forall cs. IsCoordList cs => Int
 coordSpaceSize = coordListSize @cs
 {-# INLINE coordSpaceSize #-}
 
--- | The inverse of 'coordPosition'.
+-- | The inverse of 'coordPosition': a range check and nothing else.
 coordFromPosition ::
        forall cs. IsCoordList cs
     => Int
     -> Maybe (Coord cs)
 coordFromPosition p
-    | p < 0 = Nothing
-    | otherwise =
-        case coordDigits p of
-            -- A nonzero leftover means p was at least coordSpaceSize, so no separate bounds check is needed.
-            (np, 0) -> Just $ Coord np
-            _       -> Nothing
+    | p < 0 || p >= coordListSize @cs = Nothing
+    | otherwise = Just (Coord p)
+{-# INLINE coordFromPosition #-}
 
--- | Least-significant axis first: the tail is decoded before the head so no stride needs to be known in advance.
-coordDigits ::
-       forall xs. IsCoordList xs
-    => Int
-    -> (NP I xs, Int)
-coordDigits p =
-  case sList :: SList xs of
-    SNil -> (Nil, p)
-    -- unsafeOrdinal is safe here: quotRem by a positive divisor with a non-negative numerator gives 0 <= r < size.
-    SCons @ys @y ->
-      case coordDigits @ys p of
-        (rest, q) ->
-          case q `quotRem` ordinalSize @(CoordNat y) of
-            (q', r) ->
-              (I (review asOrdinal (unsafeOrdinal r)) :* rest, q')
+-- | 'coordFromPosition' without the range check.
+--
+-- __Precondition:__ @0 <= p < 'MaxCoordSize' cs@, /unchecked/. Breaking it
+-- forges a coordinate outside its own space, which
+-- 'Data.Grid.Sized.indexGrid' will then read through @unsafeIndex@ -- the
+-- same class of hole 'Data.Grid.Sized.Unsafe.unsafeGridFromVector' opens, and
+-- the reason both live behind that name.
+--
+-- It exists because after sized-grid-adr.16 a coordinate /is/ a position, so
+-- a caller that already holds an in-range index -- one the vector it came
+-- from supplies, say -- has nothing left to compute and no reason to pay a
+-- bounds check it can already discharge. That is exactly the case in the
+-- indexed traversals: @'Data.Vector.Generic.imap'@ hands over an index it
+-- guarantees is below the vector's length, and a @'Data.Grid.Sized.GridOf' v
+-- cs a@\'s length is @'coordSpaceSize' \@cs@ by construction.
+--
+-- Prefer 'coordFromPosition' anywhere the index came from outside.
+unsafeCoordFromPosition :: Int -> Coord cs
+unsafeCoordFromPosition = Coord
+{-# INLINE unsafeCoordFromPosition #-}
 
--- | The checked counterpart of '.+^': succeeds only if every axis's own boundary policy allows the step, so a torus axis can wrap while a bounded axis in the same coord refuses.
+-- | The checked counterpart of '.+^': succeeds only if every axis's own
+-- boundary policy allows the step, so a torus axis can wrap while a bounded
+-- axis in the same coord refuses.
 offsetCoord ::
-       ( IsCoordList cs
+       forall cs. ( IsCoordList cs
        , AllDiffSame Int cs
        )
     => Coord cs
     -> Diff (Coord cs)
     -> Maybe (Coord cs)
-offsetCoord (Coord cs) (Coord d) = Coord <$> npOffset cs d
+offsetCoord (Coord p) (Delta d) = Coord <$> posOffset @cs p d
 
 -- | Where a walk left the grid: the last coordinate still on it, and how many whole steps it took to get there.
 data OffGrid cs = OffGrid
@@ -347,9 +543,9 @@ data OffGrid cs = OffGrid
     , stepsTaken :: Int
     } deriving (Generic)
 
-deriving instance All Eq cs => Eq (OffGrid cs)
+deriving instance Eq (OffGrid cs)
 
-deriving instance All Show cs => Show (OffGrid cs)
+deriving instance (IsCoordList cs, All Show cs) => Show (OffGrid cs)
 
 -- | Take up to @n@ steps of @d@ from @c@: 'Right' the coordinate @n@ steps away, or 'Left' how far the walk got before the grid ran out.
 offsetCoordUpTo ::
@@ -429,19 +625,33 @@ stepsWithin ::
     => Int
     -> Coord cs
     -> [(Int, Coord cs)]
-stepsWithin r (Coord cs) = fmap Coord <$> npStepsWithin r cs
+stepsWithin r (Coord p) = fmap Coord <$> posStepsWithin @cs r p
+{-# INLINE stepsWithin #-}
 
 -- | The Moore neighbourhood: every coordinate within @r@ steps on each axis independently, excluding the centre.
-mooreNeighbours :: IsCoordList cs => Int -> Coord cs -> [Coord cs]
-mooreNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0]
+--
+-- Reads 'posStepsWithin' directly rather than going through 'stepsWithin'.
+-- The two differ by one intermediate list -- 'stepsWithin' has to rebuild
+-- every @(steps, position)@ pair as a @(steps, 'Coord')@ one to honour its own
+-- type, and this then drops the steps again. Worth 995 us \/ 8.0 MB to
+-- 648 us \/ 2.6 MB on the 50x50 neighbour sweep -- the difference between
+-- half of the allocation win sized-grid-adr.8 measured the ceiling at and all
+-- of it (adr.8: 16.4 MB to 2.6 MB, 2.6x; this reaches 2.58x).
+mooreNeighbours :: forall cs. IsCoordList cs => Int -> Coord cs -> [Coord cs]
+mooreNeighbours r (Coord p) =
+    [Coord n | (s, n) <- posStepsWithin @cs r p, s > 0]
+{-# INLINE mooreNeighbours #-}
 
 -- | The von Neumann neighbourhood: coordinates whose per-axis distances sum to at most @r@, excluding the centre.
-vonNeumannNeighbours :: IsCoordList cs => Int -> Coord cs -> [Coord cs]
-vonNeumannNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0, s <= r]
+vonNeumannNeighbours :: forall cs. IsCoordList cs => Int -> Coord cs -> [Coord cs]
+vonNeumannNeighbours r (Coord p) =
+    [Coord n | (s, n) <- posStepsWithin @cs r p, s > 0, s <= r]
+{-# INLINE vonNeumannNeighbours #-}
 
 -- | 'mooreNeighbours' at radius one: the surrounding cells, diagonals included.
 neighbours :: IsCoordList cs => Coord cs -> [Coord cs]
 neighbours = mooreNeighbours 1
+{-# INLINE neighbours #-}
 
 -- | The number of steps between two values on a single axis, by the shorter route if the axis offers more than one.
 axisDistance :: forall x. IsCoordLifted x => x -> x -> Int
@@ -449,19 +659,19 @@ axisDistance = axisDistanceIsCoord @(CoordContainer x) @(CoordNat x)
 
 -- | The per-axis distances between two coords, first axis first.
 axisDistances :: forall cs. IsCoordList cs => Coord cs -> Coord cs -> [Int]
-axisDistances (Coord as) (Coord bs) = npDistances as bs
+axisDistances (Coord a) (Coord b) = posDistances @cs a b
 
 -- | The Chebyshev distance: the largest per-axis distance. Folded by the
--- 'npMaxDistance' method rather than over 'axisDistances', so the @['Int']@
+-- 'posMaxDistance' method rather than over 'axisDistances', so the @['Int']@
 -- that was built only to be consumed immediately is gone (measured: 135 MB to
 -- 60 MB over 360,000 calls).
-coordDistance :: IsCoordList cs => Coord cs -> Coord cs -> Int
-coordDistance (Coord as) (Coord bs) = npMaxDistance as bs
+coordDistance :: forall cs. IsCoordList cs => Coord cs -> Coord cs -> Int
+coordDistance (Coord a) (Coord b) = posMaxDistance @cs a b
 
 -- | The Manhattan distance: the per-axis distances summed, likewise without
 -- the intermediate list.
-coordManhattan :: IsCoordList cs => Coord cs -> Coord cs -> Int
-coordManhattan (Coord as) (Coord bs) = npSumDistance as bs
+coordManhattan :: forall cs. IsCoordList cs => Coord cs -> Coord cs -> Int
+coordManhattan (Coord a) (Coord b) = posSumDistance @cs a b
 
 -- | Which end of its axis a single coordinate sits at, or 'Nothing' if interior.
 axisBoundary :: forall x. IsCoordLifted x => x -> Maybe Extremum
@@ -473,45 +683,49 @@ axisFrameFlips = axisFrameFlipsIsCoord @(CoordContainer x) @(CoordNat x)
 
 -- | Move a coordinate by a heading, and report the heading a walker facing it would have after the step.
 transportCoord ::
-       (TransportCoordList cs, AllDiffSame Int cs)
+       forall cs. (TransportCoordList cs, AllDiffSame Int cs)
     => Coord cs
     -> Diff (Coord cs)
     -> (Coord cs, Diff (Coord cs))
-transportCoord (Coord c) (Coord d) =
-    case npTransport c d of
-        (c', d') -> (Coord c', Coord d')
+transportCoord (Coord c) (Delta d) =
+    case posTransport @cs c d of
+        (c', d') -> (Coord c', Delta d')
 
 -- | Where each axis of a coord sits relative to its own ends, first axis first.
 axisBoundaries ::
        forall cs. IsCoordList cs
     => Coord cs
     -> [Maybe Extremum]
-axisBoundaries (Coord cs) = npBoundaries cs
+axisBoundaries (Coord p) = posBoundaries @cs p
 
 -- | Whether any axis is at one of its ends. 'False' on a coord with no axes.
-onBoundary :: IsCoordList cs => Coord cs -> Bool
-onBoundary (Coord cs) = npAnyBoundary cs
+onBoundary :: forall cs. IsCoordList cs => Coord cs -> Bool
+onBoundary (Coord p) = posAnyBoundary @cs p
 
 -- | Whether every axis is at one of its ends. 'False' on any coord with a torus axis, and 'False' rather than a vacuous 'True' on the empty coord.
 --
--- The match on 'Nil' is what keeps the empty coord 'False': 'npAllBoundary' is
--- a fold and so vacuously 'True' there, and there is no longer a list whose
--- emptiness could be tested instead.
-isCorner :: IsCoordList cs => Coord cs -> Bool
-isCorner (Coord cs) =
-  case cs of
-    Nil -> False
-    _   -> npAllBoundary cs
+-- The 'SList' match is what keeps the empty coord 'False': 'posAllBoundary' is
+-- a fold and so vacuously 'True' there. It replaces a match on the coord's own
+-- 'Nil', which there is no longer a spine to perform --- but the emptiness of
+-- @cs@ is a property of the type, so 'SList' answers it without one.
+isCorner :: forall cs. IsCoordList cs => Coord cs -> Bool
+isCorner (Coord p) =
+  case sList :: SList cs of
+    SNil  -> False
+    SCons -> posAllBoundary @cs p
 
 -- | Every coordinate that is not 'onBoundary', in 'allCoord' order.
 interiorCoords :: IsCoordList cs => [Coord cs]
 interiorCoords = filter (not . onBoundary) allCoord
 
-tranposeCoord :: Coord '[a,b] -> Coord '[b,a]
-tranposeCoord (Coord (a :* b :* Nil)) = Coord (b :* a :* Nil)
+tranposeCoord ::
+       (IsCoordLifted a, IsCoordLifted b) => Coord '[a, b] -> Coord '[b, a]
+tranposeCoord (a :| b :| EmptyCoord) = b :| a :| EmptyCoord
 
-zeroCoord :: IsCoordList cs => Coord cs
-zeroCoord = Coord $ hcpure (Proxy :: Proxy IsCoordLifted) (I zeroPosition)
+zeroCoord :: forall cs. IsCoordList cs => Coord cs
+zeroCoord =
+    Coord $
+    npToPosition @cs $ hcpure (Proxy :: Proxy IsCoordLifted) (I zeroPosition)
 
 -- | An axis contributing to 'centreCoord': lifted and odd-sized, via 'Data.Grid.Sized.Coord.Class.OddC'.
 class (IsCoordLifted x, OddC x) => CentredAxis x
@@ -520,13 +734,12 @@ instance (IsCoordLifted x, OddC x) => CentredAxis x
 
 -- | The middle value of a single axis: index @(n - 1) \`div\` 2@, equidistant from both ends when @n@ is odd.
 centreAxis :: forall x. IsCoordLifted x => x
-centreAxis =
-    review asOrdinal $
-    unsafeOrdinal @(CoordNat x) ((ordinalSize @(CoordNat x) - 1) `div` 2)
+centreAxis = unsafeFromAxisIndex @x ((ordinalSize @(CoordNat x) - 1) `div` 2)
 
 -- | The coordinate sitting at the middle of every axis at once.
-centreCoord :: forall cs. All CentredAxis cs => Coord cs
-centreCoord = Coord $ hcpure (Proxy :: Proxy CentredAxis) (I centreAxis)
+centreCoord :: forall cs. (IsCoordList cs, All CentredAxis cs) => Coord cs
+centreCoord =
+    Coord $ npToPosition @cs $ hcpure (Proxy :: Proxy CentredAxis) (I centreAxis)
 
 -- | A coordinate other than the centre of a window: a flat position, not axis-by-axis, so recovering which neighbour it is goes through 'puncturedToCoord'.
 newtype PuncturedCoord cs =
@@ -601,7 +814,12 @@ class WeakenCoord as bs where
 instance WeakenCoord '[] '[] where
   weakenCoord = Just
 
-instance (WeakenCoord as bs, IsCoord c, KnownNat m) =>
+instance ( WeakenCoord as bs
+         , IsCoordLifted (c n)
+         , IsCoordLifted (c m)
+         , IsCoordList as
+         , IsCoordList bs
+         ) =>
          WeakenCoord (c n ': as) (c m ': bs) where
     weakenCoord (a :| as) = do
         bs <- weakenCoord as
@@ -615,9 +833,11 @@ instance StrengthenCoord '[] '[] where
   strengthenCoord c = c
 
 instance ( StrengthenCoord as bs
-         , IsCoord c
+         , IsCoordLifted (c n)
+         , IsCoordLifted (c m)
+         , IsCoordList as
+         , IsCoordList bs
          , n <= m
-         , KnownNat m
          ) =>
          StrengthenCoord (c n ': as) (c m ': bs) where
   strengthenCoord (a :| as) = strengthenIsCoord a :| strengthenCoord as

@@ -9,6 +9,7 @@ module Data.Grid.Sized.Ordinal
     , ordinalToNum
     , numToOrdinal
     , unsafeOrdinal
+    , unsafeOrdinalUnchecked
     , _Ordinal
       -- * Sizes and evidence
     , ordinalSize
@@ -103,6 +104,38 @@ unsafeOrdinal i
   where
     sz = ordinalSize @m
 {-# INLINE unsafeOrdinal #-}
+
+-- | 'unsafeOrdinal'\'s precondition, /not/ checked.
+--
+-- __Precondition:__ @0 <= i < m@. Prefer 'unsafeOrdinal' -- which is the same
+-- thing with the guard -- unless the bound is already established by
+-- arithmetic at the call site rather than by inspecting @i@.
+--
+-- This is not a reopening of the sized-grid-adr.14 \/ sized-grid-sxy
+-- decision that 'unsafeOrdinal'\'s guard is unconditional. That decision is
+-- about /constructing/ an axis value from a number whose range is not
+-- otherwise known, and it stands: every such construction in this library
+-- still goes through 'unsafeOrdinal'.
+--
+-- This one is for the other direction. sized-grid-adr.16 made a
+-- 'Data.Grid.Sized.Coord.Coord' its row-major position, with the invariant
+-- that the position is in @[0, MaxCoordSize cs)@, so /decoding/ one --
+-- @p \`quotRem\` stride@ at each axis -- yields an index in @[0, size)@ by
+-- arithmetic alone: if @p < size * stride@ then @p \`quot\` stride < size@,
+-- and the remainder is below @stride@ for the tail to divide in turn. Running
+-- 'unsafeOrdinal'\'s guard on that is re-checking a bound that has already
+-- been proved, once per axis per operation, and the spike adr.16 is measured
+-- against never paid it.
+--
+-- It is not free to leave in, either: the cold branch is what stops the
+-- enclosing fold fusing. Against the spine representation, removing it took
+-- the @onBoundary@ sweep from 1.78x to 2.08x and the @coordDistance@ sweep
+-- from 1.31x to 1.61x -- in both cases landing on the ratio sized-grid-adr.8
+-- measured the ceiling at (2.2x and 1.7x), which is how this check rather
+-- than anything else was identified as the whole of the remaining gap.
+unsafeOrdinalUnchecked :: Int -> Ordinal m
+unsafeOrdinalUnchecked = UnsafeOrdinal
+{-# INLINE unsafeOrdinalUnchecked #-}
 
 numToOrdinal ::
        forall a m. (KnownNat m, Integral a)

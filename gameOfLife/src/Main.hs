@@ -21,7 +21,6 @@ import qualified Data.Vector.Generic                as VG
 import qualified Data.Vector.Generic.Mutable        as VGM
 import qualified Data.Vector.Unboxed                as VU
 import           Data.Word                          (Word8)
-import           Generics.SOP                       hiding (S, Z)
 import           GHC.TypeLits
 import           Graphics.Gloss.Interface.Pure.Game
 
@@ -102,9 +101,7 @@ gridPositionFromScreenCoord ::
 gridPositionFromScreenCoord DisplayInfo{..} x y =
     let x' :: Integer = floor ((x + 0.5*tileSize + offset ) / tileSize)
         y' :: Int = floor ((y + 0.5 * tileSize + offset ) / tileSize)
-    in (\a b ->
-            Coord
-                (I (view (re asOrdinal) a) :* I (view (re asOrdinal) b) :* Nil)) <$>
+    in (\a b -> review asOrdinal a :| review asOrdinal b :| EmptyCoord) <$>
        numToOrdinal x' <*>
        numToOrdinal y'
 
@@ -123,7 +120,7 @@ drawWorld DisplayInfo{..} ws =
         image Dead  = color black $ rectangleWire tileSize tileSize
         tile :: Coord cs -> TileState -> Picture
         tile p a =
-            let (x :| y :| EmptyCoord) = p .-. mempty
+            let (x :^ y :^ NoDelta) = p .-. mempty
             in translate (tileSize * fromIntegral x) (tileSize * fromIntegral y) $
                image a
     in pictures $
@@ -132,8 +129,6 @@ drawWorld DisplayInfo{..} ws =
 updateWorld :: forall x y .
        ( IsCoordLifted x
        , IsCoordLifted y
-       , Eq x
-       , Eq y
        )
     => DisplayInfo
     -> Event

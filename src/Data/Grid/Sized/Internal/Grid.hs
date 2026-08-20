@@ -57,7 +57,6 @@ import           Data.Aeson
 import           Data.Aeson.Types              (Parser)
 import           Data.Constraint
 import           Data.Distributive
-import           Data.Foldable                 (fold)
 import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Kind                     (Type)
@@ -127,53 +126,47 @@ gridFromVector v =
 -- | `tabulate` for grids that cannot be `Representable`.
 --
 -- sized-grid-adr.4 spiked three ways to close the gap between this and
--- `pure` (same vector, no coordinate) and found only one that actually
--- helps; the other two are recorded here so they are not re-tried blind.
+-- `pure` (same vector, no coordinate). sized-grid-adr.16 then changed which
+-- one wins, by changing what a coordinate costs to make; all four are
+-- recorded so none is re-tried blind.
 --
 --   1. __An odometer.__ Walk `Coord` directly with a hand-rolled successor
 --      (increment the last axis, carry into earlier ones on overflow) and
 --      feed it to `VG.unfoldrExactN`, so no coordinate list is ever built.
---      Measured /worse/: 78-93% slower than the `VG.fromListN` version this
---      replaces, allocating more, not less. The `NP` state `unfoldrExactN`
---      threads through its generator does not specialise the way a plain
---      `Int` accumulator would -- every step rebuilds part of that
---      structure -- and that cost outweighs the list it avoids.
---   2. __`VG.generate` with `coordFromPosition`.__ No coordinate list, no
---      per-step state at all -- just the position handed to
---      `coordFromPosition`, one `quotRem` per axis. Measured far worse
---      again: 297-650% slower. Re-deriving every axis of every coordinate
---      from scratch costs more than either building the list or walking it.
---   3. __Make the list fuse, the way `imap` does__ (below): this is what
---      survived. `imap`'s trick is @V.zipWith func (V.fromList allCoord) v@,
---      which fuses because it has a second vector, @v@, to zip against;
---      `tabulateGrid` has none, since producing @v@ /is/ the job. Handing it
---      a throwaway one -- @V.replicate size ()@ -- turns out to be enough to
---      trigger the same fusion, so the coordinate list built by
---      @V.fromList allCoord@ still never exists as a whole: each coordinate
---      is produced, consumed by @func@, and dies in the nursery exactly as
---      it does in `imap`.
+--      Measured /worse/: 78-93% slower than the `VG.fromListN` version it
+--      replaced, allocating more, not less. The `NP` state `unfoldrExactN`
+--      threaded through its generator did not specialise the way a plain
+--      `Int` accumulator would. Moot now -- there is no `NP` to thread --
+--      and subsumed by (4).
+--   2. __Make the list fuse, the way `imap` did.__ @V.zipWith func
+--      (V.fromList allCoord) v@ fuses because it has a second vector to zip
+--      against; `tabulateGrid` has none, since producing @v@ /is/ the job,
+--      so it was handed a throwaway @V.replicate size ()@ to trigger the
+--      same fusion. That was this function's body until adr.16, and it is
+--      what (4) replaced.
+--   3. __`VG.generate` with `coordFromPosition`.__ Measured far worse at the
+--      time: 297-650% slower, because re-deriving every axis of every
+--      coordinate from scratch -- one `quotRem` per axis, an `NP` rebuilt --
+--      cost more than either building the list or walking it.
+--   4. __`VG.generate` with the position /as/ the coordinate.__ What (3)
+--      becomes once a coordinate is its row-major position: there is nothing
+--      to re-derive, so `unsafeCoordFromPosition` is a coercion and the
+--      generator is @func . coerce@. adr.4's measurement of (3) was a
+--      measurement of the representation, not of `VG.generate`, and it
+--      inverted when the representation did: 2.44 ms to 1.65 ms boxed and
+--      529 to 354 us unboxed against (2), with the throwaway unit vector and
+--      the `VG.convert` after it both gone.
 --
--- Measured against the original `VG.fromListN` version, same run, same
--- machine, `tabulate` at 300x300: 3.15 ms / 9.6 MB allocated / 6.4 MB
--- copied down to 2.53 ms / 7.6 MB / 4.6 MB. The unboxed case is where it
--- matters most: `tabulateGrid` unboxed went from 906 μs / 9.6 MB / 525 KB
--- copied to 530 μs / 4.8 MB / 15 KB copied -- allocation and copying both
--- roughly halved, and the promotion that `pure`\/`fmap`'s allocation-only
--- comparison had already pinned on the never-fusing list (see the note
--- there before this rewrite, preserved in git history) is nearly gone.
---
--- The `VG.convert` at the end is a real conversion for every @v@ except
--- @V.Vector@ itself, where it is a copy of a vector to itself; unlike
--- `collapseGrid`\/`gridFromList` this has no @[~1]@ RULE to bypass it; a
--- spike, not measured to be worth the added surface here.
+-- The index `VG.generate` supplies is below the vector's length, and that
+-- length is @coordSpaceSize \@cs@, so the `unsafeCoordFromPosition`
+-- precondition is discharged by construction -- the same argument
+-- `indexGrid`\'s `VG.unsafeIndex` rests on.
 tabulateGrid ::
        forall v cs a. (VG.Vector v a, IsCoordList cs)
     => (Coord cs -> a)
     -> GridOf v cs a
 tabulateGrid func =
-    Grid $
-    VG.convert $
-    V.zipWith (\c () -> func c) (V.fromList allCoord) (V.replicate (coordSpaceSize @cs) ())
+    Grid $ VG.generate (coordSpaceSize @cs) (func . unsafeCoordFromPosition)
 {-# INLINABLE tabulateGrid #-}
 
 -- | Read the element at a coordinate. `Data.Functor.Rep.index` for grids
@@ -182,8 +175,11 @@ tabulateGrid func =
 -- the vector has exactly that many elements by `GridOf`'s size invariant,
 -- so the bounds check can never fire on a grid built through the safe API
 -- -- only `unsafeGridFromVector` can falsify that.
+--
+-- No @IsCoordList cs@ any more: after sized-grid-adr.16 a coordinate /is/ its
+-- position, so there is no fold left here to need the axis sizes.
 indexGrid ::
-       forall v cs a. (VG.Vector v a, IsCoordList cs)
+       forall v cs a. VG.Vector v a
     => GridOf v cs a
     -> Coord cs
     -> a
@@ -198,17 +194,17 @@ mapGrid ::
 mapGrid f (Grid v) = Grid (VG.map f v)
 {-# INLINE mapGrid #-}
 
--- | Walks the coordinate list alongside the vector rather than materialising
--- it; see the `FunctorWithIndex` instance below.
+-- | The index `VG.imap` already has /is/ the coordinate after
+-- sized-grid-adr.16, so there is nothing to zip against and nothing to look
+-- up. This used to build a boxed @V.Vector (Coord cs)@ of every coordinate up
+-- front and index into it, which was the cheaper of the two options while a
+-- coordinate was a spine of boxes; it is pure waste now.
 imapGrid ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b, IsCoordList cs)
+       forall v cs a b. (VG.Vector v a, VG.Vector v b)
     => (Coord cs -> a -> b)
     -> GridOf v cs a
     -> GridOf v cs b
-imapGrid f (Grid v) = Grid (VG.imap (\i x -> f (allCoordVector VG.! i) x) v)
-  where
-    allCoordVector :: V.Vector (Coord cs)
-    allCoordVector = V.fromListN (coordSpaceSize @cs) allCoord
+imapGrid f (Grid v) = Grid (VG.imap (f . unsafeCoordFromPosition) v)
 {-# INLINABLE imapGrid #-}
 
 -- | Pointwise combination of two grids of the same shape.
@@ -268,27 +264,33 @@ instance (IsCoordList cs, AllSizedKnown cs) =>
   tabulate = tabulateGrid
   index = indexGrid
 
--- | @V.fromList allCoord@ looks like it materialises the whole coordinate
--- list on every traversal, but it does not: 'V.zipWith' fuses with it, so
--- coordinates are produced and consumed one at a time and die in the
--- nursery. Replacing it with anything the simplifier cannot see through
--- forces all of them to be live at once -- measured 23% more allocation and
--- 59% slower. Leave it alone.
-instance (IsCoordList cs) => FunctorWithIndex (Coord cs) (Grid cs) where
-  imap func (Grid v) = Grid $ V.zipWith func (V.fromList allCoord) v
+-- | All three of these zipped against @V.fromList allCoord@ until
+-- sized-grid-adr.16, relying on 'V.zipWith' fusing with the coordinate list
+-- so the coordinates were produced and consumed one at a time rather than
+-- being live all at once. That is no longer the cheapest shape, or even a
+-- sensible one: a coordinate is its row-major position, so the index the
+-- vector combinator already carries is the coordinate, and the list has
+-- nothing left to produce. Going through it cost 3.7x on 'imap' and 1.4x on
+-- 'ifoldl'' against the index forms below.
+--
+-- As in 'imapGrid', the index is below the vector's length and the length is
+-- @coordSpaceSize \@cs@, which discharges 'unsafeCoordFromPosition'.
+instance FunctorWithIndex (Coord cs) (Grid cs) where
+  imap func (Grid v) = Grid $ V.imap (func . unsafeCoordFromPosition) v
 
 -- | 'ifoldr' and 'ifoldl'' are given outright because the class otherwise
 -- builds them out of 'ifoldMap' and an 'Endo' chain, which is a closure per
 -- cell on top of the coordinate.
-instance (IsCoordList cs) => FoldableWithIndex (Coord cs) (Grid cs) where
-  ifoldMap func (Grid v) = fold $ V.zipWith func (V.fromList allCoord) v
-  ifoldr func z (Grid v) = V.foldr ($) z $ V.zipWith func (V.fromList allCoord) v
+instance FoldableWithIndex (Coord cs) (Grid cs) where
+  ifoldMap func (Grid v) =
+    V.ifoldr (\i x acc -> func (unsafeCoordFromPosition i) x <> acc) mempty v
+  ifoldr func z (Grid v) = V.ifoldr (func . unsafeCoordFromPosition) z v
   ifoldl' func z (Grid v) =
-    V.foldl' (&) z $ V.zipWith (\c x acc -> func c acc x) (V.fromList allCoord) v
+    V.ifoldl' (\acc i x -> func (unsafeCoordFromPosition i) acc x) z v
 
-instance (IsCoordList cs) => TraversableWithIndex (Coord cs) (Grid cs) where
+instance TraversableWithIndex (Coord cs) (Grid cs) where
   itraverse func (Grid v) =
-    Grid <$> sequenceA (V.zipWith func (V.fromList allCoord) v)
+    Grid <$> sequenceA (V.imap (func . unsafeCoordFromPosition) v)
 
 -- | Given a grid type, give back a series of nested lists repesenting the grid. The lists will have a number of layers equal to the dimensionality.
 type family CollapseGrid cs a where
@@ -497,9 +499,11 @@ nestedParseJSON val =
 -- A caller cannot supply a bad permutation: they supply a coordinate
 -- function, and @Coord ds@ is only inhabited by in-range coordinates, so
 -- whatever @f@ returns is safe to look up.
+-- @IsCoordList ds@ is likewise gone: the table is @coordPosition@ of whatever
+-- @f@ returns, and that is now a field read rather than a fold.
 permuteGrid ::
        forall v cs ds a.
-       (VG.Vector v a, VG.Vector v Int, IsCoordList cs, IsCoordList ds)
+       (VG.Vector v a, VG.Vector v Int, IsCoordList cs)
     => (Coord cs -> Coord ds)
     -> GridOf v ds a
     -> GridOf v cs a
@@ -839,11 +843,19 @@ instance ShrinkableGrid '[] '[] '[] where
 --
 -- The split is boxed, so the slice that picks the window is a boxed one
 -- whatever @v@ the grid being shrunk uses. See 'splitGrid'.
+-- @1 <= x@ and @IsCoordList cs@ are what @(':|')@ costs after
+-- sized-grid-adr.16: splitting a coordinate is a division by the tail's
+-- stride, so the tail's sizes have to be in scope, and the head axis has to
+-- be one 'Data.Grid.Sized.Coord.Class.IsCoordLifted' can speak for. Neither
+-- narrows what this instance covers --- an axis of size zero has no
+-- coordinates to shrink.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as
          , IsCoord c
+         , IsCoordList cs
          , ShrinkableGrid cs as bs
+         , 1 <= x
          , x + z <= y + 1
          ) =>
          ShrinkableGrid (c x ': cs) (c y ': as) (c z ': bs) where
