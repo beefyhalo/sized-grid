@@ -56,7 +56,8 @@ atlasIndex (Atlas charts) (chart, c) =
 -- crossing into the neighbouring chart if it would leave the current one.
 -- 'Nothing' at the atlas's own two ends.
 atlasOffsetHead ::
-       forall headAxis rest k a. (IsCoordLifted headAxis, KnownNat k)
+       forall headAxis rest k a.
+       (IsCoordLifted headAxis, IsCoordList rest, KnownNat k)
     => Atlas (headAxis ': rest) k a
     -> AtlasCoord (headAxis ': rest) k
     -> Int

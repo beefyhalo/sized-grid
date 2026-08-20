@@ -60,7 +60,7 @@ crossMobiusEdge () (Straight, side) = ((), (Straight, side), False)
 -- as its gluing, where "Data.Grid.Atlas.CubeMap" hands over a total one and
 -- gets a total step.
 mobiusStep ::
-       forall w h. (KnownNat w, KnownNat h)
+       forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
     => AtlasCoord '[ Clamped w, Clamped h] 1
     -> Heading
     -> Maybe (AtlasCoord '[ Clamped w, Clamped h] 1, Heading)

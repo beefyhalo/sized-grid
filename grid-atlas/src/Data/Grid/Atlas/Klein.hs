@@ -61,7 +61,7 @@ crossKleinEdge () (Rolled, AtMax)  = ((), (Rolled, AtMin), False)
 -- gluing handed to 'rectStep' answers in 'Identity' where a Mobius strip's
 -- answers in 'Maybe'.
 kleinStep ::
-       forall w h. (KnownNat w, KnownNat h)
+       forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
     => AtlasCoord '[ Clamped w, Clamped h] 1
     -> Heading
     -> (AtlasCoord '[ Clamped w, Clamped h] 1, Heading)

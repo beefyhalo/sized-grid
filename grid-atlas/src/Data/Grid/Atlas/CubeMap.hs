@@ -100,7 +100,7 @@ crossCubeEdge NegZ (V, AtMax) = (PosX, (V, AtMin), False)
 -- lands somewhere -- which is why this runs in 'Identity' where
 -- "Data.Grid.Atlas.Mobius" runs the same 'rectStep' in 'Maybe'.
 cubeStep ::
-       forall n. KnownNat n
+       forall n. (KnownNat n, 1 <= n)
     => AtlasCoord '[ Ordinal n, Ordinal n] 6
     -> Heading
     -> (AtlasCoord '[ Ordinal n, Ordinal n] 6, Heading)
