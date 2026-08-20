@@ -29,11 +29,13 @@ data FocusedGrid cs a = FocusedGrid
 
 -- | Equality is on both fields: two grids with the same cells but different
 -- focus are distinct.
-deriving instance (All Eq cs, Eq a) => Eq (FocusedGrid cs a)
+deriving instance Eq a => Eq (FocusedGrid cs a)
 
-deriving instance (All Show cs, Show a) => Show (FocusedGrid cs a)
+deriving instance (IsCoordList cs, All Show cs, Show a) =>
+                  Show (FocusedGrid cs a)
 
-instance (NFData (Grid cs a), NFData (Coord cs)) => NFData (FocusedGrid cs a) where
+-- @NFData (Coord cs)@ is unconditional now that a coordinate is one 'Int'.
+instance NFData (Grid cs a) => NFData (FocusedGrid cs a) where
     rnf (FocusedGrid g p) = rnf g `seq` rnf p
 
 instance ( AllSizedKnown cs
@@ -62,7 +64,7 @@ traceOffset ::
        , IsCoordList cs
        , AllDiffSame Int cs
        )
-    => Coord (MapDiff cs)
+    => Delta (MapDiff cs)
     -> FocusedGrid cs a
     -> Maybe a
 traceOffset d (FocusedGrid g p) = index g <$> offsetCoord p d
@@ -97,10 +99,14 @@ data Walker cs a = Walker
     }
     deriving (Functor)
 
-deriving instance (All Eq cs, Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
+deriving instance (Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
 
-deriving instance (All Show cs, Show a, Show (Diff (Coord cs))) =>
-                   Show (Walker cs a)
+deriving instance ( IsCoordList cs
+                  , All Show cs
+                  , Show a
+                  , Show (Diff (Coord cs))
+                  ) =>
+                  Show (Walker cs a)
 
 -- | Take one step in the walker's own heading, transporting the heading
 -- through 'transportCoord' so the boundary policy decides what the heading

@@ -182,8 +182,11 @@ tabulateGrid func =
 -- the vector has exactly that many elements by `GridOf`'s size invariant,
 -- so the bounds check can never fire on a grid built through the safe API
 -- -- only `unsafeGridFromVector` can falsify that.
+--
+-- No @IsCoordList cs@ any more: after sized-grid-adr.16 a coordinate /is/ its
+-- position, so there is no fold left here to need the axis sizes.
 indexGrid ::
-       forall v cs a. (VG.Vector v a, IsCoordList cs)
+       forall v cs a. VG.Vector v a
     => GridOf v cs a
     -> Coord cs
     -> a
@@ -497,9 +500,11 @@ nestedParseJSON val =
 -- A caller cannot supply a bad permutation: they supply a coordinate
 -- function, and @Coord ds@ is only inhabited by in-range coordinates, so
 -- whatever @f@ returns is safe to look up.
+-- @IsCoordList ds@ is likewise gone: the table is @coordPosition@ of whatever
+-- @f@ returns, and that is now a field read rather than a fold.
 permuteGrid ::
        forall v cs ds a.
-       (VG.Vector v a, VG.Vector v Int, IsCoordList cs, IsCoordList ds)
+       (VG.Vector v a, VG.Vector v Int, IsCoordList cs)
     => (Coord cs -> Coord ds)
     -> GridOf v ds a
     -> GridOf v cs a
@@ -839,11 +844,19 @@ instance ShrinkableGrid '[] '[] '[] where
 --
 -- The split is boxed, so the slice that picks the window is a boxed one
 -- whatever @v@ the grid being shrunk uses. See 'splitGrid'.
+-- @1 <= x@ and @IsCoordList cs@ are what @(':|')@ costs after
+-- sized-grid-adr.16: splitting a coordinate is a division by the tail's
+-- stride, so the tail's sizes have to be in scope, and the head axis has to
+-- be one 'Data.Grid.Sized.Coord.Class.IsCoordLifted' can speak for. Neither
+-- narrows what this instance covers --- an axis of size zero has no
+-- coordinates to shrink.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as
          , IsCoord c
+         , IsCoordList cs
          , ShrinkableGrid cs as bs
+         , 1 <= x
          , x + z <= y + 1
          ) =>
          ShrinkableGrid (c x ': cs) (c y ': as) (c z ': bs) where
