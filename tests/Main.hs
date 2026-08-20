@@ -84,7 +84,6 @@ testCoordLayout _ =
 gridTests ::
        forall cs a x y f g.
        ( Show (Coord cs)
-       , Eq (Coord cs)
        , IsCoordList cs
        , AllSizedKnown cs
        , Show a
