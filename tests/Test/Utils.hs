@@ -14,6 +14,8 @@ module Test.Utils
   , jsonKeyLaws
   , semigroupLaws
   , monoidLaws
+  , groupLaws
+  , abelianLaws
   , additiveGroupLaws
   , affineSpaceLaws
   , traversalLaws
@@ -40,6 +42,7 @@ import           Data.AffineSpace
 import           Data.Distributive
 import           Data.Functor.Classes
 import           Data.Functor.Compose
+import           Data.Group             (Abelian, Group (..))
 import           Data.Map              (Map)
 -- 'Data.Functor.Identity' is not imported: 'Data.Functor.Rep' re-exports it.
 import           Data.Functor.Rep
@@ -106,6 +109,30 @@ monoidLaws =
        , testProperty "Mempty Id" memptyId
        , testProperty "Concat is Fold" concatIsFold
        ]
+
+-- | The 'Data.Group.Group' laws: 'invert' is a two-sided inverse for '<>'.
+groupLaws ::
+     forall a. (Show a, Eq a, Group a, Arbitrary a)
+  => TestTree
+groupLaws =
+  let invertRight :: a -> Property
+      invertRight a = a <> invert a === mempty
+      invertLeft :: a -> Property
+      invertLeft a = invert a <> a === mempty
+  in testGroup
+       "Group laws"
+       [ testProperty "a <> invert a == mempty" invertRight
+       , testProperty "invert a <> a == mempty" invertLeft
+       ]
+
+-- | The single 'Data.Group.Abelian' law: '<>' commutes.
+abelianLaws ::
+     forall a. (Show a, Eq a, Abelian a, Arbitrary a)
+  => TestTree
+abelianLaws =
+  let commute :: a -> a -> Property
+      commute a b = a <> b === b <> a
+  in testGroup "Abelian laws" [testProperty "a <> b == b <> a" commute]
 
 additiveGroupLaws ::
      forall a. (Show a, Eq a, AdditiveGroup a, Arbitrary a)

@@ -244,6 +244,8 @@ main =
         -- round-trip and succ/pred against the wrapping 'Enum'.
         , lawsToTest $ enumLaws (Proxy @(Periodic 10))
         , additiveGroupLaws @(Periodic 10)
+        , groupLaws @(Periodic 10)
+        , abelianLaws @(Periodic 10)
         , affineSpaceLaws @(Periodic 10)
         , aesonLaws @(Periodic 10)
         , lawsToTest $ jsonLaws (Proxy @(Periodic 10))
@@ -305,6 +307,8 @@ main =
           semigroupMonoidLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , affineSpaceLaws @(Coord '[ Periodic 10, Periodic 20])
         , additiveGroupLaws @(Coord '[ Periodic 10, Periodic 20])
+        , groupLaws @(Coord '[ Periodic 10, Periodic 20])
+        , abelianLaws @(Coord '[ Periodic 10, Periodic 20])
         , aesonLaws @(Coord '[ Periodic 10, Periodic 20])
         , lawsToTest $ jsonLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Periodic 10, Periodic 20]))

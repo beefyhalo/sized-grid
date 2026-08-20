@@ -10,7 +10,7 @@ import           Control.Lens
 import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
-import           Data.Group          (Group (..))
+import           Data.Group          (Abelian, Cyclic (..), Group (..))
 import           GHC.TypeLits
 import           System.Random
 
@@ -90,6 +90,14 @@ instance (1 <= n, KnownNat n) => AffineSpace (Periodic n) where
 -- 'AdditiveGroup' is its own inverse under negation.
 instance (1 <= n, KnownNat n) => Group (Periodic n) where
     invert = negateV
+
+-- | Z/nZ is commutative: translation on a torus does not care about order.
+instance (1 <= n, KnownNat n) => Abelian (Periodic n)
+
+-- | 1 generates Z/nZ: repeated translation by one step reaches every
+-- position, since 'pow' on 'Periodic'\'s additive monoid is repeated '.+^'.
+instance (1 <= n, KnownNat n) => Cyclic (Periodic n) where
+    generator = toEnum 1
 
 -- | A torus has no edges: 'offsetIsCoord' never refuses, and the monoid
 -- operation ('<>' via 'AdditiveGroup') is exactly '.+^'. See

@@ -126,6 +126,7 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Constraint
+import           Data.Group            (Abelian, Group (..))
 import           Data.Kind (Type)
 import           Data.List             (intercalate, unfoldr)
 import qualified Data.Vector           as V
@@ -309,6 +310,26 @@ instance forall cs. (IsCoordList cs, All Random cs) => Random (Coord cs) where
                          (unCoord ma))
                     g
         in (Coord (npToPosition c), g')
+
+-- | The 'Group' this 'Coord' has is exactly the one its axes have,
+-- pointwise: 'invert' negates axis by axis, same as 'AdditiveGroup's
+-- 'negateV' does but through 'Data.Group.Group' so consumers who reach for
+-- @groups@ rather than @vector-space@ find it too. Not every axis type
+-- qualifies -- 'Data.Grid.Sized.Coord.Clamped.Clamped' has no 'Group'
+-- because clamping is not invertible -- so this instance is only as wide as
+-- @All Group cs@ lets it be.
+instance forall cs. (IsCoordList cs, All Semigroup cs, All Monoid cs, All Group cs) =>
+         Group (Coord cs) where
+    invert a =
+        Coord $
+        npToPosition $
+        hcliftA (Proxy :: Proxy Group) (fmap invert) (unCoord a)
+
+-- | Pointwise again: a product of abelian groups is abelian, since swapping
+-- the order of '<>' on the whole coordinate is swapping it independently on
+-- each axis.
+instance (IsCoordList cs, All Semigroup cs, All Monoid cs, All Group cs, All Abelian cs) =>
+         Abelian (Coord cs)
 
 -- | Changing the head axis keeps the tail's stride, so only the most
 -- significant digit is rewritten.
