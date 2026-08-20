@@ -124,13 +124,56 @@ gridFromVector v =
 -- $bulk
 -- Operations that carry an element constraint and so cannot be class methods.
 
--- | `tabulate` for grids that cannot be `Representable`. Uses `VG.fromListN`,
--- not `VG.fromList`, since the length is known up front.
+-- | `tabulate` for grids that cannot be `Representable`.
+--
+-- sized-grid-adr.4 spiked three ways to close the gap between this and
+-- `pure` (same vector, no coordinate) and found only one that actually
+-- helps; the other two are recorded here so they are not re-tried blind.
+--
+--   1. __An odometer.__ Walk `Coord` directly with a hand-rolled successor
+--      (increment the last axis, carry into earlier ones on overflow) and
+--      feed it to `VG.unfoldrExactN`, so no coordinate list is ever built.
+--      Measured /worse/: 78-93% slower than the `VG.fromListN` version this
+--      replaces, allocating more, not less. The `NP` state `unfoldrExactN`
+--      threads through its generator does not specialise the way a plain
+--      `Int` accumulator would -- every step rebuilds part of that
+--      structure -- and that cost outweighs the list it avoids.
+--   2. __`VG.generate` with `coordFromPosition`.__ No coordinate list, no
+--      per-step state at all -- just the position handed to
+--      `coordFromPosition`, one `quotRem` per axis. Measured far worse
+--      again: 297-650% slower. Re-deriving every axis of every coordinate
+--      from scratch costs more than either building the list or walking it.
+--   3. __Make the list fuse, the way `imap` does__ (below): this is what
+--      survived. `imap`'s trick is @V.zipWith func (V.fromList allCoord) v@,
+--      which fuses because it has a second vector, @v@, to zip against;
+--      `tabulateGrid` has none, since producing @v@ /is/ the job. Handing it
+--      a throwaway one -- @V.replicate size ()@ -- turns out to be enough to
+--      trigger the same fusion, so the coordinate list built by
+--      @V.fromList allCoord@ still never exists as a whole: each coordinate
+--      is produced, consumed by @func@, and dies in the nursery exactly as
+--      it does in `imap`.
+--
+-- Measured against the original `VG.fromListN` version, same run, same
+-- machine, `tabulate` at 300x300: 3.15 ms / 9.6 MB allocated / 6.4 MB
+-- copied down to 2.53 ms / 7.6 MB / 4.6 MB. The unboxed case is where it
+-- matters most: `tabulateGrid` unboxed went from 906 μs / 9.6 MB / 525 KB
+-- copied to 530 μs / 4.8 MB / 15 KB copied -- allocation and copying both
+-- roughly halved, and the promotion that `pure`\/`fmap`'s allocation-only
+-- comparison had already pinned on the never-fusing list (see the note
+-- there before this rewrite, preserved in git history) is nearly gone.
+--
+-- The `VG.convert` at the end is a real conversion for every @v@ except
+-- @V.Vector@ itself, where it is a copy of a vector to itself; unlike
+-- `collapseGrid`\/`gridFromList` this has no @[~1]@ RULE to bypass it; a
+-- spike, not measured to be worth the added surface here.
 tabulateGrid ::
        forall v cs a. (VG.Vector v a, IsCoordList cs)
     => (Coord cs -> a)
     -> GridOf v cs a
-tabulateGrid func = Grid $ VG.fromListN (coordSpaceSize @cs) $ map func allCoord
+tabulateGrid func =
+    Grid $
+    VG.convert $
+    V.zipWith (\c () -> func c) (V.fromList allCoord) (V.replicate (coordSpaceSize @cs) ())
 {-# INLINABLE tabulateGrid #-}
 
 -- | Read the element at a coordinate. `Data.Functor.Rep.index` for grids
@@ -222,10 +265,6 @@ instance (IsCoordList cs, AllSizedKnown cs) =>
   type Rep (Grid cs) = Coord cs
   -- The bodies are 'tabulateGrid' and 'indexGrid' at @v ~ V.Vector@, where the
   -- 'VG.Vector' constraint is discharged for every element type.
-  --
-  -- The traversals below deliberately do not use 'V.fromListN', and the
-  -- difference is that 'tabulate' ends in a vector whatever happens. They do
-  -- not: they hand their list straight to a 'V.zipWith' that fuses with it.
   tabulate = tabulateGrid
   index = indexGrid
 
