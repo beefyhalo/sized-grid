@@ -69,8 +69,8 @@ pec r c = pe r :| pe c :| EmptyCoord
 mixc :: Int -> Int -> Coord '[Clamped 5, Periodic 5]
 mixc r c = hw r :| pe c :| EmptyCoord
 
-d2 :: Int -> Int -> Coord '[Int, Int]
-d2 a b = a :| b :| EmptyCoord
+d2 :: Int -> Int -> Delta '[Int, Int]
+d2 a b = a :^ b :^ NoDelta
 
 offsetCoordTests :: TestTree
 offsetCoordTests =
@@ -275,7 +275,7 @@ metricTests =
   where
     -- @f r c@ is every coord whose distance from @c@ is in @[1, r]@.
     ballAgrees ::
-           (All Eq cs, All Ord cs, IsCoordList cs)
+           IsCoordList cs
         => (Coord cs -> Coord cs -> Int)
         -> (Int -> Coord cs -> [Coord cs])
         -> Int
@@ -459,7 +459,7 @@ sevenOf n =
     in c :| c :| c :| c :| c :| c :| c :| EmptyCoord
 
 sevenD :: Int -> Diff (Coord Seven)
-sevenD d = d :| d :| d :| d :| d :| d :| d :| EmptyCoord
+sevenD d = d :^ d :^ d :^ d :^ d :^ d :^ d :^ NoDelta
 
 arityTests :: TestTree
 arityTests =
@@ -482,25 +482,34 @@ arityTests =
               assertEqual "" (sevenOf 1) (sevenOf 1 .+^ zeroV)
         ]
 
--- | Arity-generic: the same function covers a pair and a seven-axis coord.
+-- | Arity-generic: the same pair of functions covers a two-axis coord and a
+-- seven-axis one, on both sides of the position\/displacement split --
+-- 'coordFromTuple' for a 'Coord', 'deltaFromTuple' for a 'Delta'.
 tupleBridgeTests :: TestTree
 tupleBridgeTests =
     testGroup
-        "coordFromTuple / coordToTuple"
-        [ testCase "coordFromTuple builds the same coord as (:|)" $
-              assertEqual "" (d2 1 (-2)) (coordFromTuple (1, -2))
+        "coordFromTuple / coordToTuple / deltaFromTuple / deltaToTuple"
+        [ testCase "deltaFromTuple builds the same displacement as (:^)" $
+              assertEqual "" (d2 1 (-2)) (deltaFromTuple (1, -2))
+        , testCase "deltaToTuple takes one apart" $
+              assertEqual "" (1, -2 :: Int) (deltaToTuple (d2 1 (-2)))
+        , testCase "coordFromTuple builds the same coord as (:|)" $
+              assertEqual "" (hwc 1 2) (coordFromTuple (toEnum 1, toEnum 2))
         , testCase "coordToTuple takes one apart" $
-              assertEqual "" (1, -2 :: Int) (coordToTuple (d2 1 (-2)))
+              assertEqual
+                  ""
+                  (toEnum 1, toEnum 2 :: Clamped 5)
+                  (coordToTuple (hwc 1 2))
         , testCase "a tuple offsets a coord through (.+^)" $
               assertEqual
                   ""
                   (hwc 3 3)
-                  (hwc 2 2 .+^ coordFromTuple (1, 1))
+                  (hwc 2 2 .+^ deltaFromTuple (1, 1))
         , testCase "seven axes go through the same function" $
               assertEqual
                   ""
                   (sevenD 1)
-                  (coordFromTuple (1, 1, 1, 1, 1, 1, 1))
+                  (deltaFromTuple (1, 1, 1, 1, 1, 1, 1))
         ]
 
 neighbourTests :: TestTree

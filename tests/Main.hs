@@ -47,7 +47,7 @@ assertOrderd =
      in assertBool "Ordered" . helper
 
 testAllCoordOrdered ::
-       forall cs proxy. (All Eq cs, All Ord cs, IsCoordList cs)
+       forall cs proxy. IsCoordList cs
     => proxy (Coord cs)
     -> TestTree
 testAllCoordOrdered _ =
@@ -59,7 +59,7 @@ testAllCoordOrdered _ =
 -- order.
 testCoordLayout ::
        forall cs proxy.
-       (All Eq cs, All Show cs, All Arbitrary cs, IsCoordList cs)
+       (All Show cs, All Arbitrary cs, IsCoordList cs)
     => proxy (Coord cs)
     -> TestTree
 testCoordLayout _ =
@@ -178,7 +178,13 @@ splitTests _ _ =
      ]
 
 twoDimensionalCoordTests ::
-     forall cs x y . (cs ~ '[ x, y], All Show cs, All Eq cs, All Arbitrary cs)
+     forall cs x y .
+     ( cs ~ '[ x, y]
+     , IsCoordLifted x
+     , IsCoordLifted y
+     , All Show cs
+     , All Arbitrary cs
+     )
   => Proxy (Coord cs)
   -> [TestTree]
 twoDimensionalCoordTests _ =
@@ -188,12 +194,13 @@ twoDimensionalCoordTests _ =
 
 coordCreationTests ::
      forall cs a c.
-     ( All Show cs
-     , All Eq cs
+     ( IsCoordLifted a
+     , IsCoordLifted c
+     , IsCoordList cs
+     , All Show cs
      , Eq a
      , Show a
      , Show c
-     , Eq c
      , Arbitrary a
      , All Arbitrary cs
      , Arbitrary c
@@ -320,11 +327,15 @@ main =
        , testGroup "Coord [Periodic 10, Periodic 20]" coord2
        , testGroup "2D Coords" $
          twoDimensionalCoordTests (Proxy @(Coord '[ Clamped 10, Periodic 10]))
+         -- The element proxy is an axis type, not 'Int'. It used to be able to
+         -- be anything, because a coord was an @NP@ that would hold it; a
+         -- coord is a row-major position now, so @Coord '[Int]@ has no sizes
+         -- to be a position within and the tests below build real axes.
        , testGroup
            "Coord creation"
            (coordCreationTests
               (Proxy @(Coord '[ Clamped 10, Periodic 10]))
-              (Proxy @Int))
+              (Proxy @(Clamped 10)))
        , testGroup
            "Grid"
            (gridTests

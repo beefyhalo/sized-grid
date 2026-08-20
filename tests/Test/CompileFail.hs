@@ -85,4 +85,12 @@ compileFailTests =
       assertCompileFails
         "WalkPathTotalNotBoundaryless.hs"
         "No instance for \8216Boundaryless (Clamped 5)\8217"
+      -- sized-grid-adr.16: a 'Coord' is now a bare 'Int', so nothing in its
+      -- representation mentions @cs@ and the role annotation is the only thing
+      -- keeping @coerce@ from forging an out-of-range coordinate. The
+      -- substring is deliberately the unquoted half of the diagnostic: the
+      -- snippet has exactly one way to fail, and a role that regressed to
+      -- phantom would compile cleanly rather than fail differently.
+    , testCase "coerce a Coord between axis sizes (the nominal role)" $
+      assertCompileFails "CoordCoerceAcrossSizes.hs" "Couldn't match type"
     ]

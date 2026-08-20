@@ -28,8 +28,8 @@ hw = hwOf
 hwc :: Int -> Int -> Coord '[Clamped 5, Clamped 5]
 hwc r c = hw r :| hw c :| EmptyCoord
 
-d2 :: Int -> Int -> Coord '[Int, Int]
-d2 a b = a :| b :| EmptyCoord
+d2 :: Int -> Int -> Delta '[Int, Int]
+d2 a b = a :^ b :^ NoDelta
 
 emptyPathTests :: TestTree
 emptyPathTests =

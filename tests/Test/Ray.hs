@@ -37,8 +37,8 @@ mixc :: Int -> Int -> Coord '[Clamped 5, Periodic 5]
 mixc r c = hw r :| pe c :| EmptyCoord
 
 -- | A two-dimensional displacement, the shape 'Diff' gives every @Coord@ above.
-d2 :: Int -> Int -> Coord '[Int, Int]
-d2 a b = a :| b :| EmptyCoord
+d2 :: Int -> Int -> Delta '[Int, Int]
+d2 a b = a :^ b :^ NoDelta
 
 offsetCoordUpToTests :: TestTree
 offsetCoordUpToTests =
