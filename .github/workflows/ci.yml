@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v27
+      - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
@@ -45,7 +45,20 @@ jobs:
       # `checks` derivations keeps HLS out of the store entirely, so 6G is
       # comfortably enough for both GHC closures rather than a tight squeeze
       # that gets whichever paths GC visits first.
-      - uses: nix-community/cache-nix-action@v6
+      #
+      # sized-grid-pr6: pinned to v27/v6 since this job's introduction, both
+      # several majors behind (current v31/v7 as of 2026-08-19). Every run
+      # observed on v6 fails to restore with tar errors against /nix/store --
+      # 'Cannot open: Permission denied' on an existing .drv, 'Cannot utime'
+      # and 'Cannot change mode' on the store directory itself -- so the
+      # cache never actually helps and flake-check pays a full rebuild every
+      # time. Not reproduced locally (this is a GH-runner-only failure mode:
+      # install-nix-action's multi-user install leaves /nix/store root-owned,
+      # and tar as the unprivileged runner user can't restore permission bits
+      # on paths it doesn't own). Bumping both actions to current majors is
+      # the first thing to try; watch the next run rather than assuming this
+      # landed it.
+      - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
