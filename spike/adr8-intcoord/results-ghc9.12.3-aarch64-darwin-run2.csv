@@ -1,0 +1,34 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+All.tabulate 300x300 [coordPosition per cell].lib,2454663281,119741440,7920812,4597673,44040192
+All.tabulate 300x300 [coordPosition per cell].int,1082774218,64503572,5040786,2322058,44040192
+All.tabulate 300x300 [rule destructures the coord].lib,2328676562,212000206,7776727,3233642,44040192
+All.tabulate 300x300 [rule destructures the coord].int,1042629687,70210786,4896642,1376413,44040192
+"All.index x90000, 300x300.lib",693890625,55019500,7920042,1257,44040192
+"All.index x90000, 300x300.int",433000878,33094678,7920023,1239,44040192
+All.imap 300x300 [coordPosition per cell].lib,1225561718,114622940,5040812,1790568,44040192
+All.imap 300x300 [coordPosition per cell].int,859246484,53103120,5040788,1776623,44040192
+"All.imap 300x300, raw vector controls (no Coord at all).V.imap",862080078,59413024,5040787,1776686,45088768
+"All.imap 300x300, raw vector controls (no Coord at all).V.zipWith over V.generate",3288564062,292659370,9360877,7958772,59768832
+"All.imap 300x300, raw vector controls (no Coord at all).V.zipWith over V.enumFromN",5608865625,454564668,15121003,14197522,65011712
+"All.imap 300x300, raw vector controls (no Coord at all).V.imap over the int grid's own vector",868956640,62501592,5040787,1788276,65011712
+"All.imap 300x300, raw vector controls (no Coord at all).V.imap over it, through imapI's wrapper",865765234,67663766,5040787,1788288,65011712
+All.ifoldl' 300x300.lib,377397265,31883184,22,0,65011712
+All.ifoldl' 300x300.int,248276464,13408982,23,0,65011712
+"All.(.+^) x360000, four corner reads over 300x300.lib",1129207812,65883646,42,2,65011712
+"All.(.+^) x360000, four corner reads over 300x300.int",864364843,78204730,44,2,65011712
+"All.offsetCoord x360000, checked, flat arms.lib",931000000,82961614,43,2,65011712
+"All.offsetCoord x360000, checked, flat arms.int",204793847,13519912,22,0,65011712
+"All.onBoundary x360000, flat arms.lib",1453368750,107544388,43,2,65011712
+"All.onBoundary x360000, flat arms.int",696181835,45854242,29,1,65011712
+"All.coordDistance x360000, flat arms.lib",1313622265,127789536,42,2,65011712
+"All.coordDistance x360000, flat arms.int",787385937,73936984,46,2,65011712
+"All.(.+^) x10000, Periodic 300x300.lib",341296875,26553306,2677533,155723,65011712
+"All.(.+^) x10000, Periodic 300x300.int",66721069,3365566,17,0,65011712
+All.imapGrid over neighbours 50x50.lib,1700782812,124734160,16381956,262318,65011712
+All.imapGrid over neighbours 50x50.int,646520507,35100152,2648094,43556,65011712
+"All.imapGrid over neighbours 50x50, Periodic.lib",1768504687,124863432,16800132,264433,65011712
+"All.imapGrid over neighbours 50x50, Periodic.int",682640625,64086056,2675310,44188,65011712
+All.transposeGrid 300x300 boxed.lib,395818945,27964824,720773,71,65011712
+All.transposeGrid 300x300 boxed.int,313001757,28957952,720773,68,65011712
+"All.opaque axis list (dictionary at run time), x90000.lib",10335843750,879054222,57450576,40238,65011712
+"All.opaque axis list (dictionary at run time), x90000.int",6299718750,440924654,51397951,5543,65011712

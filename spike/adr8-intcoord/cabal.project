@@ -1,0 +1,7 @@
+-- sized-grid-adr.8 spike. Two packages: this throwaway one, and the real
+-- library, so the control and the experiment are the same binary, built by
+-- the same compiler, measured back to back (see the METHOD NOTE on the
+-- sized-grid-adr epic).
+packages:
+  .
+  ../..

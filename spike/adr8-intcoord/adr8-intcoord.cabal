@@ -1,0 +1,50 @@
+cabal-version:      3.0
+name:               adr8-intcoord
+version:            0
+build-type:         Simple
+synopsis:           Throwaway Int-coordinate grid, for sized-grid-adr.8
+
+-- The Int-coordinate implementation. Flags deliberately identical to the
+-- 'library' stanza of grid-sized.cabal, and in a separate component from the
+-- benchmark, so the experiment reaches the benchmark through a .hi file the
+-- same way the control does. Compiling it into bench/Main.hs would let GHC
+-- see the whole thing at once and flatter it.
+library
+  default-language:   GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DataKinds
+    TypeFamilies
+    UndecidableInstances
+  hs-source-dirs:     src
+  exposed-modules:    IntCoord
+  ghc-options:        -O2 -fexpose-all-unfoldings -fspecialise-aggressively -Wall
+  build-depends:
+    , base
+    , deepseq
+    , vector
+
+benchmark compare
+  default-language: GHC2024
+  default-extensions:
+    DataKinds
+    RequiredTypeArguments
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   bench
+  main-is:          Main.hs
+  build-depends:
+    , adjunctions
+    , adr8-intcoord
+    , base
+    , comonad
+    , deepseq
+    , grid-sized
+    , lens
+    , tasty-bench
+    , vector
+    , vector-space
+
+  ghc-options:      -with-rtsopts=-T
