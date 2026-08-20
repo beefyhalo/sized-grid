@@ -17,7 +17,7 @@ module Data.Grid.Sized.Coord.Class
   , axisSteps
   , axisStepsIx
   , toAxisIndex
-  , fromAxisIndex
+  , unsafeFromAxisIndex
   ) where
 
 import           Data.Grid.Sized.Internal.Error (type (?!))
@@ -186,7 +186,7 @@ type OddC (x :: Type) =
 axisSteps :: forall x. IsCoordLifted x => Int -> x -> [(Int, x)]
 {-# INLINE axisSteps #-}
 axisSteps r c =
-    [(d, fromAxisIndex v) | (d, v) <- axisStepsIx @x r (toAxisIndex c)]
+    [(d, unsafeFromAxisIndex v) | (d, v) <- axisStepsIx @x r (toAxisIndex c)]
 
 -- | 'axisSteps' on the axis's index rather than on a value of the axis type:
 -- the form the row-major fold needs, since after sized-grid-adr.16 all it has
@@ -205,7 +205,7 @@ axisStepsIx r i =
     -- Hoisted out of the comprehension: one axis value per call, not one per
     -- offset tried.
     c :: x
-    c = fromAxisIndex i
+    c = unsafeFromAxisIndex i
     -- Already an 'Int', so -- as before -- no 'Eq' is needed on the axis type.
     reachable :: [(Int, Int)]
     reachable =
@@ -230,10 +230,14 @@ toAxisIndex :: forall x. IsCoordLifted x => x -> Int
 toAxisIndex x = ordinalToInt (x ^. asOrdinal)
 {-# INLINE toAxisIndex #-}
 
--- | __Precondition:__ @0 <= i < 'CoordNat' x@, checked by 'unsafeOrdinal'.
-fromAxisIndex :: forall x. IsCoordLifted x => Int -> x
-fromAxisIndex i = review asOrdinal (unsafeOrdinal i)
-{-# INLINE fromAxisIndex #-}
+-- | __Precondition:__ @0 <= i < 'CoordNat' x@, /unchecked/ -- see
+-- 'unsafeOrdinalUnchecked' for why this one is not guarded when every
+-- construction of an axis value still is. Every caller in this library
+-- obtains @i@ by dividing an in-range position, which establishes the bound
+-- by arithmetic.
+unsafeFromAxisIndex :: forall x. IsCoordLifted x => Int -> x
+unsafeFromAxisIndex i = review asOrdinal (unsafeOrdinalUnchecked i)
+{-# INLINE unsafeFromAxisIndex #-}
 
 -- | Apply 'Diff' to each element of a type level list: the displacement
 -- between two coords is itself coord-shaped, a
@@ -284,7 +288,7 @@ type family IsCoordListF (cs :: [Type]) :: Constraint where
 -- the whole fold into flat arithmetic on one unboxed 'Int'.
 --
 -- What did /not/ change is 'IsCoord'. A boundary policy still says what it
--- means in terms of its own axis type, and 'toAxisIndex' \/ 'fromAxisIndex'
+-- means in terms of its own axis type, and 'toAxisIndex' \/ 'unsafeFromAxisIndex'
 -- convert at the edges of each step -- both coercions bar 'unsafeOrdinal'\'s
 -- range check. That is what kept the port from touching
 -- 'Data.Grid.Sized.Coord.Clamped.Clamped',
@@ -435,7 +439,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
 
     npFromPosition p =
         case p `quotRem` coordListSize @xs of
-            (i, r) -> I (fromAxisIndex @x i) :* npFromPosition r
+            (i, r) -> I (unsafeFromAxisIndex @x i) :* npFromPosition r
 
     -- The displacement drives the match: ':*' on it is what refines @xs@ far
     -- enough for 'MapDiff' to reduce, the job the coord's own ':*' used to do
@@ -444,7 +448,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
         case p `quotRem` stride of
             (i, r) ->
                 (\y r' -> toAxisIndex y * stride + r') <$>
-                offsetIsCoord (fromAxisIndex @x i) dx <*>
+                offsetIsCoord (unsafeFromAxisIndex @x i) dx <*>
                 posOffset @xs r dxs
       where
         stride = coordListSize @xs
@@ -463,7 +467,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
 
     -- 'x' unifies with @CoordContainer x (CoordNat x)@ via 'IsCoordLifted's
     -- superclass equality, so 'axisBoundaryIsCoord' and 'axisDistanceIsCoord'
-    -- apply to a 'fromAxisIndex' of this axis's index directly, at the
+    -- apply to an 'unsafeFromAxisIndex' of this axis's index directly, at the
     -- per-axis 'IsCoord' instance @IsCoordLifted x@ resolves to --- no
     -- 'Data.Grid.Sized.Coord.axisBoundary'\/'Data.Grid.Sized.Coord.axisDistance'
     -- indirection needed here, the same way 'posOffset' calls 'offsetIsCoord'
@@ -471,12 +475,12 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     posBoundaries p =
         case p `quotRem` coordListSize @xs of
             (i, r) ->
-                axisBoundaryIsCoord (fromAxisIndex @x i) : posBoundaries @xs r
+                axisBoundaryIsCoord (unsafeFromAxisIndex @x i) : posBoundaries @xs r
 
     posDistances p q =
         case (p `quotRem` stride, q `quotRem` stride) of
             ((i, r), (j, s)) ->
-                axisDistanceIsCoord (fromAxisIndex @x i) (fromAxisIndex @x j) :
+                axisDistanceIsCoord (unsafeFromAxisIndex @x i) (unsafeFromAxisIndex @x j) :
                 posDistances @xs r s
       where
         stride = coordListSize @xs
@@ -484,20 +488,20 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     posAnyBoundary p =
         case p `quotRem` coordListSize @xs of
             (i, r) ->
-                isJust (axisBoundaryIsCoord (fromAxisIndex @x i)) ||
+                isJust (axisBoundaryIsCoord (unsafeFromAxisIndex @x i)) ||
                 posAnyBoundary @xs r
 
     posAllBoundary p =
         case p `quotRem` coordListSize @xs of
             (i, r) ->
-                isJust (axisBoundaryIsCoord (fromAxisIndex @x i)) &&
+                isJust (axisBoundaryIsCoord (unsafeFromAxisIndex @x i)) &&
                 posAllBoundary @xs r
 
     posMaxDistance p q =
         case (p `quotRem` stride, q `quotRem` stride) of
             ((i, r), (j, s)) ->
                 max
-                    (axisDistanceIsCoord (fromAxisIndex @x i) (fromAxisIndex @x j))
+                    (axisDistanceIsCoord (unsafeFromAxisIndex @x i) (unsafeFromAxisIndex @x j))
                     (posMaxDistance @xs r s)
       where
         stride = coordListSize @xs
@@ -505,7 +509,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     posSumDistance p q =
         case (p `quotRem` stride, q `quotRem` stride) of
             ((i, r), (j, s)) ->
-                axisDistanceIsCoord (fromAxisIndex @x i) (fromAxisIndex @x j) +
+                axisDistanceIsCoord (unsafeFromAxisIndex @x i) (unsafeFromAxisIndex @x j) +
                 posSumDistance @xs r s
       where
         stride = coordListSize @xs

@@ -20,7 +20,6 @@ import           Data.Aeson              (Result (..), fromJSON, toJSON)
 import           Data.AffineSpace        ((.+^), (.-.))
 import           Data.Functor.Identity   (Identity (..))
 import           Data.Functor.Rep        (index, tabulate)
-import           Data.Maybe              (isJust)
 import qualified Data.Vector.Generic     as VG
 import           Test.Tasty.Bench
 
@@ -164,7 +163,7 @@ iterateStencilFold s n g = iterate (stencilFoldStep s) g !! n
 -- intermediate 'Coord's cannot be fused away.
 walk :: Int -> Coord Walk -> Int
 walk 0 c = coordPosition c
-walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
+walk k c = walk (k - 1) (c .+^ (1 :^ 1 :^ NoDelta))
 
 -- | Four corner reads per position at a fixed window size: a summed-area-table
 -- solve, 360,000 offsets over the 90,000 cells of 'Big'. Neither benchmark
@@ -173,10 +172,10 @@ walk k c = walk (k - 1) (c .+^ (1 :| 1 :| EmptyCoord))
 cornerReads :: Grid Big Int -> Int
 cornerReads g =
     total
-        [ index g (c .+^ (0 :| 0 :| EmptyCoord)) +
-          index g (c .+^ (3 :| 3 :| EmptyCoord)) -
-          index g (c .+^ (0 :| 3 :| EmptyCoord)) -
-          index g (c .+^ (3 :| 0 :| EmptyCoord))
+        [ index g (c .+^ (0 :^ 0 :^ NoDelta)) +
+          index g (c .+^ (3 :^ 3 :^ NoDelta)) -
+          index g (c .+^ (0 :^ 3 :^ NoDelta)) -
+          index g (c .+^ (3 :^ 0 :^ NoDelta))
         | c <- allCoord @Big
         ]
 
@@ -185,11 +184,23 @@ cornerReads g =
 -- 'Big'. @('.+^')@ and 'offsetCoord' are different functions over different
 -- folds, so a change to one is invisible to a benchmark of the other.
 --
--- Counts successes rather than summing positions, so both branches of the
--- bounds check are forced and measured, and consumed with 'total' rather
--- than @length@, whose @foldr@-with-accumulator form allocates a closure
--- per element. The window size is an argument, not a literal, so full
--- laziness can't float the displacement list out as a CAF.
+-- Sums the position of each coordinate reached, so both branches of the
+-- bounds check are forced /and/ the coordinate 'offsetCoord' constructs is
+-- actually demanded. That last part is load-bearing as of sized-grid-adr.16:
+-- this counted successes with @isJust@ until then, which was enough while a
+-- coordinate was a spine of boxes -- the cold branch of 'unsafeOrdinal''s
+-- guard sat in the middle of the fold and nothing could be dropped around
+-- it. Once adr.16 made the decode unguarded, GHC could see that @isJust@
+-- never demands the position and deleted the whole reconstruction, leaving
+-- four in-range tests: 3.46 ms and 36.7 MB became 205 us and 24 bytes, and
+-- the benchmark had quietly stopped measuring 'offsetCoord' at all.
+-- 'coordPosition' is what a caller does with the result and is the cheapest
+-- thing that demands it.
+--
+-- Consumed with 'total' rather than @length@, whose @foldr@-with-accumulator
+-- form allocates a closure per element. The window size is an argument, not
+-- a literal, so full laziness can't float the displacement list out as a
+-- CAF.
 --
 -- This allocates ~35 MB against 'checkedCornerReadsFlat''s ~60 bytes for the
 -- identical 360,000 'offsetCoord' calls -- see that function's note.
@@ -199,14 +210,12 @@ cornerReads g =
 checkedCornerReads :: Int -> Int
 checkedCornerReads k =
     total
-        [ if isJust (offsetCoord c d)
-              then 1
-              else 0
+        [ maybe 0 coordPosition (offsetCoord c d)
         | c <- allCoord @Big
-        , d <- [ 0 :| 0 :| EmptyCoord
-               , k :| k :| EmptyCoord
-               , 0 :| k :| EmptyCoord
-               , k :| 0 :| EmptyCoord
+        , d <- [ 0 :^ 0 :^ NoDelta
+               , k :^ k :^ NoDelta
+               , 0 :^ k :^ NoDelta
+               , k :^ 0 :^ NoDelta
                ]
         ]
 
@@ -240,10 +249,10 @@ checkedCornerReads k =
 checkedCornerReadsFlat :: Int -> Int
 checkedCornerReadsFlat k =
     total
-        [ (if isJust (offsetCoord c (0 :| 0 :| EmptyCoord)) then 1 else 0) +
-          (if isJust (offsetCoord c (k :| k :| EmptyCoord)) then 1 else 0) +
-          (if isJust (offsetCoord c (0 :| k :| EmptyCoord)) then 1 else 0) +
-          (if isJust (offsetCoord c (k :| 0 :| EmptyCoord)) then 1 else 0)
+        [ maybe 0 coordPosition (offsetCoord c (0 :^ 0 :^ NoDelta)) +
+          maybe 0 coordPosition (offsetCoord c (k :^ k :^ NoDelta)) +
+          maybe 0 coordPosition (offsetCoord c (0 :^ k :^ NoDelta)) +
+          maybe 0 coordPosition (offsetCoord c (k :^ 0 :^ NoDelta))
         | c <- allCoord @Big
         ]
 
@@ -259,10 +268,10 @@ onBoundarySweep k =
               then 1
               else 0
         | c <- allCoord @Big
-        , d <- [ 0 :| 0 :| EmptyCoord
-               , k :| k :| EmptyCoord
-               , 0 :| k :| EmptyCoord
-               , k :| 0 :| EmptyCoord
+        , d <- [ 0 :^ 0 :^ NoDelta
+               , k :^ k :^ NoDelta
+               , 0 :^ k :^ NoDelta
+               , k :^ 0 :^ NoDelta
                ]
         ]
 
@@ -274,10 +283,10 @@ onBoundarySweep k =
 onBoundarySweepFlat :: Int -> Int
 onBoundarySweepFlat k =
     total
-        [ (if onBoundary (c .+^ (0 :| 0 :| EmptyCoord)) then 1 else 0) +
-          (if onBoundary (c .+^ (k :| k :| EmptyCoord)) then 1 else 0) +
-          (if onBoundary (c .+^ (0 :| k :| EmptyCoord)) then 1 else 0) +
-          (if onBoundary (c .+^ (k :| 0 :| EmptyCoord)) then 1 else 0)
+        [ (if onBoundary (c .+^ (0 :^ 0 :^ NoDelta)) then 1 else 0) +
+          (if onBoundary (c .+^ (k :^ k :^ NoDelta)) then 1 else 0) +
+          (if onBoundary (c .+^ (0 :^ k :^ NoDelta)) then 1 else 0) +
+          (if onBoundary (c .+^ (k :^ 0 :^ NoDelta)) then 1 else 0)
         | c <- allCoord @Big
         ]
 
@@ -290,10 +299,10 @@ axisDistanceSweep k =
     total
         [ coordDistance c (c .+^ d)
         | c <- allCoord @Big
-        , d <- [ 0 :| 0 :| EmptyCoord
-               , k :| k :| EmptyCoord
-               , 0 :| k :| EmptyCoord
-               , k :| 0 :| EmptyCoord
+        , d <- [ 0 :^ 0 :^ NoDelta
+               , k :^ k :^ NoDelta
+               , 0 :^ k :^ NoDelta
+               , k :^ 0 :^ NoDelta
                ]
         ]
 
@@ -305,10 +314,10 @@ axisDistanceSweep k =
 axisDistanceSweepFlat :: Int -> Int
 axisDistanceSweepFlat k =
     total
-        [ coordDistance c (c .+^ (0 :| 0 :| EmptyCoord)) +
-          coordDistance c (c .+^ (k :| k :| EmptyCoord)) +
-          coordDistance c (c .+^ (0 :| k :| EmptyCoord)) +
-          coordDistance c (c .+^ (k :| 0 :| EmptyCoord))
+        [ coordDistance c (c .+^ (0 :^ 0 :^ NoDelta)) +
+          coordDistance c (c .+^ (k :^ k :^ NoDelta)) +
+          coordDistance c (c .+^ (0 :^ k :^ NoDelta)) +
+          coordDistance c (c .+^ (k :^ 0 :^ NoDelta))
         | c <- allCoord @Big
         ]
 
@@ -350,6 +359,7 @@ power serial ((fromEnum -> y) :| (fromEnum -> x) :| _) =
     ((rack * y + serial) * rack `div` 100) `mod` 10 - 5
   where
     rack = x + 10
+
 
 -- | Summed-area table: prefix along the rows, transpose, prefix again,
 -- transpose back. Four whole-grid passes, which is the shape unboxing helps.
@@ -406,22 +416,41 @@ main = do
                 env (pure zeroCoord) $ \o ->
                 bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
                 nf
-                    (\o' -> [view coordHead (c .-. o') | c <- allCoord @Mid])
+                    (\o' -> [view deltaHead (c .-. o') | c <- allCoord @Mid])
                     o
               , bench "(.+^) x360000, four corner reads over Clamped 300x300" $
                 whnf cornerReads bigGrid
-              , bench "offsetCoord x360000, checked, over Clamped 300x300" $
-                whnf checkedCornerReads 3
-              , bench "offsetCoord x360000, checked, flat arms (sized-grid-2xv)" $
-                whnf checkedCornerReadsFlat 3
-              , bench "onBoundary x360000, over Clamped 300x300" $
-                whnf onBoundarySweep 3
-              , bench "onBoundary x360000, flat arms (sized-grid-2xv)" $
-                whnf onBoundarySweepFlat 3
-              , bench "coordDistance x360000, over Clamped 300x300" $
-                whnf axisDistanceSweep 3
-              , bench "coordDistance x360000, flat arms (sized-grid-2xv)" $
-                whnf axisDistanceSweepFlat 3
+                -- sized-grid-adr.16: these six take their @k@ through 'env'
+                -- for the same reason '(.-.) x10000' above does, and they did
+                -- not need to before. While a coordinate was a spine, the cold
+                -- branch of 'unsafeOrdinal''s guard sat in the middle of every
+                -- one of these loops and was on its own enough to stop GHC
+                -- folding them. adr.16 removed that guard from the /decode/
+                -- path (see 'unsafeOrdinalUnchecked'), and with nothing left
+                -- to block it GHC evaluated 'checkedCornerReads 3' at compile
+                -- time: 3.46 ms and 36.7 MB became 205 us and __24 bytes__,
+                -- which is not a 17x speedup but a benchmark that had stopped
+                -- doing the work. 'env' pushes @k@ through
+                -- 'withResource'/'unsafePerformIO', which GHC does not see
+                -- through, so what is measured is 360,000 real calls again.
+              , env (pure 3) $ \k ->
+                bench "offsetCoord x360000, checked, over Clamped 300x300" $
+                whnf checkedCornerReads k
+              , env (pure 3) $ \k ->
+                bench "offsetCoord x360000, checked, flat arms (sized-grid-2xv)" $
+                whnf checkedCornerReadsFlat k
+              , env (pure 3) $ \k ->
+                bench "onBoundary x360000, over Clamped 300x300" $
+                whnf onBoundarySweep k
+              , env (pure 3) $ \k ->
+                bench "onBoundary x360000, flat arms (sized-grid-2xv)" $
+                whnf onBoundarySweepFlat k
+              , env (pure 3) $ \k ->
+                bench "coordDistance x360000, over Clamped 300x300" $
+                whnf axisDistanceSweep k
+              , env (pure 3) $ \k ->
+                bench "coordDistance x360000, flat arms (sized-grid-2xv)" $
+                whnf axisDistanceSweepFlat k
               , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
                 whnf axisOffsets 1200
               , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
@@ -435,6 +464,17 @@ main = do
               "indexed vs unindexed (the gap is coordPosition, not allCoord)"
               [ bench "tabulate 300x300  [coordPosition per cell]" $
                 nf (\f -> tabulate f :: Grid Big Int) coordPosition
+                -- sized-grid-adr.16: the worst case for a coordinate that is
+                -- a position rather than a spine, and the one adr.8 called
+                -- out. Every other tabulate here passes its coordinate
+                -- straight to 'coordPosition', which is now free; this one
+                -- takes the coordinate apart per cell, so both @(':|')@
+                -- matches are a 'quotRem' where they used to be field reads.
+                -- adr.8 predicted it still comes out ahead, because producing
+                -- a coordinate costs more than decoding one, and the suite had
+                -- no benchmark that would have caught it if that were wrong.
+              , bench "tabulate 300x300  [rule destructures the coord]" $
+                nf (\s -> tabulate (power s) :: Grid Big Int) 42
               , bench "pure 300x300      [no coord at all]" $
                 nf (\x -> pure x :: Grid Big Int) 1
               , bench "imap 300x300      [coordPosition per cell]" $

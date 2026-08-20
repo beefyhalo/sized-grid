@@ -95,11 +95,13 @@ deltaSplit (Delta (I x :* xs)) = (x, Delta xs)
 pattern (:^) :: d -> Delta ds -> Delta (d ': ds)
 pattern (:^) a as <- (deltaSplit -> (a, as))
   where (:^) a (Delta as) = Delta (I a :* as)
+{-# INLINE (:^) #-}
 
 -- | The displacement with no components: the zero of the empty difference
 -- space, and the end of every @(':^')@ chain.
 pattern NoDelta :: Delta '[]
 pattern NoDelta = Delta Nil
+{-# INLINE NoDelta #-}
 
 -- | Needed because GHC's coverage checker cannot see this view pattern is exhaustive.
 {-# COMPLETE (:^) #-}

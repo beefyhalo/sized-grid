@@ -58,6 +58,7 @@ module Data.Grid.Sized.Coord
   , allCoord
   , coordPosition
   , coordFromPosition
+  , unsafeCoordFromPosition
   , coordSpaceSize
     -- * Centred coordinates
   , CentredAxis
@@ -184,7 +185,7 @@ coordSplit ::
     -> (c, Coord cs)
 coordSplit (Coord p) =
     case p `quotRem` coordListSize @cs of
-        (i, r) -> (fromAxisIndex i, Coord r)
+        (i, r) -> (unsafeFromAxisIndex i, Coord r)
 {-# INLINE coordSplit #-}
 
 -- | Cons. A field read in each direction until sized-grid-adr.16; a 'quotRem'
@@ -193,16 +194,34 @@ coordSplit (Coord p) =
 -- The @('IsCoordLifted' c, 'IsCoordList' cs)@ context is what pays for that
 -- arithmetic. Any caller that already has @'IsCoordList' (c ': cs)@ has it,
 -- since 'Data.Grid.Sized.Coord.Class.IsCoordListF' hands both halves back.
+--
+-- __The @INLINE@ is load-bearing and was measured.__ This is the first
+-- version of @(':|')@ to carry a context at all, and a pattern synonym with a
+-- required context compiles to a matcher that takes those dictionaries. Left
+-- to itself GHC does not inline it, so every match allocates the pair
+-- 'coordSplit' returns /and/ boxes the axis value inside it -- on
+-- @tabulate 300x300@ with a rule that destructures its coordinate, 9.20 ms
+-- and 36 MB against 1.13 ms and 4.8 MB with the pragma, i.e. 400 bytes a
+-- cell for a match that should cost a 'quotRem'. The same body reached
+-- through 'coordSplit' directly was 1.08 ms either way, which is how the
+-- matcher rather than the arithmetic was identified: nothing about the
+-- 'quotRem', 'unsafeOrdinal'\'s guard or the 'Control.Lens.Iso' costs
+-- anything measurable.
+--
+-- @tabulate 300x300  [rule destructures the coord]@ in @bench\/Main.hs@ is
+-- there to keep it that way.
 pattern (:|) ::
         (IsCoordLifted c, IsCoordList cs) => c -> Coord cs -> Coord (c ': cs)
 pattern (:|) a as <- (coordSplit -> (a, as))
   where (:|) = appendCoord
+{-# INLINE (:|) #-}
 
 -- | The coordinate with no axes. Its position is zero, the only 'Int' in
 -- @[0, 'MaxCoordSize' '[])@ = @[0, 1)@, so matching it is matching anything.
 pattern EmptyCoord :: Coord '[]
 pattern EmptyCoord <- Coord _
   where EmptyCoord = Coord 0
+{-# INLINE EmptyCoord #-}
 
 -- | Needed because GHC's coverage checker cannot see these view patterns are exhaustive.
 {-# COMPLETE (:|) #-}
@@ -299,7 +318,7 @@ coordHead ::
 coordHead f (Coord p) =
     case p `quotRem` stride of
         (i, r) ->
-            (\a' -> Coord (toAxisIndex a' * stride + r)) <$> f (fromAxisIndex @a i)
+            (\a' -> Coord (toAxisIndex a' * stride + r)) <$> f (unsafeFromAxisIndex @a i)
   where
     stride = coordListSize @as
 
@@ -388,13 +407,13 @@ instance (IsCoordLifted x, AffineSpace x, AffineCoordList xs) =>
     -- Match the displacement so MapDiff reduces before the recursive call.
     posAdd p (I d :* ds) =
         case p `quotRem` stride of
-            (i, r) -> toAxisIndex (fromAxisIndex @x i .+^ d) * stride + posAdd @xs r ds
+            (i, r) -> toAxisIndex (unsafeFromAxisIndex @x i .+^ d) * stride + posAdd @xs r ds
       where
         stride = coordListSize @xs
     posSub p q =
         case (p `quotRem` stride, q `quotRem` stride) of
             ((i, r), (j, s)) ->
-                I (fromAxisIndex @x i .-. fromAxisIndex @x j) :* posSub @xs r s
+                I (unsafeFromAxisIndex @x i .-. unsafeFromAxisIndex @x j) :* posSub @xs r s
       where
         stride = coordListSize @xs
     {-# INLINE posAdd #-}
@@ -436,7 +455,7 @@ instance (AffineSpace x, IsCoordLifted x, TransportCoordList xs) =>
                                  else d) :*
                           ds')
               where
-                x = fromAxisIndex @x i
+                x = unsafeFromAxisIndex @x i
       where
         stride = coordListSize @xs
     {-# INLINE posTransport #-}
@@ -484,6 +503,27 @@ coordFromPosition p
     | p < 0 || p >= coordListSize @cs = Nothing
     | otherwise = Just (Coord p)
 {-# INLINE coordFromPosition #-}
+
+-- | 'coordFromPosition' without the range check.
+--
+-- __Precondition:__ @0 <= p < 'MaxCoordSize' cs@, /unchecked/. Breaking it
+-- forges a coordinate outside its own space, which
+-- 'Data.Grid.Sized.indexGrid' will then read through @unsafeIndex@ -- the
+-- same class of hole 'Data.Grid.Sized.Unsafe.unsafeGridFromVector' opens, and
+-- the reason both live behind that name.
+--
+-- It exists because after sized-grid-adr.16 a coordinate /is/ a position, so
+-- a caller that already holds an in-range index -- one the vector it came
+-- from supplies, say -- has nothing left to compute and no reason to pay a
+-- bounds check it can already discharge. That is exactly the case in the
+-- indexed traversals: @'Data.Vector.Generic.imap'@ hands over an index it
+-- guarantees is below the vector's length, and a @'Data.Grid.Sized.GridOf' v
+-- cs a@\'s length is @'coordSpaceSize' \@cs@ by construction.
+--
+-- Prefer 'coordFromPosition' anywhere the index came from outside.
+unsafeCoordFromPosition :: Int -> Coord cs
+unsafeCoordFromPosition = Coord
+{-# INLINE unsafeCoordFromPosition #-}
 
 -- | The checked counterpart of '.+^': succeeds only if every axis's own
 -- boundary policy allows the step, so a torus axis can wrap while a bounded
@@ -586,18 +626,32 @@ stepsWithin ::
     -> Coord cs
     -> [(Int, Coord cs)]
 stepsWithin r (Coord p) = fmap Coord <$> posStepsWithin @cs r p
+{-# INLINE stepsWithin #-}
 
 -- | The Moore neighbourhood: every coordinate within @r@ steps on each axis independently, excluding the centre.
-mooreNeighbours :: IsCoordList cs => Int -> Coord cs -> [Coord cs]
-mooreNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0]
+--
+-- Reads 'posStepsWithin' directly rather than going through 'stepsWithin'.
+-- The two differ by one intermediate list -- 'stepsWithin' has to rebuild
+-- every @(steps, position)@ pair as a @(steps, 'Coord')@ one to honour its own
+-- type, and this then drops the steps again. Worth 995 us \/ 8.0 MB to
+-- 648 us \/ 2.6 MB on the 50x50 neighbour sweep -- the difference between
+-- half of the allocation win sized-grid-adr.8 measured the ceiling at and all
+-- of it (adr.8: 16.4 MB to 2.6 MB, 2.6x; this reaches 2.58x).
+mooreNeighbours :: forall cs. IsCoordList cs => Int -> Coord cs -> [Coord cs]
+mooreNeighbours r (Coord p) =
+    [Coord n | (s, n) <- posStepsWithin @cs r p, s > 0]
+{-# INLINE mooreNeighbours #-}
 
 -- | The von Neumann neighbourhood: coordinates whose per-axis distances sum to at most @r@, excluding the centre.
-vonNeumannNeighbours :: IsCoordList cs => Int -> Coord cs -> [Coord cs]
-vonNeumannNeighbours r c = [n | (s, n) <- stepsWithin r c, s > 0, s <= r]
+vonNeumannNeighbours :: forall cs. IsCoordList cs => Int -> Coord cs -> [Coord cs]
+vonNeumannNeighbours r (Coord p) =
+    [Coord n | (s, n) <- posStepsWithin @cs r p, s > 0, s <= r]
+{-# INLINE vonNeumannNeighbours #-}
 
 -- | 'mooreNeighbours' at radius one: the surrounding cells, diagonals included.
 neighbours :: IsCoordList cs => Coord cs -> [Coord cs]
 neighbours = mooreNeighbours 1
+{-# INLINE neighbours #-}
 
 -- | The number of steps between two values on a single axis, by the shorter route if the axis offers more than one.
 axisDistance :: forall x. IsCoordLifted x => x -> x -> Int
@@ -680,7 +734,7 @@ instance (IsCoordLifted x, OddC x) => CentredAxis x
 
 -- | The middle value of a single axis: index @(n - 1) \`div\` 2@, equidistant from both ends when @n@ is odd.
 centreAxis :: forall x. IsCoordLifted x => x
-centreAxis = fromAxisIndex @x ((ordinalSize @(CoordNat x) - 1) `div` 2)
+centreAxis = unsafeFromAxisIndex @x ((ordinalSize @(CoordNat x) - 1) `div` 2)
 
 -- | The coordinate sitting at the middle of every axis at once.
 centreCoord :: forall cs. (IsCoordList cs, All CentredAxis cs) => Coord cs
