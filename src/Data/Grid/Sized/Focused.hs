@@ -1,5 +1,8 @@
 module Data.Grid.Sized.Focused
   ( FocusedGrid(..)
+  , _FocusedGrid
+  , focus
+  , unfocused
   , traceOffset
   , tracePath
   , walkEverywhere
@@ -16,6 +19,7 @@ import           Data.Grid.Sized.Internal.Grid (Grid)
 import           Control.Comonad
 import           Control.Comonad.Store
 import           Control.DeepSeq       (NFData (..))
+import           Control.Lens          hiding (index)
 import           Data.AffineSpace (Diff)
 import           Data.Functor.Rep
 import           Generics.SOP
@@ -37,6 +41,21 @@ deriving instance (IsCoordList cs, All Show cs, Show a) =>
 -- @NFData (Coord cs)@ is unconditional now that a coordinate is one 'Int'.
 instance NFData (Grid cs a) => NFData (FocusedGrid cs a) where
     rnf (FocusedGrid g p) = rnf g `seq` rnf p
+
+-- | A product of exactly two fields, both public, with no invariant relating
+-- them: every 'Coord cs' is a valid focus by construction.
+_FocusedGrid :: Iso (FocusedGrid cs a) (FocusedGrid cs b) (Grid cs a, Coord cs) (Grid cs b, Coord cs)
+_FocusedGrid = iso (\(FocusedGrid g p) -> (g, p)) (uncurry FocusedGrid)
+
+-- | The focus alone, the fourth of the get/set/modify operations on it
+-- alongside 'pos'/'seek'/'seeks' -- and the one that composes.
+focus :: Lens' (FocusedGrid cs a) (Coord cs)
+focus = _FocusedGrid . _2
+
+-- | The grid alone, focus untouched. Unlike 'asGrid', this permits changing
+-- the cell type.
+unfocused :: Lens (FocusedGrid cs a) (FocusedGrid cs b) (Grid cs a) (Grid cs b)
+unfocused = _FocusedGrid . _1
 
 instance ( AllSizedKnown cs
          , IsCoordList cs

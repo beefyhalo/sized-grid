@@ -386,6 +386,36 @@ main =
              comonadLaws @(FocusedGrid '[ Periodic 3, Periodic 3])
            , lawsToTest $
              comonadLaws @(FocusedGrid '[ Clamped 2, Periodic 3])
+           , isoLaws
+               "_FocusedGrid"
+               (_FocusedGrid ::
+                  Iso'
+                    (FocusedGrid '[ Periodic 10, Periodic 11] Int)
+                    (Grid '[ Periodic 10, Periodic 11] Int, Coord '[ Periodic 10, Periodic 11]))
+           , lensLaws
+               "focus"
+               (focus ::
+                  Lens'
+                    (FocusedGrid '[ Periodic 10, Periodic 11] Int)
+                    (Coord '[ Periodic 10, Periodic 11]))
+           , lensLaws
+               "unfocused"
+               (unfocused ::
+                  Lens'
+                    (FocusedGrid '[ Periodic 10, Periodic 11] Int)
+                    (Grid '[ Periodic 10, Periodic 11] Int))
+           , lensLaws
+               "asGrid on FocusedGrid"
+               (asGrid ::
+                  Lens'
+                    (FocusedGrid '[ Periodic 10, Periodic 11] Int)
+                    (Grid '[ Periodic 10, Periodic 11] Int))
+           , lensLaws
+               "asGrid on Grid"
+               (asGrid ::
+                  Lens'
+                    (Grid '[ Periodic 10, Periodic 11] Int)
+                    (Grid '[ Periodic 10, Periodic 11] Int))
            ]
        , shrinkTests
        , stencilTests

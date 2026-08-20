@@ -20,6 +20,7 @@ module Test.Utils
   , affineSpaceLaws
   , traversalLaws
   , isoLaws
+  , lensLaws
   , isCoordLaws
   , comonadLaws
   , representableLaws
@@ -305,6 +306,25 @@ isoLaws name i =
       , testProperty ("view " ++ name ++ " . review " ++ name ++ " == id") $
         \a -> there (back a) === a
       ]
+
+-- | The three lens laws: get-put, put-get and put-put.
+lensLaws ::
+     (Eq s, Show s, Arbitrary s, Eq a, Show a, Arbitrary a)
+  => String -- ^ The lens's name, used to build the test labels.
+  -> Lens' s a
+  -> TestTree
+lensLaws name l =
+  testGroup
+    (name ++ " is a lens")
+    [ testProperty ("set " ++ name ++ " (view " ++ name ++ " s) s == s") $
+      \s -> set l (view l s) s === s
+    , testProperty ("view " ++ name ++ " (set " ++ name ++ " a s) == a") $
+      \s a -> view l (set l a s) === a
+    , testProperty
+        ("set " ++ name ++
+         " a2 (set " ++ name ++ " a1 s) == set " ++ name ++ " a2 s") $
+      \s a1 a2 -> set l a2 (set l a1 s) === set l a2 s
+    ]
 
 -- | The laws of the coordinate abstraction itself. If 'asOrdinal''s two
 -- directions disagree, a coord silently reads the wrong cell, everywhere.
