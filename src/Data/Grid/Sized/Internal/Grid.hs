@@ -93,6 +93,41 @@ deriving newtype instance Show1 v => Show1 (GridOf v cs)
 
 deriving newtype instance Functor v => Functor (GridOf v cs)
 
+-- | Derived, and deliberately so. @GeneralizedNewtypeDeriving@ coerces @v@'s
+-- whole dictionary, so every method @v@ overrides comes across with it, and
+-- `Data.Vector`'s `Foldable` overrides @foldr@, @foldl@, @foldr'@, @foldl'@,
+-- @toList@, @length@, @null@, @elem@, @maximum@, @minimum@, @sum@ and
+-- @product@ -- the reducing four as @Bundle.foldl'@\/@Bundle.foldl1'@ over the
+-- stream, already strict. A grid inherits all of it. (Checked against
+-- vector-0.13.2.0, inside the @>=0.13 && <0.14@ bound, rather than assumed.)
+--
+-- sized-grid-adr.10 proposed writing this instance by hand to fix two things.
+-- Neither was broken, and the second cannot be fixed at any acceptable price:
+--
+--   1. __The strict-fold overrides.__ @sum@ over a 90,000-cell boxed
+--      @Grid '[Clamped 300, Clamped 300] Int@ allocates 1,128 bytes -- the
+--      same as `foldlGrid'` on the same grid, where a @foldl@ thunk chain
+--      would be about 2.9 MB. There is no thunk chain to remove. adr.10's
+--      evidence for one was the @mapGrid then sum 300x300@ benchmark reading
+--      slower than @foldlGrid' 300x300@, but that benchmark sums nothing:
+--      its body is @nf (mapGrid (+ 1))@, which builds and deep-forces a whole
+--      second 90,000-cell boxed grid (sized-grid-iiah).
+--   2. __@length@ and @null@ as compile-time constants.__ Both are already
+--      /O(1)/. At @-O2@ and a concrete axis list, @length@ is one field
+--      unpack -- @case v of Vector _ n _ -> I# n@ -- and @null@ is that plus
+--      a comparison against @0@. The literal would save the unpack.
+--
+--      It is not available anyway. @length _ = coordSpaceSize \@cs@ needs
+--      `IsCoordList cs` on the /instance head/, since a method cannot acquire
+--      a constraint of its own; `Foldable` is a superclass of `Traversable`,
+--      `FoldableWithIndex` and `TraversableWithIndex`, so it spreads to all
+--      four instances and from there to every call site of every method of
+--      any of them. Tried, and it reaches out of the library: @randomGrid =
+--      sequence $ pure getRandom@ in @ising-example@ needs only
+--      `AllSizedKnown cs` today and would have to carry `IsCoordList cs` too,
+--      so that a @length@ it never calls could be a literal. sized-grid-o9s
+--      had just finished taking `AllSizedKnown` off `Apply` and `Bind`;
+--      this would push a constraint back the other way to buy nothing.
 deriving newtype instance Foldable v => Foldable (GridOf v cs)
 
 -- | Written by hand: @GeneralizedNewtypeDeriving@ can't coerce under the
