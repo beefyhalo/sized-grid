@@ -31,7 +31,7 @@ import           Data.Proxy
 import           GHC.TypeLits
 import           Test.QuickCheck       (Arbitrary (..), Property, property,
                                         (.&&.), (===))
-import           Test.QuickCheck.Classes (applicativeLaws,
+import           Test.QuickCheck.Classes (applicativeLaws, applyLaws,
                                           commutativeMonoidLaws, enumLaws,
                                           eqLaws, foldableLaws, functorLaws,
                                           genericLaws, jsonLaws, monadLaws,
@@ -348,7 +348,9 @@ main =
              map
                lawsToTest
                [ functorLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , applyLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                , applicativeLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , bindLaws @(Grid '[ Periodic 10, Periodic 11])
                , monadLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                , foldableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                , traversableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))

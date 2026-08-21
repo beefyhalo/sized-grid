@@ -60,6 +60,7 @@ import           Data.Aeson
 import           Data.Aeson.Types              (Parser)
 import           Data.Constraint
 import           Data.Distributive
+import           Data.Functor.Bind             (Apply (..), Bind (..))
 import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Kind                     (Type)
@@ -244,6 +245,21 @@ scanl1Grid :: VG.Vector v a => (a -> a -> a) -> GridOf v cs a -> GridOf v cs a
 scanl1Grid f (Grid v) = Grid (VG.scanl1' f v)
 {-# INLINE scanl1Grid #-}
 
+-- | `AllSizedKnown` is `Applicative`'s cost, not `Apply`'s: it is only there
+-- for `pure`, which has to materialise a vector of the right length out of
+-- nothing. '(<.>)' is a zipWith and needs none of that -- so a grid
+-- polymorphic in @cs@ with no `KnownNat` evidence on every axis can still be
+-- `Apply`\'d, where it cannot be `Applicative`\'d (sized-grid-o9s).
+instance IsCoordList cs => Apply (Grid cs) where
+  (<.>) = zipWithGrid ($)
+
+-- | As 'Apply' above: `Monad`\'s `AllSizedKnown` comes from `Representable`'s
+-- `index`, not from what a bind actually needs. `indexGrid` itself takes only
+-- `IsCoordList` (see its haddock), so `Bind` drops the constraint `Monad`
+-- cannot.
+instance IsCoordList cs => Bind (Grid cs) where
+  g >>- f = imap (\p a -> indexGrid (f a) p) g
+
 -- | Boxed only, and necessarily so: `pure` must produce a grid of /any/ element
 -- type, which no unboxed vector can hold. 'tabulateGrid' is the unboxed
 -- counterpart for the cases that have a concrete element type in hand.
@@ -252,9 +268,10 @@ instance AllSizedKnown cs => Applicative (Grid cs) where
         Grid . V.replicate (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
     Grid fs <*> Grid as = Grid $ V.zipWith ($) fs as
 
+-- | Defined via '(>>-)' so the two cannot drift.
 instance (AllSizedKnown cs, IsCoordList cs) =>
          Monad (Grid cs) where
-  g >>= f = imap (\p a -> f a `index` p) g
+  g >>= f = g >>- f
 
 instance (AllSizedKnown cs, IsCoordList cs) =>
          Distributive (Grid cs) where

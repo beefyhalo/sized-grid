@@ -26,6 +26,7 @@ module Test.Utils
   , comonadLaws
   , representableLaws
   , distributiveLaws
+  , bindLaws
   , lawsToTest
   ) where
 
@@ -37,11 +38,14 @@ import           Data.Grid.Sized.Ordinal
 import           Test.Arbitrary        ()
 
 import           Control.Comonad
-import           Control.Lens          hiding (index)
+-- '(<.>)' hidden: 'Data.Functor.Bind''s is wanted in 'bindLaws', not lens's
+-- indexed-traversal composition of the same name.
+import           Control.Lens          hiding (index, (<.>))
 import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Distributive
+import           Data.Functor.Bind      (Apply (..), Bind (..))
 import           Data.Functor.Classes
 import           Data.Functor.Compose
 import           Data.Group             (Abelian, Group (..))
@@ -290,6 +294,38 @@ distributiveLaws =
         , ("distribute == collect id", property distributeIsCollectId)
         , ("collect f == distribute . fmap f", property collectIsDistributeFmap)
         , ("distribute . Identity == fmap Identity", property identityLaw)
+        ]
+
+-- | The 'Data.Functor.Bind.Bind' laws. 'quickcheck-classes' checks 'Apply'
+-- ('applyLaws'), but has no equivalent for 'Bind', so this is hand-rolled the
+-- way 'comonadLaws' and 'representableLaws' above are.
+--
+-- Associativity is the substantive law; the other two are really checks that
+-- 'Apply' and 'Bind' agree, which sized-grid-o9s made a real question by
+-- giving 'Grid' independent instances of both rather than deriving one from
+-- the other.
+bindLaws ::
+     forall f.
+     ( Bind f
+     , forall a. Arbitrary a => Arbitrary (f a)
+     , forall a. Show a => Show (f a)
+     , forall a. Eq a => Eq (f a)
+     )
+  => Laws
+bindLaws =
+  let associativity ::
+           f Int -> Fun Int (f Int) -> Fun Int (f Int) -> Property
+      associativity m (applyFun -> f) (applyFun -> g) =
+        ((m >>- f) >>- g) === (m >>- (\x -> f x >>- g))
+      joinIsBindId :: f (f Int) -> Property
+      joinIsBindId m = join m === (m >>- id)
+      apIsBind :: f (Fun Int Int) -> f Int -> Property
+      apIsBind (fmap applyFun -> fs) xs = (fs <.> xs) === (fs >>- (<$> xs))
+   in Laws
+        "Bind"
+        [ ("Associativity", property associativity)
+        , ("join == (>>- id)", property joinIsBindId)
+        , ("(<.>) == (>>- (<$>))", property apIsBind)
         ]
 
 -- | The two round trips of an 'Control.Lens.Iso''.

@@ -61,7 +61,8 @@ There is a deliberately small number of functions that work over `Grid`: we inst
 
 * `Functor`: Update all values in the grid with the same function
 * `Applicative`: As the size of the grid is statically known, `pure` just creates a grid with the same element at each point. `<*>` combines the grids point wise.
-* `Monad`: I'm not sure if there is much of a need for this, but an instance exists.  
+* `Monad`: `>>=` rebinds each cell against the value at that same position in the result of applying the function.
+* `Apply` and `Bind`, from `semigroupoids`: `<.>` and `>>-` do the same point-wise combination and per-cell rebind as `<*>` and `>>=`, but need no axis size known at all — only that `cs` is a coordinate list. Useful when a caller is polymorphic in `cs` with no `KnownNat` evidence to hand; `pure` is what actually needs every axis's size, not applying or binding.
 * `Foldable`: Combine each element of the grid
 * `Traverse`: Apply an applicative function over the grid
 * `IndexedFunctor`, `IndexedFoldable` and `IndexedTraversable`: Like `Functor`, `Foldable` and `Traversable`, but with access to the position at each point. These are from the lens package

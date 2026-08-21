@@ -102,6 +102,25 @@ part of this release. The dated 0.1.x sections beneath those are upstream
   contiguous axis, is `mapLowerDim . scanl1Grid` and costs the same as
   writing that out.
 
+* New: `Apply` and `Bind` instances for `Grid`, from `semigroupoids`
+  (sized-grid-o9s).
+
+  A prior survey (sized-grid-90f) judged these "low value" as mere synonyms
+  for `Applicative` and `Monad`. That undersold them: `AllSizedKnown` is
+  `Applicative`'s cost, not `Apply`'s — it is there only for `pure`, which
+  materialises a vector of the right length out of nothing, while `(<.>)` is
+  a `zipWith` and needs none of it. `Monad` carries the same constraint only
+  because its `(>>=)` went through `Representable`'s `index`, whose instance
+  context has it; `indexGrid` itself needs only `IsCoordList`. So `Apply` and
+  `Bind` are a real capability `Applicative`/`Monad` cannot offer: code
+  polymorphic in a grid's axis list with no `KnownNat` evidence on every axis
+  can still combine and rebind grids with `(<.>)` and `(>>-)`.
+
+  `Monad`'s `(>>=)` is now defined as `(>>-)`, so the two cannot drift apart.
+  `semigroupoids` was already in the build plan, pulled in transitively by
+  `adjunctions` and `lens`, so this costs nothing new to the dependency
+  closure — only an explicit direct dependency to import it from.
+
 * `Grid` gains an unboxed sibling, and the two share one implementation
   (sized-grid-up6).
 
