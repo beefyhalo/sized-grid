@@ -5,6 +5,7 @@ module Main
 import           Data.Grid.Sized
 
 import           Test.Arbitrary ()
+import           Test.Axis
 import           Test.Boundary
 import           Test.CompileFail
 import           Test.Focused
@@ -448,6 +449,7 @@ main =
                     (Grid '[ Periodic 10, Periodic 11] Int)
                     (Grid '[ Periodic 10, Periodic 11] Int))
            ]
+       , axisTests
        , shrinkTests
        , stencilTests
        , tilingTests

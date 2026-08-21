@@ -64,6 +64,7 @@ import           Data.Kind                     (Type)
 import           Data.Proxy                    (Proxy (..))
 import qualified Data.Vector                   as V
 import qualified Data.Vector.Generic           as VG
+import qualified Data.Vector.Generic.Mutable   as VGM
 import qualified GHC.Generics                  as GHC
 import           GHC.TypeLits
 import qualified GHC.TypeLits                  as GHC
@@ -689,26 +690,15 @@ zipLowerDim ::
 zipLowerDim f = getZipList . mapLowerDim (ZipList . f)
 {-# INLINABLE zipLowerDim #-}
 
--- | Transpose a flat, row-major vector holding an @rows × cols@ matrix into
--- its @cols × rows@ transpose. Pure index arithmetic -- unlike 'transposeGrid'
--- this needs no coordinate machinery, because by the time 'mapAxis' reaches
--- for it the axis being moved has already been reduced to a size, not a
--- coordinate type.
+-- | The geometry of one axis inside a flat row-major vector: how many
+-- elements the axis has, and how far apart consecutive ones are.
 --
--- 'VG.unsafeIndex': @i@ ranges over @[0, rows * cols)@ and @(c, r)@ is its
--- @'divMod' rows@, so @r < rows@ and @c < cols@, and @r * cols + c@ is
--- therefore always in @[0, rows * cols)@ too. The bounds check 'VG.!' would
--- do can never fire.
-transposeFlat :: VG.Vector v a => Int -> Int -> v a -> v a
-transposeFlat rows cols v =
-    VG.generate (rows * cols) $ \i ->
-        let (c, r) = i `divMod` rows
-         in VG.unsafeIndex v (r * cols + c)
-{-# INLINABLE transposeFlat #-}
-
--- | The recursion behind 'mapAxis' and 'scanAxis': peel outer axes one at a
--- time, exactly as 'mapLowerDim' does, until the target axis @n@ is
--- outermost, then hand off to 'mapAxisHere'.
+-- Row-major means the axes below @n@ vary fastest, so the elements of a
+-- fibre along axis @n@ sit @'MaxCoordSize'@-of-the-axes-below apart, and
+-- @'MaxCoordSize'@ of the axes at @n@ and below is the block that one
+-- combination of the axes /above/ @n@ occupies. Both are products of
+-- statically known sizes, so at a concrete axis list this pair is two
+-- literals.
 --
 -- @c@, the axis type 'mapAxis' hands its function, is a plain (fundep-determined)
 -- class parameter rather than an associated type family. An associated type
@@ -722,56 +712,152 @@ transposeFlat rows cols v =
 -- recursive instance forwards the very same @c@ -- so it is what determines
 -- @c@ here instead.
 class MapAxis (n :: Nat) (cs :: [Type]) (c :: Type) | n cs -> c where
-  -- | Apply a length-preserving function to every fibre along axis @n@,
-  -- independently for each combination of the other axes. See 'mapAxis'.
-  mapAxisImpl ::
-       (VG.Vector v x, VG.Vector v y)
-    => (GridOf v '[c] x -> GridOf v '[c] y)
-    -> GridOf v cs x
-    -> GridOf v cs y
+  -- | The size of axis @n@ and its stride, in that order. See 'mapAxis'.
+  --
+  -- This is all the recursion produces now. It used to carry the whole
+  -- operation -- a @mapAxisImpl@ that peeled one axis per level with
+  -- 'mapLowerDim', splitting and re-concatenating the vector at every one
+  -- (sized-grid-adr.5).
+  axisSizeAndStride :: (Int, Int)
 
-instance {-# OVERLAPPING #-} AllSizedKnown as => MapAxis 0 (c ': as) c where
-  mapAxisImpl = mapAxisHere
+-- | The target axis is the head, so the axes below it are all of @as@.
+instance {-# OVERLAPPING #-} (KnownNat n, AllSizedKnown as) =>
+         MapAxis 0 (c n ': as) (c n) where
+  axisSizeAndStride =
+    ( fromIntegral (GHC.natVal (Proxy @n))
+    , fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as))))
+  {-# INLINE axisSizeAndStride #-}
 
-instance {-# OVERLAPPABLE #-}
-         (MapAxis (n - 1) as c, AllSizedKnown as) =>
-         MapAxis n (c0 ': as) c where
-  mapAxisImpl f = runIdentity . mapLowerDim (Identity . mapAxisImpl @(n - 1) @as @c f)
+-- | Peeling an axis off the front changes neither the target axis's size nor
+-- its stride: both are products over the axes at or below it, and the one
+-- being dropped is above.
+instance {-# OVERLAPPABLE #-} MapAxis (n - 1) as c => MapAxis n (c0 ': as) c where
+  axisSizeAndStride = axisSizeAndStride @(n - 1) @as @c
+  {-# INLINE axisSizeAndStride #-}
 
--- | The base case 'MapAxis' recurses down to: the target axis @c@ is
--- outermost, so every other axis, @as@, forms one contiguous block per @c@
--- value -- the same layout 'transposeGrid' swaps for a fixed pair of axes,
--- generalised here to swapping @c@ against @as@ taken as a single unit.
+-- | The engine under 'mapAxis': apply @f@ to every fibre of a flat row-major
+-- vector along an axis of the given size and stride.
 --
--- Transposing brings @c@ contiguous, turning each of the @'MaxCoordSize' as@
--- fibres into one chunk of @'splitVectorBySize'@; @f@ runs on each in turn,
--- and a second transpose undoes the first.
+-- A fibre is @axisSize@ elements @stride@ apart, and the fibres partition the
+-- vector: the ones starting in @[b, b + stride)@ cover the block
+-- @[b, b + axisSize * stride)@ exactly, and the blocks tile the vector. So
+-- every element is read once, written once, and belongs to one call of @f@.
 --
--- @as ~ '[]@ (@c@ is already the sole axis, the case every call this
--- recursion bottoms out at eventually gets to) skips the transpose rather
--- than pay for two no-op copies of the whole fibre: measured on the
--- 300x300 summed-area build, going through the general path regardless
--- cost 62.7 ms against 29 ms for the equivalent @'mapLowerDim' .
--- 'scanl1Grid'@, entirely in the two @'transposeFlat'@ copies and the
--- one-chunk @'splitVectorBySize'@\/@'VG.concat'@ around them, all three
--- provably no-ops whenever @'MaxCoordSize' as@ is @1@.
-mapAxisHere ::
-     forall v c as x y. (VG.Vector v x, VG.Vector v y, AllSizedKnown as)
-  => (GridOf v '[c] x -> GridOf v '[c] y)
-  -> GridOf v (c ': as) x
-  -> GridOf v (c ': as) y
-mapAxisHere f (Grid v) =
-    let restSize = fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))
-     in if restSize == 1
-          then Grid (unGrid (f (Grid v)))
-          else let axisSize = VG.length v `div` restSize
-                in Grid $
-                   transposeFlat restSize axisSize $
-                   VG.concat $
-                   map (unGrid . f . Grid) $
-                   splitVectorBySize axisSize $
-                   transposeFlat axisSize restSize v
-{-# INLINABLE mapAxisHere #-}
+-- Gather-apply-scatter, rather than the two whole-grid transposes this used
+-- to be (sized-grid-adr.5). @f@ takes a @'GridOf' v '[c] x@, which is a
+-- contiguous vector, so the gather cannot be avoided while that is its type
+-- -- but it copies one fibre at a time, where transposing copied the whole
+-- grid to bring the fibres contiguous, copied it again to reassemble, and
+-- copied it a third time to put the axes back.
+--
+-- @stride == 1@ is the innermost axis, whose fibres are already contiguous.
+-- It skips the gather /and/ the mutable scatter: the fibres are slices,
+-- 'VG.concat' puts the results back in order, and the whole operation is one
+-- allocation.
+--
+-- Unsafe indexing throughout, and the bounds are the ones above: @base@ runs
+-- over @[0, len)@ with @base + (axisSize - 1) * stride < len@ by
+-- construction, so no @unsafeIndex@, @unsafeRead@ or @unsafeWrite@ here can
+-- leave the vector.
+--
+-- @INLINE@, not @INLINABLE@, and the difference is load-bearing -- see
+-- 'scanAxisStrided', where it is measured.
+mapAxisStrided ::
+     forall v x y. (VG.Vector v x, VG.Vector v y)
+  => Int -- ^ The axis's size: how many elements a fibre has.
+  -> Int -- ^ The axis's stride: how far apart consecutive elements of a fibre are.
+  -> (v x -> v y)
+  -> v x
+  -> v y
+mapAxisStrided axisSize stride f v
+  | stride == 1 && axisSize > 0 = VG.concat (map f (splitVectorBySize axisSize v))
+  | otherwise =
+      VG.create $ do
+        out <- VGM.unsafeNew len
+        let scatterFrom base =
+              VG.imapM_ (\k -> VGM.unsafeWrite out (base + k * stride)) $
+              f (VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride)))
+            fibresOf blockStart base
+              | base >= blockStart + stride = pure ()
+              | otherwise = scatterFrom base >> fibresOf blockStart (base + 1)
+            blocks blockStart
+              | blockStart >= len = pure ()
+              | otherwise =
+                  fibresOf blockStart blockStart >> blocks (blockStart + block)
+        blocks 0
+        pure out
+  where
+    len = VG.length v
+    block = axisSize * stride
+{-# INLINE mapAxisStrided #-}
+
+-- | 'scanAxis''s engine, and the reason it does not go through
+-- 'mapAxisStrided': a prefix scan needs no fibre in hand, only the element
+-- one stride back, so it can be done in a single in-order pass with the
+-- result vector as its own accumulator and nothing else allocated
+-- (sized-grid-adr.5).
+--
+-- The first @stride@ elements of each block are the fibres' first elements
+-- and copy across unchanged; every later element combines the one a stride
+-- behind it -- already written, already forced -- with its own. Both the
+-- reads and the writes run straight up the vector, unlike the strided walk
+-- 'mapAxisStrided' has to make.
+--
+-- Walking whole fibres instead, one at a time with the running total in an
+-- argument rather than read back out of @out@, was written and measured
+-- first: it is the obvious shape and it is slower, 679 us against 575 us
+-- boxed and 254 us against 68 us unboxed on @'scanAxis' 0@ over 300x300.
+-- The accumulator argument saves a read; taking the whole grid in
+-- @stride@-sized strides costs more than the read does.
+--
+-- Strict in the accumulator, for the reason 'scanl1Grid' is: a running total
+-- written unforced into a boxed vector leaves a chain of thunks as long as
+-- the axis.
+--
+-- @INLINE@ rather than @INLINABLE@, and it is worth 2.1x boxed and 8.7x
+-- unboxed on the same benchmark. @f@ is an argument, so with the loop left
+-- behind a call it stays unknown, every combined value is a boxed thunk
+-- passed to it, and the pass allocates a word per cell. Inlined at a call
+-- site where @f@ is @(+)@, the accumulator unboxes and the whole scan
+-- allocates its result and nothing else: 703 KB for 90,000 'Int's.
+scanAxisStrided ::
+     forall v a. VG.Vector v a
+  => Int -- ^ The axis's size: how many elements a fibre has.
+  -> Int -- ^ The axis's stride: how far apart consecutive elements of a fibre are.
+  -> (a -> a -> a)
+  -> v a
+  -> v a
+scanAxisStrided axisSize stride f v
+  | stride == 1 && axisSize > 0 =
+      VG.concat (map (VG.scanl1' f) (splitVectorBySize axisSize v))
+  | otherwise =
+      VG.create $ do
+        out <- VGM.unsafeNew len
+        let heads blockStart i
+              | i >= blockStart + stride = pure ()
+              | otherwise = do
+                  let !a0 = VG.unsafeIndex v i
+                  VGM.unsafeWrite out i a0
+                  heads blockStart (i + 1)
+            rest blockEnd i
+              | i >= blockEnd = pure ()
+              | otherwise = do
+                  prev <- VGM.unsafeRead out (i - stride)
+                  let !acc = f prev (VG.unsafeIndex v i)
+                  VGM.unsafeWrite out i acc
+                  rest blockEnd (i + 1)
+            blocks blockStart
+              | blockStart >= len = pure ()
+              | otherwise = do
+                  heads blockStart blockStart
+                  rest (blockStart + block) (blockStart + stride)
+                  blocks (blockStart + block)
+        blocks 0
+        pure out
+  where
+    len = VG.length v
+    block = axisSize * stride
+{-# INLINE scanAxisStrided #-}
 
 -- | Apply a length-preserving function to one named axis of a grid,
 -- independently for every combination of the others -- 'mapLowerDim'
@@ -790,8 +876,10 @@ mapAxis ::
   => (GridOf v '[c] x -> GridOf v '[c] y)
   -> GridOf v cs x
   -> GridOf v cs y
-mapAxis n = mapAxisImpl @n
-{-# INLINABLE mapAxis #-}
+mapAxis n f (Grid v) =
+    let (axisSize, stride) = axisSizeAndStride @n @cs @c
+     in Grid (mapAxisStrided axisSize stride (unGrid . f . Grid) v)
+{-# INLINE mapAxis #-}
 
 -- | 'mapAxis' as an optic: a 'Setter' whose foci are the fibres along axis
 -- @n@, one for every combination of the other axes.
@@ -803,16 +891,19 @@ mapAxis n = mapAxisImpl @n
 --
 -- > over (mapped . axis 0) (scanl1Grid (+)) gridsInSomeFunctor
 --
--- 'scanAxis' is this optic at one particular fibre transform:
--- @'scanAxis' n f = 'over' ('axis' n) ('scanl1Grid' f)@.
+-- @'scanAxis' n f@ agrees with @'over' ('axis' n) ('scanl1Grid' f)@ on every
+-- grid, and is tested against it, but is not defined that way: a scan needs
+-- no fibre in hand, so it walks the axis directly (see 'scanAxisStrided').
 --
--- A 'Setter' and no more, for now. The fibres along one axis are disjoint and
--- cover the grid, so a lawful 'Traversal' does exist -- it would additionally
--- read the fibres out ('Control.Lens.toListOf') and admit fallible per-fibre
--- transforms ('Control.Lens.traverseOf'). Writing it means giving
--- 'mapAxisImpl' an 'Applicative' version, and the body that would be
--- generalised, @mapAxisHere@, is the one sized-grid-adr.5 is about to
--- replace. The 'Traversal' belongs to that rewrite, not ahead of it.
+-- A 'Setter' and no more. The fibres along one axis are disjoint and cover
+-- the grid, so a lawful 'Traversal' does exist -- it would additionally read
+-- the fibres out ('Control.Lens.toListOf') and admit fallible per-fibre
+-- transforms ('Control.Lens.traverseOf'). What stands in the way is no
+-- longer the implementation, which sized-grid-adr.5 has now settled, but
+-- what the 'Traversal' would cost the 'Setter': an 'Applicative'
+-- 'mapAxisStrided' has to hold every fibre at once to sequence the effects,
+-- where the loop below holds one, so @'over' ('axis' n)@ would pay for a
+-- generality it never uses. See sized-grid-0s1d.
 axis ::
      forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
   => Setter (GridOf v cs x) (GridOf v cs y) (GridOf v '[c] x) (GridOf v '[c] y)
@@ -828,13 +919,23 @@ axis n = sets (mapAxis n)
 -- transpose trick 'mapAxis' retires:
 --
 -- > sat = scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid power
+--
+-- Equal to @'mapAxis' n ('scanl1Grid' f)@, which is how it used to be
+-- written, but not built from it: a scan reads one element back rather than
+-- a whole fibre, which is a single in-order pass over the grid and one
+-- allocation (sized-grid-adr.5). On that summed-area build it is now 1.6x
+-- the hand-fused @'transposeGrid'@ pipeline boxed and 2.2x it unboxed,
+-- where before the rewrite it was 2.8x and 3.2x /slower/ than the same
+-- pipeline.
 scanAxis ::
      forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
   => (a -> a -> a)
   -> GridOf v cs a
   -> GridOf v cs a
-scanAxis n f = mapAxis n (scanl1Grid f)
-{-# INLINABLE scanAxis #-}
+scanAxis n f (Grid v) =
+    let (axisSize, stride) = axisSizeAndStride @n @cs @c
+     in Grid (scanAxisStrided axisSize stride f v)
+{-# INLINE scanAxis #-}
 
 -- | Taking a window out of a grid, one axis at a time.
 --

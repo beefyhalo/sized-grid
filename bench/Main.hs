@@ -361,6 +361,13 @@ power serial ((fromEnum -> y) :| (fromEnum -> x) :| _) =
     rack = x + 10
 
 
+-- | The hand-rolled equivalent of @'scanAxis' 0@: rotate the grid so the
+-- axis is outermost, prefix each row, rotate back. This is what a caller
+-- writes when the library does not reach the axis for them, and what
+-- 'scanAxis' has to beat rather than merely match (sized-grid-adr.5).
+rotatedPrefix :: VG.Vector v Int => GridOf v Big Int -> GridOf v Big Int
+rotatedPrefix = transposeGrid . rowPrefix . transposeGrid
+
 -- | Summed-area table: prefix along the rows, transpose, prefix again,
 -- transpose back. Four whole-grid passes, which is the shape unboxing helps.
 satBuild :: VG.Vector v Int => Int -> GridOf v Big Int
@@ -607,6 +614,31 @@ main = do
                 nf (\s -> satBuildAxis s :: Grid Big Int) 18
               , bench "summed-area build (scanAxis) 300x300 unboxed" $
                 nf (\s -> satBuildAxis s :: UGrid Big Int) 18
+                -- sized-grid-adr.5. The summed-area pair above measures
+                -- 'scanAxis' with 'tabulateGrid' in front of it, which is
+                -- most of the time; these four measure the axis walk on a
+                -- grid that already exists. Axis 1 is the innermost, whose
+                -- fibres are contiguous; axis 0 is the strided one, and the
+                -- 'rotatedPrefix' rows below are what a caller writes
+                -- instead when the combinator is not worth reaching for.
+              , env (pure bigGrid) $ \g ->
+                bench "scanAxis 0 300x300           boxed" $ nf (scanAxis 0 (+)) g
+              , env (pure ubigGrid) $ \g ->
+                bench "scanAxis 0 300x300         unboxed" $ nf (scanAxis 0 (+)) g
+              , env (pure bigGrid) $ \g ->
+                bench "transpose-prefix-transpose   boxed" $ nf rotatedPrefix g
+              , env (pure ubigGrid) $ \g ->
+                bench "transpose-prefix-transpose unboxed" $ nf rotatedPrefix g
+              , env (pure bigGrid) $ \g ->
+                bench "scanAxis 1 300x300           boxed" $ nf (scanAxis 1 (+)) g
+              , env (pure ubigGrid) $ \g ->
+                bench "scanAxis 1 300x300         unboxed" $ nf (scanAxis 1 (+)) g
+              , env (pure bigGrid) $ \g ->
+                bench "mapAxis 0 300x300            boxed" $
+                nf (mapAxis 0 (mapGrid (+ 1))) g
+              , env (pure ubigGrid) $ \g ->
+                bench "mapAxis 0 300x300          unboxed" $
+                nf (mapAxis 0 (mapGrid (+ 1))) g
                 -- The pair that reports no difference, deliberately kept.
               , bench "indexGrid x90000           boxed" $
                 whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid

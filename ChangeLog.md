@@ -87,16 +87,20 @@ part of this release. The dated 0.1.x sections beneath those are upstream
   (+)` rather than a double `transposeGrid`.
 
   The axis position is a `Nat`, resolved through an internal `MapAxis`
-  class whose recursion peels outer axes one at a time (as `mapLowerDim`
-  does) until the target axis is outermost, then transposes it against
-  everything else taken as a single block and chunks the result — the same
-  layout `transposeGrid` swaps for a fixed pair, generalised to swapping one
-  axis against the rest. Measured on the 300x300 summed-area build: the
-  inner axis, already contiguous, costs nothing extra over the hand-written
-  `mapLowerDim . scanl1Grid`; the outer axis, which genuinely transposes,
-  measured ~25% slower on the boxed grid (the generic path allocates a whole
-  extra transposed copy that the specialised pipeline does not) and is
-  unaffected on the unboxed one.
+  class. In a row-major vector an axis is two numbers — how many elements a
+  fibre along it has, and how far apart they are — and both are products of
+  sizes the type already knows, so that is all the class recursion produces.
+  `mapAxis` gathers each fibre, applies the function and scatters the result
+  back; `scanAxis` does not gather at all, since a prefix scan needs only the
+  element one stride behind, so it is a single in-order pass over the grid
+  that allocates its result and nothing else (sized-grid-adr.5).
+
+  Measured on 300x300, against the hand-fused `transposeGrid`-based pipeline
+  a caller writes when the combinator is not worth reaching for: `scanAxis 0`
+  is 2.7x that pipeline boxed and 9.4x it unboxed, and the summed-area build
+  it was written for is 1.6x boxed and 2.2x unboxed. `scanAxis 1`, the
+  contiguous axis, is `mapLowerDim . scanl1Grid` and costs the same as
+  writing that out.
 
 * `Grid` gains an unboxed sibling, and the two share one implementation
   (sized-grid-up6).
