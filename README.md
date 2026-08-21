@@ -141,9 +141,8 @@ applyRule ::
     => Rule
     -> grid cs TileState
     -> grid cs TileState
-applyRule rule = over asFocusedGrid $ 
-    extend $ \fg -> rule (extract fg) $ map (\p -> peek p fg) $ 
-        neighbours $ pos fg
+applyRule rule = over asGrid $ focusedGrid . extend step . focusedAtZero where
+    step fg = rule (extract fg) $ map (\p -> peek p fg) $ neighbours $ pos fg
 
 ```
 
