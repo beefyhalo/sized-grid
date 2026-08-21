@@ -9,6 +9,7 @@ module Test.Windows
   ( windowTests
   ) where
 
+import           Control.Lens          (toListOf)
 import           Data.Foldable         (toList)
 import           Data.Maybe            (fromJust)
 import           Data.Grid.Sized
@@ -49,6 +50,14 @@ windowsAreSlices src =
   map toList (gridWindows src :: [Grid '[ Ordinal 3] Int]) ===
   [take 3 (drop n (toList src)) | n <- [0 .. 2]]
 
+-- | 'windows' as a getter agrees with 'gridWindows'. There is no 'over' law
+-- to check here, on purpose: 'windows' is a 'Fold', not a 'Traversal', because
+-- its foci overlap (see the module Haddock on 'Data.Grid.Sized.windows') --
+-- there is no lawful write-back to test.
+windowsIsGridWindows :: Grid '[ Ordinal 5] Int -> Property
+windowsIsGridWindows src =
+  toListOf (windows @(Ordinal 3)) src === (gridWindows @(Ordinal 3) src)
+
 windowTests :: TestTree
 windowTests =
   testGroup
@@ -65,4 +74,5 @@ windowTests =
     , testProperty
         "gridWindows agrees with shrinkGrid, 2D with the second axis fixed"
         windowIsShrinkGrid2D
+    , testProperty "toListOf windows == gridWindows" windowsIsGridWindows
     ]

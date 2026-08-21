@@ -42,7 +42,9 @@ module Data.Grid.Sized.Internal.Grid
     -- * Windows and tiles
   , ShrinkableGrid(..)
   , gridTiles
+  , tiles
   , gridWindows
+  , windows
     -- * Vector helpers
   , splitVectorBySize
   ) where
@@ -666,10 +668,26 @@ mapLowerDim ::
     -> GridOf v (c ': as) x
     -> f (GridOf v (c ': bs) y)
 mapLowerDim f (Grid v) =
-    fmap (Grid . VG.concat) $
-    traverse (fmap unGrid . f . Grid) $
-    splitVectorBySize (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))) v
+    Grid <$>
+    traverseChunks (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))) f v
 {-# INLINABLE mapLowerDim #-}
+
+-- | The engine shared by 'mapLowerDim' and 'tiles': split a flat vector into
+-- equally sized chunks, traverse each chunk as a sub-grid, and concatenate the
+-- results back into one vector. The two callers differ only in how the chunk
+-- size is computed -- @'MaxCoordSize' as@ for 'mapLowerDim', where the chunk
+-- count is fixed by the axis @c@ being peeled off, versus @'MaxCoordSize'
+-- (small ': rest)@ for 'tiles', where the chunk size is fixed and the count
+-- falls out of the vector's length.
+traverseChunks ::
+     forall v x y as bs f. (VG.Vector v x, VG.Vector v y, Applicative f)
+  => Int
+  -> (GridOf v as x -> f (GridOf v bs y))
+  -> v x
+  -> f (v y)
+traverseChunks size f =
+    fmap VG.concat . traverse (fmap unGrid . f . Grid) . splitVectorBySize size
+{-# INLINE traverseChunks #-}
 
 -- | 'mapLowerDim' where @f@ returns many results per sub-grid and they should
 -- be zipped positionally rather than multiplied: the @k@th result is built from
@@ -1031,6 +1049,28 @@ gridTiles (Grid v) =
     in map Grid $ splitVectorBySize size v
 {-# INLINABLE gridTiles #-}
 
+-- | 'gridTiles' as an optic. The @Mod ~ 0@ constraint that makes 'gridTiles'
+-- total is exactly the statement that the tiles are disjoint and exactly
+-- partition the grid, which is the precondition for a lawful 'Traversal':
+-- setting through disjoint, covering foci has only one sensible meaning,
+-- unlike 'gridWindows' (see 'windows'), whose foci overlap.
+--
+-- The write-back concatenates the (possibly modified) tiles in order, which
+-- reproduces the source whenever the traversal is used as a getter -- the
+-- same fact 'gridTiles'\'s own Haddock states for the read-only direction.
+-- It shares its engine with 'mapLowerDim' via 'traverseChunks'.
+tiles :: forall small v big rest a.
+          ( VG.Vector v a
+          , KnownNat (MaxCoordSize (small ': rest))
+          , CoordNat big `Mod` CoordNat small ~ 0
+          )
+       => Traversal' (GridOf v (big ': rest) a) (GridOf v (small ': rest) a)
+tiles f (Grid v) =
+    requiring @(CoordNat big `Mod` CoordNat small ~ 0) $
+    Grid <$>
+    traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))) f v
+{-# INLINABLE tiles #-}
+
 -- | Every overlapping window of size @CoordNat small@ along a grid's outermost
 -- axis, stride 1: an @Ordinal 9@ axis windowed by @Ordinal 3@ gives seven
 -- overlapping windows -- @0..2@, @1..3@, ..., @6..8@ -- not the three disjoint
@@ -1076,3 +1116,27 @@ gridWindows (Grid v) =
        | off <- [0 .. bigSize - smallSize]
        ]
 {-# INLINABLE gridWindows #-}
+
+-- | 'gridWindows' as an optic -- and, on purpose, no more than a 'Fold'.
+--
+-- A window of @Ordinal 3@ over an @Ordinal 9@ axis puts cell 2 in three
+-- overlapping windows (see 'gridWindows'). A 'Traversal'\'s foci must be
+-- disjoint for @'over' l f@ to have a single meaning; here it would not --
+-- @over windows f@ would have to pick which of three writes to cell 2 wins,
+-- and whichever it picked, the 'Traversal' law
+-- @'over' l f . 'over' l g == 'over' l (f . g)@ would fail. So the only
+-- lawful optic over 'gridWindows' is read-only.
+--
+-- Do not be tempted to write this as a 'Traversal' on the grounds that a
+-- caller can be trusted to use it read-only: the failure of the law is
+-- silent, wrong values rather than a type error, which is the one failure
+-- mode this library organises its types against.
+windows :: forall small v big rest a.
+           ( VG.Vector v a
+           , AllSizedKnown rest
+           , KnownNat (CoordNat small)
+           , CoordNat small <= CoordNat big
+           )
+        => Fold (GridOf v (big ': rest) a) (GridOf v (small ': rest) a)
+windows = folding (gridWindows @small)
+{-# INLINABLE windows #-}
