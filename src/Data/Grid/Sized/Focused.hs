@@ -3,6 +3,7 @@ module Data.Grid.Sized.Focused
   , _FocusedGrid
   , focus
   , unfocused
+  , focusedAtZero
   , traceOffset
   , tracePath
   , walkEverywhere
@@ -56,6 +57,10 @@ focus = _FocusedGrid . _2
 -- the cell type.
 unfocused :: Lens (FocusedGrid cs a) (FocusedGrid cs b) (Grid cs a) (Grid cs b)
 unfocused = _FocusedGrid . _1
+
+-- | A grid focused at 'zeroCoord'.
+focusedAtZero :: IsCoordList cs => Grid cs a -> FocusedGrid cs a
+focusedAtZero = (`FocusedGrid` zeroCoord)
 
 instance ( AllSizedKnown cs
          , IsCoordList cs
