@@ -43,14 +43,16 @@ cubeStepBeltCloses =
     testCase
         "cubeStep, followed for 4n steps from any start, returns to that exact start" $
     mapM_
-        (\(face, axis, side, u, v) ->
-             let start = ((faceIndex face, u :| v :| EmptyCoord), Heading axis side)
+        -- @ax@, not @axis@: 'Data.Grid.Sized.axis' is imported unqualified
+        -- above and -Wname-shadowing is an error here.
+        (\(face, ax, side, u, v) ->
+             let start = ((faceIndex face, u :| v :| EmptyCoord), Heading ax side)
                  n = ordinalSize @N
                  got = iterate (uncurry (cubeStep @N)) start !! (4 * n)
-             in assertEqual (show (face, axis, side, u, v)) start got)
-        [ (face, axis, side, u, v)
+             in assertEqual (show (face, ax, side, u, v)) start got)
+        [ (face, ax, side, u, v)
         | face <- allFaces
-        , axis <- allAxes
+        , ax <- allAxes
         , side <- allExtrema
         , u <- [minBound .. maxBound] :: [Ordinal N]
         , v <- [minBound .. maxBound] :: [Ordinal N]

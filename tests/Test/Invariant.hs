@@ -9,6 +9,7 @@ module Test.Invariant
 import           Data.Grid.Sized
 import           Data.Grid.Sized.Unsafe (unsafeGridFromVector)
 
+import           Control.Lens         (over)
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Foldable        (toList)
@@ -240,5 +241,35 @@ invariantTests =
                , [[100, 201], [110, 221], [120, 241]]
                ] :: Maybe (Grid '[ Ordinal 2, Ordinal 3, Ordinal 2] Int))
             (Just (scanAxis 2 (+) twoByThreeByTwo))
+        ]
+      -- The setter laws are in Main; what is checked here is that the optic
+      -- reaches the same fibres the function does, on every axis of a grid
+      -- whose three sizes are distinct.
+    , testGroup
+        "axis is mapAxis wearing an optic"
+        [ testCase "over (axis 0) agrees with mapAxis 0" $
+          assertEqual
+            "outermost axis"
+            (mapAxis 0 (scanl1Grid (+)) twoByThreeByTwo)
+            (over (axis 0) (scanl1Grid (+)) twoByThreeByTwo)
+        , testCase "over (axis 1) agrees with mapAxis 1" $
+          assertEqual
+            "middle axis"
+            (mapAxis 1 (scanl1Grid (+)) twoByThreeByTwo)
+            (over (axis 1) (scanl1Grid (+)) twoByThreeByTwo)
+        , testCase "over (axis 2) agrees with mapAxis 2" $
+          assertEqual
+            "innermost axis"
+            (mapAxis 2 (scanl1Grid (+)) twoByThreeByTwo)
+            (over (axis 2) (scanl1Grid (+)) twoByThreeByTwo)
+        , testCase "scanAxis n f is over (axis n) (scanl1Grid f)" $
+          assertEqual
+            "the identity the Haddock claims"
+            (scanAxis 1 (+) twoByThreeByTwo)
+            (over (axis 1) (scanl1Grid (+)) twoByThreeByTwo)
+        , testCase "over (axis 1) preserves the invariant" $
+          assertWellSized
+            "over (axis 1)"
+            (over (axis 1) (scanl1Grid (+)) twoByThreeByTwo)
         ]
     ]

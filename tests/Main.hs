@@ -359,6 +359,37 @@ main =
                genericLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
              ])
+         -- Two transforms that do not commute with each other, so a
+         -- composition that ran them in the wrong order would show up.
+       , testGroup
+           "axis"
+           [ setterLaws
+               "axis 0"
+               (axis 0 ::
+                  Setter'
+                    (Grid '[ Periodic 10, Periodic 11] Int)
+                    (Grid '[ Periodic 10] Int))
+               ("scanl1Grid (+)", scanl1Grid (+))
+               ("mapGrid (+ 1)", mapGrid (+ 1))
+           , setterLaws
+               "axis 1"
+               (axis 1 ::
+                  Setter'
+                    (Grid '[ Periodic 10, Periodic 11] Int)
+                    (Grid '[ Periodic 11] Int))
+               ("scanl1Grid (+)", scanl1Grid (+))
+               ("mapGrid (+ 1)", mapGrid (+ 1))
+             -- The middle axis of a 3D grid: the case that reaches
+             -- 'mapAxisHere' through the recursive 'MapAxis' instance.
+           , setterLaws
+               "axis 1 of three"
+               (axis 1 ::
+                  Setter'
+                    (Grid '[ Clamped 2, Periodic 3, Clamped 4] Int)
+                    (Grid '[ Periodic 3] Int))
+               ("scanl1Grid (+)", scanl1Grid (+))
+               ("mapGrid (+ 1)", mapGrid (+ 1))
+           ]
        , testGroup
            "Splitting"
            (splitTests

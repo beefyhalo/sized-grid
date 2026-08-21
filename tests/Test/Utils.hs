@@ -21,6 +21,7 @@ module Test.Utils
   , traversalLaws
   , isoLaws
   , lensLaws
+  , setterLaws
   , isCoordLaws
   , comonadLaws
   , representableLaws
@@ -324,6 +325,32 @@ lensLaws name l =
         ("set " ++ name ++
          " a2 (set " ++ name ++ " a1 s) == set " ++ name ++ " a2 s") $
       \s a1 a2 -> set l a2 (set l a1 s) === set l a2 s
+    ]
+
+-- | The two setter laws: 'over' with 'id' changes nothing, and two 'over's
+-- compose into one.
+--
+-- The transforms of the focus are supplied by the caller rather than
+-- generated. A 'Test.QuickCheck.Fun' would need @Function@ and @CoArbitrary@
+-- at the focus type, which the focus of a grid optic -- itself a grid -- does
+-- not have; two concrete transforms that do not commute with each other still
+-- distinguish a setter that composes from one that does not.
+setterLaws ::
+     (Eq s, Show s, Arbitrary s)
+  => String -- ^ The setter's name, used to build the test labels.
+  -> Setter' s a
+  -> (String, a -> a) -- ^ A named transform of the focus.
+  -> (String, a -> a) -- ^ A second one, to compose with the first.
+  -> TestTree
+setterLaws name l (fName, f) (gName, g) =
+  testGroup
+    (name ++ " is a setter")
+    [ testProperty ("over " ++ name ++ " id == id") $ \s -> over l id s === s
+    , testProperty
+        ("over " ++ name ++ " (" ++ fName ++ ") . over " ++ name ++ " (" ++
+         gName ++ ") == over " ++ name ++ " ((" ++ fName ++ ") . (" ++ gName ++
+         "))") $
+      \s -> over l f (over l g s) === over l (f . g) s
     ]
 
 -- | The laws of the coordinate abstraction itself. If 'asOrdinal''s two

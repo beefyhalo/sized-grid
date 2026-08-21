@@ -37,6 +37,7 @@ module Data.Grid.Sized.Internal.Grid
   , zipLowerDim
   , MapAxis(..)
   , mapAxis
+  , axis
   , scanAxis
     -- * Windows and tiles
   , ShrinkableGrid(..)
@@ -782,6 +783,8 @@ mapAxisHere f (Grid v) =
 -- grid to bring it to the front (@transposeGrid . f . transposeGrid@), a
 -- trick that stops working past two dimensions since there is no
 -- 'transposeGrid' for an arbitrary pair of axes.
+--
+-- 'axis' is the same operation as a 'Setter'.
 mapAxis ::
      forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
   => (GridOf v '[c] x -> GridOf v '[c] y)
@@ -789,6 +792,32 @@ mapAxis ::
   -> GridOf v cs y
 mapAxis n = mapAxisImpl @n
 {-# INLINABLE mapAxis #-}
+
+-- | 'mapAxis' as an optic: a 'Setter' whose foci are the fibres along axis
+-- @n@, one for every combination of the other axes.
+--
+-- > over (axis 1) (mapGrid negate) g   -- what mapAxis 1 (mapGrid negate) gives
+--
+-- What the optic adds over the bare function is composition. A 'Setter' goes
+-- in a chain with the other setters; a function does not.
+--
+-- > over (mapped . axis 0) (scanl1Grid (+)) gridsInSomeFunctor
+--
+-- 'scanAxis' is this optic at one particular fibre transform:
+-- @'scanAxis' n f = 'over' ('axis' n) ('scanl1Grid' f)@.
+--
+-- A 'Setter' and no more, for now. The fibres along one axis are disjoint and
+-- cover the grid, so a lawful 'Traversal' does exist -- it would additionally
+-- read the fibres out ('Control.Lens.toListOf') and admit fallible per-fibre
+-- transforms ('Control.Lens.traverseOf'). Writing it means giving
+-- 'mapAxisImpl' an 'Applicative' version, and the body that would be
+-- generalised, @mapAxisHere@, is the one sized-grid-adr.5 is about to
+-- replace. The 'Traversal' belongs to that rewrite, not ahead of it.
+axis ::
+     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
+  => Setter (GridOf v cs x) (GridOf v cs y) (GridOf v '[c] x) (GridOf v '[c] y)
+axis n = sets (mapAxis n)
+{-# INLINABLE axis #-}
 
 -- | Prefix-scan one named axis of a grid, independently for every
 -- combination of the others.

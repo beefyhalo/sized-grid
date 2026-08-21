@@ -35,6 +35,7 @@ module Data.Grid.Sized
     , scanl1Grid
     , MapAxis(..)
     , mapAxis
+    , axis
     , scanAxis
       -- * Windows and tiles
     , ShrinkableGrid(..)
