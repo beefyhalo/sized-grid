@@ -40,7 +40,9 @@ module Data.Grid.Sized
       -- * Windows and tiles
     , ShrinkableGrid(..)
     , gridTiles
+    , tiles
     , gridWindows
+    , windows
       -- * Vector helpers
     , splitVectorBySize
       -- * The rest of the public API

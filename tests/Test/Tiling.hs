@@ -1,16 +1,20 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
--- | Tests for 'gridTiles' and 'zipLowerDim'.
+-- | Tests for 'gridTiles', 'tiles' and 'zipLowerDim'.
 module Test.Tiling
   ( tilingTests
   ) where
 
-import           Data.Foldable    (toList)
-import           Data.Maybe       (fromJust)
+import           Control.Lens      (over, toListOf)
+import           Data.Foldable     (toList)
+import           Data.Maybe        (fromJust)
 import           Data.Grid.Sized
+import           Test.Arbitrary    ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           Test.Tasty.QuickCheck (Property, testProperty, (===))
 
 -- | 1..16 laid out row-major.
 fourByFour :: Grid '[ Ordinal 4, Ordinal 4] Int
@@ -38,6 +42,32 @@ squares b = do
 -- merely forcing the length is a sufficient regression test.
 nineColumns :: [Grid '[ Ordinal 9, Ordinal 1] Int]
 nineColumns = zipLowerDim gridTiles nineByNine
+
+-- | 'tiles' as a getter agrees with 'gridTiles'.
+tilesIsGridTiles :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
+tilesIsGridTiles g = toListOf (tiles @(Ordinal 1)) g === rows g
+
+-- | 'over' at the identity function is the identity -- the first half of the
+-- Traversal laws.
+overTilesId :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
+overTilesId g = over (tiles @(Ordinal 1)) id g === g
+
+-- | @'over' l f . 'over' l g == 'over' l (f . g)@ -- the composition law that
+-- fails for 'gridWindows' (overlapping foci) but holds here because the tiles
+-- are disjoint and covering.
+overTilesComposes :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
+overTilesComposes g =
+  over (tiles @(Ordinal 1)) negate' (over (tiles @(Ordinal 1)) double g) ===
+  over (tiles @(Ordinal 1)) (negate' . double) g
+  where
+    double = mapGrid (* 2)
+    negate' = mapGrid negate
+
+-- | Writing back through the tiles and mapping the whole grid directly agree,
+-- since every tile is transformed the same way.
+overTilesMatchesMapGrid :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
+overTilesMatchesMapGrid g =
+  over (tiles @(Ordinal 1)) (mapGrid (+ 100)) g === mapGrid (+ 100) g
 
 tilingTests :: TestTree
 tilingTests =
@@ -96,4 +126,15 @@ tilingTests =
               256
               (length (mapLowerDim gridTiles fourByFour ::
                            [Grid '[ Ordinal 4, Ordinal 1] Int]))
+        , testGroup
+              "tiles is a lawful Traversal"
+              [ testProperty "toListOf tiles == gridTiles" tilesIsGridTiles
+              , testProperty "over tiles id == id" overTilesId
+              , testProperty
+                    "over tiles f . over tiles g == over tiles (f . g)"
+                    overTilesComposes
+              , testProperty
+                    "over tiles (mapGrid f) == mapGrid f"
+                    overTilesMatchesMapGrid
+              ]
         ]
