@@ -28,6 +28,7 @@ module Data.Grid.Sized.Internal.Grid
   , permuteGrid
   , transposeGrid
   , splitGrid
+  , _SplitGrid
   , combineGrid
   , combineHigherDim
   , splitHigherDim
@@ -703,6 +704,14 @@ combineGrid ::
     -> GridOf v (c ': cs) a
 combineGrid (Grid v) = Grid $ VG.concat $ map unGrid $ V.toList v
 {-# INLINE combineGrid #-}
+
+-- | An isomorphism between a grid and its slices along the outermost axis.
+-- The outer grid is boxed because a grid is never an unboxed element; only the
+-- representation of each inner grid follows @v@.
+_SplitGrid ::
+     forall v c cs a. (VG.Vector v a, AllSizedKnown cs)
+  => Iso' (GridOf v (c ': cs) a) (Grid '[ c] (GridOf v cs a))
+_SplitGrid = iso splitGrid combineGrid
 
 -- | @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
 -- comes from @CoordNat@ on the `Data.Grid.Sized.Coord.Class.IsCoordLifted` instance,

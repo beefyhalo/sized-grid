@@ -26,6 +26,7 @@ module Data.Grid.Sized
     , permuteGrid
     , transposeGrid
     , splitGrid
+    , _SplitGrid
     , combineGrid
     , combineHigherDim
     , splitHigherDim
