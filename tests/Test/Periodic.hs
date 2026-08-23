@@ -4,6 +4,7 @@ module Test.Periodic
 
 import           Data.Grid.Sized
 
+import           Data.AffineSpace      ((.-.))
 import           Data.Group          (generated')
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -14,6 +15,7 @@ periodicTests =
     "Periodic"
     [ testGroup "Enum stops after one lap instead of repeating forever" enumTests
     , testGroup "Cyclic: 1 generates every element, once" cyclicTests
+    , testGroup "Affine displacement and metric have distinct meanings" displacementTests
     ]
 
 enumTests :: [TestTree]
@@ -53,4 +55,20 @@ cyclicTests =
       (map fromEnum (generated' :: [Periodic 7]))
   , testCase "generated' visits every element exactly once" $
     assertEqual "" 7 (length (generated' :: [Periodic 7]))
+  ]
+
+displacementTests :: [TestTree]
+displacementTests =
+  [ testCase "(. -.) is the canonical non-negative residue" $
+    assertEqual
+      ""
+      6
+      ((toEnum 6 :: Periodic 7) .-. (toEnum 0 :: Periodic 7))
+  , testCase "axisDistanceIsCoord is the shorter route" $
+    assertEqual
+      ""
+      1
+      (axisDistanceIsCoord
+        (toEnum 6 :: Periodic 7)
+        (toEnum 0 :: Periodic 7))
   ]

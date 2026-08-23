@@ -84,6 +84,8 @@ instance (1 <= n, KnownNat n) => AdditiveGroup (Periodic n) where
 
 instance (1 <= n, KnownNat n) => AffineSpace (Periodic n) where
     type Diff (Periodic n) = Int
+    -- (.-.) returns the canonical representative in Z/nZ. It is deliberately
+    -- not the signed shortest route; use axisDistanceIsCoord for that metric.
     Periodic a .-. Periodic b =
         (ordinalToInt a - ordinalToInt b) `mod` ordinalSize @n
     -- The displacement is reduced into [0, size) before adding, so the sum
