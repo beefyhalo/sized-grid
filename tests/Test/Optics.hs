@@ -24,8 +24,8 @@ coordOpticTests :: TestTree
 coordOpticTests =
   testGroup
     "Coordinate optics"
-    [ isoLaws "_WrappedCoord"
-        (_WrappedCoord :: Iso' Coord2 (NP I '[Ordinal 5, Ordinal 7]))
+    [ isoLaws "_CoordAxes"
+      (_CoordAxes :: Iso' Coord2 (NP I '[Ordinal 5, Ordinal 7]))
     , lensLaws "coordHead" (coordHead :: Lens' Coord2 (Ordinal 5))
     , lensLaws "coordTail" (coordTail :: Lens' Coord2 (Coord '[Ordinal 7]))
     ]

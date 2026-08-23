@@ -4,7 +4,11 @@
 -- | The optics for sized coordinates, grids, and focused grids.
 module Data.Grid.Sized.Optics
   ( -- * Coordinates
-    _WrappedCoord
+    _CoordAxes
+  , _Position
+  , _Strengthened
+  , _Weakened
+  , _WeakenedCoord
   , coordHead
   , coordTail
   , _WrappedDelta
@@ -13,6 +17,7 @@ module Data.Grid.Sized.Optics
     -- * Ordinals
   , _Ordinal
     -- * Grids
+  , _GridVector
   , _SplitGrid
   , cell
   , gridIndex
@@ -29,23 +34,34 @@ module Data.Grid.Sized.Optics
 
 import           Data.Grid.Sized.Class            (IsGrid (..))
 import           Data.Grid.Sized.Coord            (AllSizedKnown, Coord,
+                                                   StrengthenCoord,
+                                                   WeakenCoord,
+                                                   coordFromPosition,
                                                    coordPosition,
                                                    unCoord,
-                                                   unsafeCoordFromPosition)
+                                                   unsafeCoordFromPosition,
+                                                   strengthenCoord,
+                                                   weakenCoord)
 import           Data.Grid.Sized.Coord.Class      (IsCoordLifted,
+                                                   IsCoord,
                                                    IsCoordList (..),
                                                    coordListSize,
+                                                   strengthenIsCoord,
                                                    toAxisIndex,
-                                                   unsafeFromAxisIndex)
+                                                   unsafeFromAxisIndex,
+                                                   weakenIsCoord)
 import           Data.Grid.Sized.Coord.Delta      (Delta (..))
 import           Data.Grid.Sized.Focused          (FocusedGrid (..))
 import           Data.Grid.Sized.Internal.Grid   (Grid, GridOf (..),
                                                    combineGrid, dropGrid,
+                                                   gridFromVector, gridVector,
                                                    mapLowerDim, splitGrid,
                                                    sliceGrid)
 import           Data.Grid.Sized.Internal.Type   (requiring)
 import           Data.Grid.Sized.Ordinal         (Ordinal, ordinalToNum,
-                                                   numToOrdinal)
+                                                   numToOrdinal,
+                                                   strengthenOrdinal,
+                                                   weakenOrdinal)
 
 import           Control.Lens
 import           Data.Vector.Generic              (Vector)
@@ -55,8 +71,29 @@ import           Data.Proxy                       (Proxy (..))
 import           GHC.TypeLits                    (KnownNat, natVal, type (+),
                                                    type (-), type (<=))
 
-_WrappedCoord :: forall cs. IsCoordList cs => Iso' (Coord cs) (NP I cs)
-_WrappedCoord = iso unCoord (unsafeCoordFromPosition . npToPosition @cs)
+-- | An axis-wise view of a coordinate. This decodes the flat position and
+-- therefore costs one 'quotRem' per axis; it is not a representation coercion.
+_CoordAxes :: forall cs. IsCoordList cs => Iso' (Coord cs) (NP I cs)
+_CoordAxes = iso unCoord (unsafeCoordFromPosition . npToPosition @cs)
+
+-- | The checked conversion between a flat position and a coordinate.
+_Position :: IsCoordList cs => Prism' Int (Coord cs)
+_Position = prism' coordPosition coordFromPosition
+
+-- | A checked change from a smaller ordinal bound to a larger one.
+_Strengthened :: (KnownNat n, KnownNat m, n <= m)
+              => Prism' (Ordinal m) (Ordinal n)
+_Strengthened = prism' strengthenOrdinal weakenOrdinal
+
+-- | A checked change from a larger axis bound to a smaller one.
+_Weakened :: (IsCoord c, KnownNat n, KnownNat m, n <= m)
+          => Prism' (c m) (c n)
+_Weakened = prism' strengthenIsCoord weakenIsCoord
+
+-- | A checked embedding from a coordinate list into a larger coordinate list.
+_WeakenedCoord :: (StrengthenCoord as bs, WeakenCoord bs as)
+               => Prism' (Coord bs) (Coord as)
+_WeakenedCoord = prism' strengthenCoord weakenCoord
 
 coordHead ::
        forall a a' as. (IsCoordLifted a, IsCoordLifted a', IsCoordList as)
@@ -129,6 +166,12 @@ instance Field5 (Delta (a ': b ': c ': d ': e ': ds)) (Delta (a ': b ': c ': d '
 
 _Ordinal :: (KnownNat n, Integral a) => Prism' a (Ordinal n)
 _Ordinal = prism' ordinalToNum numToOrdinal
+
+_GridVector :: (VG.Vector v a, AllSizedKnown cs)
+      => Prism' (v a) (GridOf v cs a)
+_GridVector = prism
+  gridVector
+  (\v -> maybe (Left v) Right (gridFromVector v))
 
 _SplitGrid ::
   forall v c cs a. (Vector v a, AllSizedKnown cs)

@@ -409,8 +409,8 @@ main =
         , testAllCoordOrdered (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , isoLaws
-            "_WrappedCoord"
-            (_WrappedCoord @'[ Clamped 10, Periodic 20])
+            "_CoordAxes"
+            (_CoordAxes @'[ Clamped 10, Periodic 20])
         , lawsToTest $ eqLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , lawsToTest $ ordLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , lawsToTest $ showLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
