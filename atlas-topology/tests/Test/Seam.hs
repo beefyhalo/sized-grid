@@ -118,8 +118,46 @@ byHandTables =
   where
     units = [((), s) | s <- [minBound .. maxBound] :: [Side]]
 
+vertexCycles :: TestTree
+vertexCycles =
+        testGroup
+                "vertex cycles"
+                [ testCase "a flat four-corner chart has cycle length four" $
+                    assertEqual "" [4] (vertexCycleLengths flatTable flatCorners)
+                , testCase "a three-corner vertex is a cone point" $
+                    assertEqual "" [3] (vertexCycleLengths coneTable coneCorners)
+                , testCase "flatness violations report non-four cycles" $
+                    assertEqual "" [3] (vertexCycleViolations coneTable coneCorners)
+                ]
+    where
+        flatCorners =
+            [ ((A, N), (A, E))
+            , ((A, E), (A, S))
+            , ((A, S), (A, W))
+            , ((A, W), (A, N))
+                ]
+        flatTable =
+                tableOf
+                        [ ((A, N), ((A, S), False))
+                        , ((A, S), ((A, N), False))
+                        , ((A, E), ((A, W), False))
+                        , ((A, W), ((A, E), False))
+                        ]
+        coneCorners =
+            [ ((A, N), (A, E))
+            , ((A, E), (A, S))
+            , ((A, S), (A, N))
+                ]
+        coneTable =
+                tableOf
+                        [ ((A, N), ((A, S), False))
+                        , ((A, S), ((A, N), False))
+                , ((A, E), ((A, E), False))
+                        ]
+
 seamTests :: TestTree
 seamTests =
     testGroup
         "Data.Atlas.Topology.Seam"
-        [matchingsAreInvolutions, oneBrokenSeamIsFoundExactly, byHandTables]
+        [matchingsAreInvolutions, oneBrokenSeamIsFoundExactly, byHandTables,
+         vertexCycles]
