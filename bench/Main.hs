@@ -594,6 +594,12 @@ main = do
               , env (pure ubigGrid) $ \g ->
                 bench "mapGrid then sum 300x300 unboxed" $
                 nf (mapGrid (+ 1)) g
+              , env (pure bigGrid) $ \g ->
+                bench "imapGrid 300x300            boxed" $
+                nf (imapGrid (\_ x -> x + 1)) g
+              , env (pure ubigGrid) $ \g ->
+                bench "imapGrid 300x300          unboxed" $
+                nf (imapGrid (\_ x -> x + 1)) g
               , bench "foldlGrid' 300x300         boxed" $
                 whnf (foldlGrid' (+) 0) bigGrid
               , bench "foldlGrid' 300x300       unboxed" $
