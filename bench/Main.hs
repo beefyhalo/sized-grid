@@ -589,10 +589,10 @@ main = do
                 -- already-realised unboxed vector is nearly free to re-force),
                 -- so only its allocation column exposed the sharing.
                 env (pure bigGrid) $ \g ->
-                bench "mapGrid then sum 300x300   boxed" $
+                bench "mapGrid 300x300              boxed" $
                 nf (mapGrid (+ 1)) g
               , env (pure ubigGrid) $ \g ->
-                bench "mapGrid then sum 300x300 unboxed" $
+                bench "mapGrid 300x300            unboxed" $
                 nf (mapGrid (+ 1)) g
               , env (pure bigGrid) $ \g ->
                 bench "imapGrid 300x300            boxed" $

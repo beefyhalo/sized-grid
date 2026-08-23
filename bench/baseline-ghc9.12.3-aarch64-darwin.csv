@@ -43,8 +43,8 @@ All.collapse round trip.collapseGrid 100x100,157298046,7017846,2510572,718,74448
 All.collapse round trip.gridFromList . collapseGrid 100x100,464354296,38666506,4128314,749385,74448896
 "All.boxed vs unboxed (same code, different vector).tabulateGrid 300x300      boxed",1105488281,105112664,5040834,2343278,74448896
 "All.boxed vs unboxed (same code, different vector).tabulateGrid 300x300    unboxed",207019238,17415126,2160057,300,74448896
-"All.boxed vs unboxed (same code, different vector).mapGrid then sum 300x300   boxed",745596093,56037958,4320796,1174825,74448896
-"All.boxed vs unboxed (same code, different vector).mapGrid then sum 300x300 unboxed",45929553,3456624,720049,162,74448896
+"All.boxed vs unboxed (same code, different vector).mapGrid 300x300              boxed",745596093,56037958,4320796,1174825,74448896
+"All.boxed vs unboxed (same code, different vector).mapGrid 300x300            unboxed",45929553,3456624,720049,162,74448896
 "All.boxed vs unboxed (same code, different vector).foldlGrid' 300x300         boxed",161054687,13298490,24,0,74448896
 "All.boxed vs unboxed (same code, different vector).foldlGrid' 300x300       unboxed",45232983,4357056,18,0,74448896
 "All.boxed vs unboxed (same code, different vector).transposeGrid 300x300      boxed",398793164,27669594,720778,162,74448896

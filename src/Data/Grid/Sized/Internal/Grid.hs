@@ -120,7 +120,7 @@ deriving newtype instance Functor v => Functor (GridOf v cs)
 --      @Grid '[Clamped 300, Clamped 300] Int@ allocates 1,128 bytes -- the
 --      same as `foldlGrid'` on the same grid, where a @foldl@ thunk chain
 --      would be about 2.9 MB. There is no thunk chain to remove. adr.10's
---      evidence for one was the @mapGrid then sum 300x300@ benchmark reading
+--      evidence for one was the @mapGrid 300x300@ benchmark reading
 --      slower than @foldlGrid' 300x300@, but that benchmark sums nothing:
 --      its body is @nf (mapGrid (+ 1))@, which builds and deep-forces a whole
 --      second 90,000-cell boxed grid (sized-grid-iiah).
