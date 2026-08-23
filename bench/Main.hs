@@ -153,6 +153,13 @@ stencilFoldStep s = stencilFoldGrid s (+) id
 iterateStencilFold :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilFold s n g = iterate (stencilFoldStep s) g !! n
 
+-- | The same repeated step without the lazy list created by 'iterate'.
+iterateStencilFoldLoop :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilFoldLoop stencil count = go count
+  where
+    go 0 grid = grid
+    go remaining grid = go (remaining - 1) (stencilFoldStep stencil grid)
+
 -- | Repeated coordinate offset. Recursive rather than a fold so the
 -- intermediate 'Coord's cannot be fused away.
 walk :: Int -> Coord Walk -> Int
@@ -568,6 +575,8 @@ main = do
                 nf (iterateStencilFold stepStencilPeriodic 100) plainStepGridPeriodic
               , bench "stencilFoldStep x100, 50x50, unboxed" $
                 nf (iterateStencilFold stepStencil 100) uPlainStepGrid
+              , bench "stencilFoldStep x100, 50x50, unboxed, recursive" $
+                nf (iterateStencilFoldLoop stepStencil 100) uPlainStepGrid
               ]
         , bgroup
               "collapse round trip"
