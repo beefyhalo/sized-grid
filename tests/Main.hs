@@ -361,6 +361,8 @@ main =
         , lawsToTest $ jsonLaws (Proxy @(Periodic 10))
         , jsonKeyLaws @(Periodic 10)
         , isCoordLaws @Periodic @10
+        , zeroPositionMonoidLaws @Periodic @10
+        , zeroPositionAdditiveGroupLaws @Periodic @10
         ]
       clamped =
         [ semigroupLaws @(Clamped 10)
@@ -374,6 +376,7 @@ main =
         , lawsToTest $ jsonLaws (Proxy @(Clamped 10))
         , jsonKeyLaws @(Clamped 10)
         , isCoordLaws @Clamped @10
+        , zeroPositionMonoidLaws @Clamped @10
         ]
       -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance;
       -- 'Test.Reflective' has the bounce-specific properties.

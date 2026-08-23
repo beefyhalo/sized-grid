@@ -26,6 +26,8 @@ module Test.Utils
   , lensLaws
   , setterLaws
   , isCoordLaws
+  , zeroPositionMonoidLaws
+  , zeroPositionAdditiveGroupLaws
   , comonadLaws
   , representableLaws
   , distributiveLaws
@@ -494,3 +496,31 @@ isCoordLaws =
         , testProperty "asOrdinal lands in [0, n)" inRange
         , testProperty "reifyCoord agrees with asOrdinal" reifyAgrees
         ]
+
+zeroPositionMonoidLaws ::
+     forall c n.
+     ( IsCoord c
+     , 1 <= n
+     , KnownNat n
+     , Eq (c n)
+     , Show (c n)
+     , Monoid (c n)
+     )
+  => TestTree
+zeroPositionMonoidLaws =
+  testProperty "zeroPosition == mempty" $
+    zeroPosition @c @n === (mempty :: c n)
+
+zeroPositionAdditiveGroupLaws ::
+     forall c n.
+     ( IsCoord c
+     , 1 <= n
+     , KnownNat n
+     , Eq (c n)
+     , Show (c n)
+     , AdditiveGroup (c n)
+     )
+  => TestTree
+zeroPositionAdditiveGroupLaws =
+  testProperty "zeroPosition == zeroV" $
+    zeroPosition @c @n === (zeroV :: c n)
