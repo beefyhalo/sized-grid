@@ -19,10 +19,12 @@ import           Data.Grid.Sized
 -- The orphan 'Arbitrary' instance for 'Grid'.
 import           Test.Arbitrary        ()
 
+import           Control.Lens          (toListOf)
 import           Data.Foldable         (toList)
 import           Data.Maybe            (fromJust)
 import           GHC.TypeLits          (KnownNat, type (<=))
 import           Test.Tasty
+import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
 -- | Three axes, three sizes, and the middle one is reachable by no
@@ -114,6 +116,15 @@ axisTests =
         , testProperty "3D, axis 2 (innermost)" $ \(g :: Grid Cube Int) ->
             conjoin [ mapAxis 2 f g === refCube2 f g | f <- cubeFibre2 ]
         ]
+      , testCase "axisFold returns strided fibres in order" $
+        let g = tabulateGrid coordPosition :: Grid Flat Int
+        in map toList (toListOf (axisFold 0) g) @?=
+           [ [0, 5, 10]
+           , [1, 6, 11]
+           , [2, 7, 12]
+           , [3, 8, 13]
+           , [4, 9, 14]
+           ]
       -- 'scanAxis' has its own body: it reads one element back rather than
       -- gathering a fibre, so it shares no code with 'mapAxis' beyond the
       -- size and stride. These check the equation the Haddock claims.

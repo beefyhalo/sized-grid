@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | The optics for sized coordinates, grids, and focused grids.
@@ -38,6 +39,7 @@ module Data.Grid.Sized.Optics
   , prefix
   , suffix
   , lowerDim
+  , axisFold
     -- * Focused grids
   , _FocusedGrid
   , focus
@@ -80,9 +82,9 @@ import           Data.Grid.Sized.Internal.Grid   (CollapseGrid, Grid, GridOf (..
                                                    combineHigherDim, splitHigherDim,
                                                    collapseGrid,
                                                    gridFromList, gridFromVector, gridVector,
-                                                   mapLowerDim, permuteGrid,
+                                                   mapLowerDim, permuteGrid, axisFibres,
                                                    splitGrid,
-                                                   sliceGrid)
+                                                   sliceGrid, MapAxis(..))
 import           Data.Grid.Sized.Internal.Type   (requiring)
 import           Data.Grid.Sized.Ordinal         (Ordinal, ordinalToNum,
                                                    numToOrdinal,
@@ -309,6 +311,19 @@ lowerDim :: (Vector v x, Vector v y, AllSizedKnown as)
          => Traversal (GridOf v (c ': as) x) (GridOf v (c ': bs) y)
                       (GridOf v as x) (GridOf v bs y)
 lowerDim = mapLowerDim
+
+-- | Read the fibres along one named axis without offering write-back.
+--
+-- The fibres are disjoint, so a 'Traversal' could provide the same read
+-- direction, but its applicative write path would have to retain every
+-- transformed fibre before scattering them. A 'Fold' keeps the useful
+-- read-only direction lazy and retains at most the foci demanded by its
+-- consumer.
+axisFold ::
+     forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
+  => Fold (GridOf v cs a) (GridOf v '[c] a)
+axisFold n = folding (axisFibres n)
+{-# INLINABLE axisFold #-}
 
 _FocusedGrid :: Iso (FocusedGrid cs a) (FocusedGrid cs b)
                     (Grid cs a, Coord cs) (Grid cs b, Coord cs)

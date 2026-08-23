@@ -8,7 +8,7 @@ import           Control.Comonad
 import           Control.Comonad.Store   (peek, pos)
 import           Control.DeepSeq         (NFData (..))
 import           Control.Exception       (evaluate)
-import           Control.Lens            (ifoldl', imap, itraverse, view)
+import           Control.Lens            (ifoldl', imap, itraverse, toListOf, view)
 import           Data.Aeson              (Result (..), fromJSON, toJSON)
 import           Data.AffineSpace        ((.+^), (.-.))
 import           Data.Functor.Identity   (Identity (..))
@@ -648,6 +648,12 @@ main = do
               , env (pure ubigGrid) $ \g ->
                 bench "mapAxis 0 300x300          unboxed" $
                 nf (mapAxis 0 (mapGrid (+ 1))) g
+              , env (pure bigGrid) $ \g ->
+                bench "axisFold 0 300x300         boxed" $
+                nf (sum . map (foldlGrid' (+) 0) . toListOf (axisFold 0)) g
+              , env (pure ubigGrid) $ \g ->
+                bench "axisFold 0 300x300       unboxed" $
+                nf (sum . map (foldlGrid' (+) 0) . toListOf (axisFold 0)) g
                 -- The pair that reports no difference, deliberately kept.
               , bench "indexGrid x90000           boxed" $
                 whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid

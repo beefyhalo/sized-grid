@@ -37,6 +37,7 @@ module Data.Grid.Sized.Internal.Grid
   , zipLowerDim
   , MapAxis(..)
   , mapAxis
+  , axisFibres
   , axis
   , scanAxis
     -- * Windows and tiles
@@ -1023,6 +1024,26 @@ mapAxis n f (Grid v) =
     let (axisSize, stride) = axisSizeAndStride @n @cs @c
      in Grid (mapAxisStrided axisSize stride (unGrid . f . Grid) v)
 {-# INLINE mapAxis #-}
+
+-- | Enumerate the fibres along one named axis in row-major order.
+axisFibres ::
+     forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
+  => GridOf v cs a
+  -> [GridOf v '[c] a]
+axisFibres n (Grid v) =
+    let (axisSize, stride) = axisSizeAndStride @n @cs @c
+        block = axisSize * stride
+        len = VG.length v
+        fibre blockStart base
+          | base >= blockStart + stride = []
+          | otherwise =
+              Grid (VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride)))
+              : fibre blockStart (base + 1)
+        blocks blockStart
+          | blockStart >= len = []
+          | otherwise = fibre blockStart blockStart ++ blocks (blockStart + block)
+     in blocks 0
+{-# INLINABLE axisFibres #-}
 
 -- | 'mapAxis' as an optic: a 'Setter' whose foci are the fibres along axis
 -- @n@, one for every combination of the other axes.
