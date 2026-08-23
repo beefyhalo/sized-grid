@@ -34,6 +34,9 @@ module Data.Grid.Sized.Internal.Grid
   , dropGrid
   , takeGrid
   , sliceGrid
+  , slice
+  , prefix
+  , suffix
   , mapLowerDim
   , zipLowerDim
   , MapAxis(..)
@@ -770,6 +773,50 @@ sliceGrid off len (Grid v) =
         (fromIntegral $ natVal (Proxy @len))
         v
 {-# INLINABLE sliceGrid #-}
+
+-- | A writable optic for a one-dimensional window of a grid.
+slice :: forall v m c x. forall off len ->
+  ( VG.Vector v x
+  , KnownNat off
+  , KnownNat len
+  , off + len <= m
+  )
+     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c len] x)
+slice off len =
+   lens
+  (sliceGrid @v @m @c @x off len)
+      (\(Grid source) (Grid replacement) ->
+         Grid $
+            VG.take (fromIntegral $ natVal (Proxy @off)) source
+            VG.++ replacement
+            VG.++ VG.drop
+                              (fromIntegral (natVal (Proxy @off))
+                               + fromIntegral (natVal (Proxy @len)))
+                    source)
+{-# INLINABLE slice #-}
+
+-- | A writable optic for the prefix of a one-dimensional grid.
+prefix :: forall v m c x. forall n ->
+       (VG.Vector v x, KnownNat n, n <= m)
+     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c n] x)
+prefix n = slice @v @m @c @x 0 n
+{-# INLINE prefix #-}
+
+-- | A writable optic for the suffix after dropping @n@ elements.
+suffix :: forall v m c x. forall n ->
+       ( VG.Vector v x
+          , KnownNat n
+       , n <= m
+       )
+     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c (m - n)] x)
+suffix n =
+  lens
+    (dropGrid n)
+    (\(Grid source) (Grid replacement) ->
+       Grid $
+         VG.take (fromIntegral $ natVal (Proxy @n)) source
+         VG.++ replacement)
+{-# INLINE suffix #-}
 
 -- | The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and

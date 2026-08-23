@@ -273,6 +273,7 @@ test-suite tests
     Test.Ray
     Test.Reflective
     Test.Shrink
+    Test.Slice
     Test.Stencil
     Test.Tiling
     Test.Unboxed

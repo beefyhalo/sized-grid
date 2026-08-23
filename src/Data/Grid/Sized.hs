@@ -31,6 +31,9 @@ module Data.Grid.Sized
     , splitHigherDim
     , dropGrid
     , takeGrid
+    , slice
+    , prefix
+    , suffix
     , mapLowerDim
     , zipLowerDim
     , scanl1Grid

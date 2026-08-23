@@ -17,6 +17,7 @@ import           Test.Periodic
 import           Test.Ray
 import           Test.Reflective
 import           Test.Shrink
+import           Test.Slice
 import           Test.Stencil
 import           Test.Tiling
 import           Test.Unboxed
@@ -573,6 +574,7 @@ main =
            ]
        , axisTests
        , shrinkTests
+      , sliceTests
        , stencilTests
        , tilingTests
        , unboxedTests

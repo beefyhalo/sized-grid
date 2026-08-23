@@ -2,7 +2,7 @@ module Test.Ray
   ( rayTests
   ) where
 
-import           Data.Grid.Sized
+import           Data.Grid.Sized hiding (prefix)
 import           Test.Arbitrary        ()
 
 import           Data.Maybe            (fromJust)
@@ -117,12 +117,12 @@ agreementTests =
     testGroup
         "offsetCoordUpTo and coordRay are the same walk"
         [ testProperty "the endpoint is the last of the prefix the ray takes" $ \(c :: Coord '[Clamped 5, Clamped 5]) (a, b) n ->
-              let steps = abs n `mod` 8
-                  prefix = take steps (coordRay c (d2 a b))
+                    let { steps = abs n `mod` 8
+                        ; walked = take steps (coordRay c (d2 a b)) }
                in offsetCoordUpTo steps c (d2 a b) ===
-                  (if length prefix == steps
-                       then Right (last (c : prefix))
-                       else Left (OffGrid (last (c : prefix)) (length prefix)))
+                           (if length walked == steps
+                                 then Right (last (c : walked))
+                                 else Left (OffGrid (last (c : walked)) (length walked)))
         , -- Zero displacement excluded: it makes the ray infinite even on a
           -- bounded coord, since standing still never leaves the grid.
           testProperty "a ray is as long as the walk that fails first" $ \(c :: Coord '[Clamped 5, Clamped 5]) (a, b) ->
