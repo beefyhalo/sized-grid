@@ -19,6 +19,8 @@ module Test.Utils
   , additiveGroupLaws
   , pseudoAffineLaws
   , interiorActionLaws
+  , coordRangeLaws
+  , enumRangeLaws
   , traversalLaws
   , isoLaws
   , prismLaws
@@ -195,7 +197,7 @@ interiorActionLaws ::
      forall c n.
      ( IsCoord c
      , KnownNat n
-     , 1 <= n
+  , 1 <= n
      , Arbitrary (c n)
      , Show (c n)
      , Eq (c n)
@@ -215,6 +217,50 @@ interiorActionLaws =
   in testGroup
        "Interior AffineSpace Laws"
        [testProperty "Associative where every leg stays inside" associativity]
+
+coordRangeLaws ::
+     forall c n.
+     ( IsCoord c
+     , KnownNat n
+     , Arbitrary (c n)
+     , Show (c n)
+     , Semigroup (c n)
+     , AffineSpace (c n)
+     , Diff (c n) ~ Int
+     )
+  => TestTree
+coordRangeLaws =
+  let inRange :: c n -> Property
+      inRange c =
+        let i = ordinalToInt (view asOrdinal c)
+         in counterexample ("position " ++ show i) $
+              (0 <= i) .&&. (i < ordinalSize @n)
+      combine :: c n -> c n -> Property
+      combine a b = inRange (a <> b)
+      offset :: c n -> Int -> Property
+      offset c d = inRange (c .+^ d)
+  in testGroup
+       "Coordinate operation range"
+       [ testProperty "Semigroup stays in range" combine
+       , testProperty "Affine displacement stays in range" offset
+       ]
+
+enumRangeLaws ::
+     forall c n.
+     ( IsCoord c
+     , KnownNat n
+     , Enum (c n)
+     )
+  => TestTree
+enumRangeLaws =
+  testGroup
+    "Enum operation range"
+    [ testProperty "toEnum stays in range" $ \i ->
+        let c = toEnum i :: c n
+            position = ordinalToInt (view asOrdinal c)
+         in counterexample ("position " ++ show position) $
+              (0 <= position) .&&. (position < ordinalSize @n)
+    ]
 
 -- | Renders a @quickcheck-classes@ 'Laws' bundle as a 'TestTree'.
 lawsToTest :: Laws -> TestTree

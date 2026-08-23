@@ -357,6 +357,8 @@ main =
         , abelianLaws @(Periodic 10)
         , pseudoAffineLaws @(Periodic 10)
         , interiorActionLaws @Periodic @10
+        , coordRangeLaws @Periodic @10
+        , enumRangeLaws @Periodic @10
         , aesonLaws @(Periodic 10)
         , lawsToTest $ jsonLaws (Proxy @(Periodic 10))
         , jsonKeyLaws @(Periodic 10)
@@ -372,6 +374,7 @@ main =
         , lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10))
         , pseudoAffineLaws @(Clamped 10)
         , interiorActionLaws @Clamped @10
+        , coordRangeLaws @Clamped @10
         , aesonLaws @(Clamped 10)
         , lawsToTest $ jsonLaws (Proxy @(Clamped 10))
         , jsonKeyLaws @(Clamped 10)
