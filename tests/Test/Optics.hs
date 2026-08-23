@@ -14,7 +14,7 @@ import           Test.Arbitrary      ()
 import           Test.Tasty
 import           Test.Tasty.QuickCheck (chooseInt, forAll, oneof, testProperty,
                                         (===))
-import           Test.Utils          (isoLaws, lensLaws)
+import           Test.Utils          (isoLaws, lensLaws, traversalLaws)
 
 type Coord2 = Coord '[Ordinal 5, Ordinal 7]
 type Grid2 = Grid '[Ordinal 5, Ordinal 7] Int
@@ -60,6 +60,10 @@ gridOpticTests =
     "Grid optics"
     [ isoLaws "_SplitGrid"
         (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int)))
+    , testGroup "lowerDim"
+      [ traversalLaws
+        (lowerDim :: Traversal' Grid2 (Grid '[Ordinal 7] Int))
+      ]
     , lensLaws "cell" (cell (zeroCoord :: Coord2) :: Lens' Grid2 Int)
     , lensLaws "slice" (slice 1 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int))
     , lensLaws "prefix" (prefix 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int))
