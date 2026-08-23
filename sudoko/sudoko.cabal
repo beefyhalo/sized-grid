@@ -16,9 +16,7 @@ extra-doc-files:     ChangeLog.md
 
 executable sudoko
   main-is:             Main.hs
-  -- recursion-schemes, free and lens were dependencies of an unfinished
-  -- Cofree-based search that was never written; every import of them was dead.
-  -- They come back when the solver does.
+  -- The solver is a direct backtracking search and needs no extra packages.
   build-depends:
     , base       >=4.19 && <5
     , grid-sized
