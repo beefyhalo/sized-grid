@@ -36,6 +36,7 @@ module Data.Grid.Sized
     , prefix
     , suffix
     , mapLowerDim
+    , lowerDim
     , zipLowerDim
     , scanl1Grid
     , MapAxis(..)

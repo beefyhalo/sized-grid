@@ -39,6 +39,7 @@ module Data.Grid.Sized.Internal.Grid
   , prefix
   , suffix
   , mapLowerDim
+  , lowerDim
   , zipLowerDim
   , MapAxis(..)
   , mapAxis
@@ -848,6 +849,18 @@ splitHigherDim (Grid v) =
                 v
      in (Grid a, Grid b)
 {-# INLINABLE splitHigherDim #-}
+
+-- | A lawful 'Traversal' over the disjoint sub-grids along the outermost axis.
+-- The foci partition the source vector, so 'Control.Lens.traverseOf' can
+-- transform each lower-dimensional grid while preserving the outer shape.
+-- Identity and composition follow from the corresponding laws of 'traverse'.
+-- Use 'zipLowerDim' when the operation should return a list of results zipped
+-- across sub-grids; the list 'Applicative' used by 'mapLowerDim' instead forms
+-- a cartesian product.
+lowerDim :: (VG.Vector v x, VG.Vector v y, AllSizedKnown as)
+         => Traversal (GridOf v (c ': as) x) (GridOf v (c ': bs) y)
+                      (GridOf v as x)        (GridOf v bs y)
+lowerDim = mapLowerDim
 
 -- | Split a grid into its @CoordNat c@ sub-grids along the outermost axis,
 -- apply @f@ to each, and glue the results back together.
