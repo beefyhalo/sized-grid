@@ -68,6 +68,7 @@ library
     Data.Grid.Atlas.CubeMap
     Data.Grid.Atlas.Klein
     Data.Grid.Atlas.Mobius
+    Data.Grid.Atlas.Projective
     Data.Grid.Atlas.Rect
 
   build-depends:
@@ -89,6 +90,7 @@ test-suite tests
     Test.CubeMap
     Test.Klein
     Test.Mobius
+    Test.Projective
     Test.Tiles
 
   build-depends:
