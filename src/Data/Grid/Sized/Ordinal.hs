@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings   #-}
 
 -- | A number in @[0, m)@, where @m@ is a type-level 'Nat'.
@@ -24,7 +25,15 @@ import           Control.DeepSeq         (NFData (..))
 import           Control.Lens            (Prism', prism')
 import           Control.Monad           (unless)
 import           Data.Aeson
+import           Data.Hashable          (Hashable)
+import           Data.Ix                (Ix)
+import           Data.Primitive.Types    (Prim)
 import           Data.Proxy
+import           Data.Universe.Class (universe, universeF)
+import qualified Data.Universe.Class as U
+import qualified Data.Vector.Generic as VG
+import qualified Data.Vector.Generic.Mutable as VGM
+import qualified Data.Vector.Unboxed as VU
 import           GHC.TypeLits
 import           GHC.Natural             (naturalToWord)
 import qualified GHC.TypeNats            as TN
@@ -208,6 +217,9 @@ _Ordinal = prism' ordinalToNum numToOrdinal
 instance NFData (Ordinal m) where
     rnf = rnf . ordinalToInt
 
+deriving newtype instance Ix (Ordinal m)
+deriving newtype instance Hashable (Ordinal m)
+
 instance KnownNat m => Show (Ordinal m) where
     show o =
         "Ordinal (" ++
@@ -243,8 +255,71 @@ instance (1 <= m, KnownNat m) => Enum (Ordinal m) where
         | ordinalToInt b >= ordinalToInt a = enumFromThenTo a b maxBound
         | otherwise = enumFromThenTo a b minBound
 
+instance (1 <= m, KnownNat m) => U.Universe (Ordinal m) where
+    universe = [minBound .. maxBound]
+
+instance (1 <= m, KnownNat m) => U.Finite (Ordinal m) where
+    universeF = [minBound .. maxBound]
+
 instance KnownNat m => ToJSON (Ordinal m) where
     toJSON o = object ["size" .= natVal (Proxy @m), "value" .= ordinalToInt o]
+
+newtype instance VU.MVector s (Ordinal m) = MV_Ordinal (VU.MVector s Int)
+newtype instance VU.Vector (Ordinal m) = V_Ordinal (VU.Vector Int)
+
+instance VGM.MVector VU.MVector (Ordinal m) where
+    basicLength (MV_Ordinal v) = VGM.basicLength v
+    {-# INLINE basicLength #-}
+    basicUnsafeSlice i n (MV_Ordinal v) = MV_Ordinal (VGM.basicUnsafeSlice i n v)
+    {-# INLINE basicUnsafeSlice #-}
+    basicOverlaps (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicOverlaps v1 v2
+    {-# INLINE basicOverlaps #-}
+    basicUnsafeNew n = MV_Ordinal <$> VGM.basicUnsafeNew n
+    {-# INLINE basicUnsafeNew #-}
+    basicUnsafeRead (MV_Ordinal v) i = UnsafeOrdinal <$> VGM.basicUnsafeRead v i
+    {-# INLINE basicUnsafeRead #-}
+    basicUnsafeWrite (MV_Ordinal v) i (UnsafeOrdinal x) = VGM.basicUnsafeWrite v i x
+    {-# INLINE basicUnsafeWrite #-}
+    basicClear (MV_Ordinal v) = VGM.basicClear v
+    {-# INLINE basicClear #-}
+    basicUnsafeCopy (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicUnsafeCopy v1 v2
+    {-# INLINE basicUnsafeCopy #-}
+    basicUnsafeMove (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicUnsafeMove v1 v2
+    {-# INLINE basicUnsafeMove #-}
+    basicInitialize (MV_Ordinal v) = VGM.basicInitialize v
+    {-# INLINE basicInitialize #-}
+
+instance VG.Vector VU.Vector (Ordinal m) where
+    basicUnsafeFreeze (MV_Ordinal v) = V_Ordinal <$> VG.basicUnsafeFreeze v
+    {-# INLINE basicUnsafeFreeze #-}
+    basicUnsafeThaw (V_Ordinal v) = MV_Ordinal <$> VG.basicUnsafeThaw v
+    {-# INLINE basicUnsafeThaw #-}
+    basicLength (V_Ordinal v) = VG.basicLength v
+    {-# INLINE basicLength #-}
+    basicUnsafeSlice i n (V_Ordinal v) = V_Ordinal (VG.basicUnsafeSlice i n v)
+    {-# INLINE basicUnsafeSlice #-}
+    basicUnsafeIndexM (V_Ordinal v) i = UnsafeOrdinal <$> VG.basicUnsafeIndexM v i
+    {-# INLINE basicUnsafeIndexM #-}
+
+-- | Unbox instance for storing 'Ordinal' in unboxed vectors.
+-- 'Ordinal' is a newtype over 'Int', which is already 'Unbox', so no new
+-- construction route is exposed by this instance.
+--
+-- The implementation delegates entirely to 'Int''s Unbox instance via the
+-- explicitly-defined MVector and Vector instances above.
+instance VU.Unbox (Ordinal m)
+
+-- | Prim instance for storing 'Ordinal' in primitive 'ByteArray' and
+-- related structures.
+--
+-- __Caveat:__ Unlike 'unsafeOrdinal', the 'Data.Primitive.Types.indexByteArray'
+-- and 'Data.Primitive.Types.readByteArray' operations do not validate the
+-- invariant @0 <= i < m@. A consumer reading from a 'ByteArray' that was not
+-- constructed from 'Ordinal' values may obtain an out-of-range value. The
+-- type-level size @m@ is still nominal ('Data.Primitive.Types.readByteArray
+-- (arr :: ByteArray) (i :: Int) :: Ordinal m' does not change the stored
+-- integer), so only its own construction code can ensure the invariant.
+deriving newtype instance Prim (Ordinal m)
 
 instance KnownNat m => FromJSON (Ordinal m) where
     parseJSON =

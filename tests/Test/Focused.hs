@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
 
 module Test.Focused
   ( focusedTests
@@ -14,6 +12,7 @@ import           Test.Arbitrary        ()
 import           Control.Comonad       (extract)
 import           Data.AffineSpace      ((.+^))
 import           Data.Functor.Rep      (index, tabulate)
+import           Data.Maybe            (fromMaybe)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck (testProperty, (===))
@@ -43,7 +42,7 @@ traceOffsetTests =
         ]
   where
     hw :: Int -> Clamped 5
-    hw = Clamped . maybe (error "in range") id . numToOrdinal
+    hw = Clamped . fromMaybe (error "in range") . numToOrdinal
 
 tracePathTests :: TestTree
 tracePathTests =
@@ -72,7 +71,7 @@ tracePathTests =
         ]
   where
     hw :: Int -> Clamped 5
-    hw = Clamped . maybe (error "in range") id . numToOrdinal
+    hw = Clamped . fromMaybe (error "in range") . numToOrdinal
 
 walkEverywhereTests :: TestTree
 walkEverywhereTests =
@@ -92,7 +91,7 @@ walkEverywhereTests =
 type RG = FocusedGrid '[ Reflective 5, Reflective 5] Int
 
 rf :: Int -> Reflective 5
-rf = Reflective . maybe (error "in range") id . numToOrdinal
+rf = Reflective . fromMaybe (error "in range") . numToOrdinal
 
 stepWalkerTests :: TestTree
 stepWalkerTests =

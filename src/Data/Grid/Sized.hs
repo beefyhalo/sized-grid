@@ -12,6 +12,7 @@ module Data.Grid.Sized
       -- * Access
     , gridVector
     , collapseGrid
+    , cell
       -- * Bulk operations
     , tabulateGrid
     , indexGrid

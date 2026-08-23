@@ -45,6 +45,7 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Distributive
+import           Data.Foldable (fold)
 import           Data.Functor.Bind      (Apply (..), Bind (..))
 import           Data.Functor.Classes
 import           Data.Functor.Compose
@@ -108,7 +109,7 @@ monoidLaws =
       memptyId :: a -> Property
       memptyId a = (a === mappend mempty a) .&&. (a === mappend a mempty)
       concatIsFold :: [a] -> Property
-      concatIsFold as = mconcat as === foldr mappend mempty as
+      concatIsFold as = mconcat as === fold as
   in testGroup
        "Monoid laws"
        [ testProperty "Associative" assoc
@@ -209,7 +210,7 @@ traversalLaws t =
           return
             (fmap (t (raiseFunc fFunc)) (t (raiseFunc gFunc) a) ===
              getCompose
-               (t (Compose . fmap (raiseFunc fFunc) . (raiseFunc gFunc)) a))
+               (t (Compose . fmap (raiseFunc fFunc) . raiseFunc gFunc) a))
   in testGroup
        "Traveral Laws"
        [testProperty "Pure Id" pureId, testProperty "Compose" compose]
@@ -438,4 +439,3 @@ isCoordLaws =
         , testProperty "asOrdinal lands in [0, n)" inRange
         , testProperty "reifyCoord agrees with asOrdinal" reifyAgrees
         ]
-

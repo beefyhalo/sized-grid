@@ -3,13 +3,14 @@
 
 -- | For @Grid cs a@, the underlying vector holds exactly @MaxCoordSize cs@ elements.
 module Test.Invariant
-  ( invariantTests
+  ( cellTests
+  , invariantTests
   ) where
 
 import           Data.Grid.Sized
 import           Data.Grid.Sized.Unsafe (unsafeGridFromVector)
 
-import           Control.Lens         (over)
+import           Control.Lens         (ix, over, (%~), (&), (.~), (^.))
 import           Data.Aeson           (decode, encode)
 import           Data.ByteString.Lazy (ByteString)
 import           Data.Foldable        (toList)
@@ -70,6 +71,26 @@ assertAllWellSized ::
 assertAllWellSized what =
   mapM_ (\(n, g) -> assertWellSized (what ++ " [" ++ show n ++ "]") g) .
   zip [0 :: Int ..]
+
+cellTests :: TestTree
+cellTests =
+  let coordinate :: Coord '[Ordinal 3, Ordinal 3]
+      coordinate = fromJust $
+        (\x y -> x :| y :| EmptyCoord) <$>
+        numToOrdinal (1 :: Int) <*> numToOrdinal (1 :: Int)
+  in testGroup
+       "cell"
+       [ testCase "reads the selected cell" $
+           assertEqual "selected cell" 5 (threeByThree ^. cell coordinate)
+       , testCase "updates only the selected cell" $
+           assertEqual "updated grid"
+             (V.fromList [1, 2, 3, 4, 42, 6, 7, 8, 9])
+             (gridVector (threeByThree & cell coordinate .~ 42))
+       , testCase "ix updates the selected cell" $
+           assertEqual "updated grid through ix"
+             (V.fromList [1, 2, 3, 4, 6, 6, 7, 8, 9])
+             (gridVector (threeByThree & ix coordinate %~ (+ 1)))
+       ]
 
 invariantTests :: TestTree
 invariantTests =

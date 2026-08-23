@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 -- | Tests for 'mapAxis' and 'scanAxis', against references written with
 -- coordinates.
 --
@@ -22,6 +19,7 @@ import           Data.Grid.Sized
 -- The orphan 'Arbitrary' instance for 'Grid'.
 import           Test.Arbitrary        ()
 
+import           Data.Foldable         (toList)
 import           Data.Maybe            (fromJust)
 import           GHC.TypeLits          (KnownNat, type (<=))
 import           Test.Tasty
@@ -49,7 +47,7 @@ at g i = indexGrid g (i :| EmptyCoord)
 -- place, so a fibre gathered in the wrong order is not still correct by
 -- accident the way @'mapGrid' (+ 1)@ would leave it.
 reverseFibre :: forall n. KnownNat n => Grid '[ Ordinal n] Int -> Grid '[ Ordinal n] Int
-reverseFibre = fibre . reverse . foldr (:) []
+reverseFibre = fibre . reverse . toList
 
 --------------------------------------------------------------------------------
 -- The references: one per axis, indexing by coordinate.

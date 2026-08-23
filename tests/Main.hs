@@ -25,17 +25,25 @@ import           Test.Windows
 
 import           Control.Lens          hiding (index)
 import           Control.Monad         (replicateM)
+import qualified Data.Align            as Align
 import           Data.Maybe            (isNothing)
 import           Data.Functor.Rep
+import qualified Data.Finitary          as F
+import           Data.Monoid           (Sum)
+import qualified Data.These            as These
+import qualified Data.Universe.Class  as U
+import qualified Data.Ix               as Ix
 import           Data.Proxy
+import qualified Data.Zip              as Zip
 import           GHC.TypeLits
 import           Test.QuickCheck       (Arbitrary (..), Property, property,
                                         (.&&.), (===))
 import           Test.QuickCheck.Classes (applicativeLaws, applyLaws,
+                                          boundedEnumLaws,
                                           commutativeMonoidLaws, enumLaws,
                                           eqLaws, foldableLaws, functorLaws,
                                           genericLaws, jsonLaws, monadLaws,
-                                          ordLaws, semigroupMonoidLaws,
+                                          ixLaws, ordLaws, semigroupMonoidLaws,
                                           showLaws, traversableLaws)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -46,6 +54,72 @@ assertOrderd =
     let helper []     = True
         helper (x:xs) = all (x <=) xs && helper xs
      in assertBool "Ordered" . helper
+
+universeTests :: TestTree
+universeTests =
+    testGroup
+        "Universe and Finite"
+        [ testCase "Coord uses allCoord" $
+          assertEqual
+              "Coord universe"
+              (allCoord @'[Ordinal 2, Ordinal 3])
+              (U.universe @(Coord '[Ordinal 2, Ordinal 3]))
+        , testCase "Coord finite universe uses allCoord" $
+          assertEqual
+              "Coord finite universe"
+              (allCoord @'[Ordinal 2, Ordinal 3])
+              (U.universeF @(Coord '[Ordinal 2, Ordinal 3]))
+        , testCase "Coord finitary enumeration uses allCoord" $
+          assertEqual
+              "Coord finitary inhabitants"
+              (allCoord @'[Ordinal 2, Ordinal 3])
+              (F.inhabitants @(Coord '[Ordinal 2, Ordinal 3]))
+        , testCase "Coord finitary indices are row-major" $
+          assertEqual
+              "Coord finitary indices"
+              ([0 .. 5] :: [Integer])
+              (map (fromIntegral . F.toFinite)
+                   (allCoord @'[Ordinal 2, Ordinal 3]))
+        , testCase "axis uses allCoordLike" $
+          assertEqual
+              "axis universe"
+              (allCoordLike @5 @Periodic)
+              (U.universe @(Periodic 5))
+        ]
+
+semialignZipTests :: TestTree
+semialignZipTests =
+    let first = tabulateGrid coordPosition :: Grid '[Periodic 3, Periodic 4] Int
+        second = mapGrid (* 10) first
+    in testGroup
+         "Semialign and Zip"
+         [ testCase "alignWith is pointwise" $
+           assertEqual
+               "aligned grid"
+               (zipWithGrid (+) first second)
+               (Align.alignWith combine first second)
+         , testCase "zipWith is pointwise" $
+           assertEqual
+               "zipped grid"
+               (zipWithGrid (+) first second)
+               (Zip.zipWith (+) first second)
+         , testProperty "alignWith is pointwise for arbitrary grids" $
+           property $ \(left :: Grid '[Periodic 3, Periodic 4] Int)
+                          (right :: Grid '[Periodic 3, Periodic 4] Int) ->
+             Align.alignWith combine left right === zipWithGrid (+) left right
+         , testProperty "align is pointwise These" $
+           property $ \(left :: Grid '[Periodic 3, Periodic 4] Int)
+                          (right :: Grid '[Periodic 3, Periodic 4] Int) ->
+             Align.align left right === Zip.zipWith These.These left right
+         , testProperty "Zip agrees with zipWithGrid for arbitrary grids" $
+           property $ \(left :: Grid '[Periodic 3, Periodic 4] Int)
+                          (right :: Grid '[Periodic 3, Periodic 4] Int) ->
+             Zip.zipWith (+) left right === zipWithGrid (+) left right
+         ]
+  where
+    combine (These.This value) = value
+    combine (These.That value) = value
+    combine (These.These left right) = left + right
 
 testAllCoordOrdered ::
        forall cs proxy. IsCoordList cs
@@ -60,7 +134,7 @@ testAllCoordOrdered _ =
 -- order.
 testCoordLayout ::
        forall cs proxy.
-       (All Show cs, All Arbitrary cs, IsCoordList cs)
+      (All Show cs, All Arbitrary cs, All Bounded cs, IsCoordList cs)
     => proxy (Coord cs)
     -> TestTree
 testCoordLayout _ =
@@ -76,11 +150,34 @@ testCoordLayout _ =
         , testProperty "coordFromPosition undoes coordPosition" $
           property $ \(c :: Coord cs) ->
               coordFromPosition (coordPosition c) === Just c
+        , testProperty "Ord agrees with Enum positions" $
+          property $ \(a :: Coord cs) (b :: Coord cs) ->
+              compare a b === compare (fromEnum a) (fromEnum b)
+        , testProperty "bounded Enum is allCoord in order" $
+          property $ [minBound .. maxBound] === allCoord @cs
         , testCase "coordFromPosition rejects positions outside the space" $ do
             assertBool "negative" $ isNothing (coordFromPosition @cs (-1))
             assertBool "one past the end" $
                 isNothing (coordFromPosition @cs (coordSpaceSize @cs))
         ]
+
+coordIxTests :: TestTree
+coordIxTests =
+    testCase "coordinate Ix uses componentwise sub-boxes" $
+      case ( coordFromPosition 27 :: Maybe (Coord '[Clamped 10, Periodic 20])
+           , coordFromPosition 69 :: Maybe (Coord '[Clamped 10, Periodic 20])
+           , coordFromPosition 48 :: Maybe (Coord '[Clamped 10, Periodic 20])
+           , coordFromPosition 50 :: Maybe (Coord '[Clamped 10, Periodic 20])
+           ) of
+        (Just lower, Just upper, Just insideCoord, Just outsideCoord) -> do
+          assertEqual "range" [27, 28, 29, 47, 48, 49, 67, 68, 69]
+            (map coordPosition (Ix.range (lower, upper)))
+          assertEqual "indices" [0 .. 8]
+            (map (Ix.index (lower, upper)) (Ix.range (lower, upper)))
+          assertEqual "rangeSize" 9 (Ix.rangeSize (lower, upper))
+          assertBool "inside" (Ix.inRange (lower, upper) insideCoord)
+          assertBool "outside" (not (Ix.inRange (lower, upper) outsideCoord))
+        _ -> assertFailure "test coordinates could not be constructed"
 
 gridTests ::
        forall cs a x y f g.
@@ -100,6 +197,14 @@ gridTests ::
 gridTests _genC _genA =
   let tabulateIndex :: Coord cs -> Property
       tabulateIndex c = c === index (tabulate id :: Grid cs (Coord cs)) c
+      numIsPointwise :: Grid cs Int -> Grid cs Int -> Property
+      numIsPointwise a b =
+        (a + b === zipWithGrid (+) a b) .&&.
+        (a * b === zipWithGrid (*) a b) .&&.
+        (negate a === mapGrid negate a) .&&.
+        (abs a === mapGrid abs a) .&&.
+        (signum a === mapGrid signum a) .&&.
+        ((3 :: Grid cs Int) === pure 3)
       collapseUnCollapse :: Property
       collapseUnCollapse =
         property $ do
@@ -136,6 +241,7 @@ gridTests _genC _genA =
      , testProperty "Transpose twice is id" doubleTranspose
      , testProperty "imap indexes every cell by its own coord" imapIsTabulate
      , testProperty "ifoldMap, ifoldr and ifoldl' agree" indexedFoldsAgree
+    , testProperty "Num operations are pointwise" numIsPointwise
      ]
 
 splitTests ::
@@ -232,17 +338,17 @@ main :: IO ()
 main =
   let ordinal =
         [ isCoordLaws @Ordinal @10
+        , lawsToTest $ ixLaws (Proxy @(Ordinal 10))
         , lawsToTest $ showLaws (Proxy @(Ordinal 10))
         , jsonKeyLaws @(Ordinal 10)
         ]
       periodic =
         [ semigroupLaws @(Periodic 10)
+        , lawsToTest $ ixLaws (Proxy @(Periodic 10))
         , monoidLaws @(Periodic 10)
         , lawsToTest $ commutativeMonoidLaws (Proxy @(Periodic 10))
         , lawsToTest $ semigroupMonoidLaws (Proxy @(Periodic 10))
-        -- No 'boundedEnumLaws' here: 'Periodic' has no 'Bounded' instance
-        -- (see sized-grid-95u). 'enumLaws' alone still checks toEnum/fromEnum
-        -- round-trip and succ/pred against the wrapping 'Enum'.
+        , lawsToTest $ boundedEnumLaws (Proxy @(Periodic 10))
         , lawsToTest $ enumLaws (Proxy @(Periodic 10))
         , additiveGroupLaws @(Periodic 10)
         , groupLaws @(Periodic 10)
@@ -255,6 +361,7 @@ main =
         ]
       clamped =
         [ semigroupLaws @(Clamped 10)
+        , lawsToTest $ ixLaws (Proxy @(Clamped 10))
         , monoidLaws @(Clamped 10)
         , lawsToTest $ commutativeMonoidLaws (Proxy @(Clamped 10))
         , lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10))
@@ -268,6 +375,7 @@ main =
       -- 'Test.Reflective' has the bounce-specific properties.
       reflective =
         [ affineSpaceLaws @(Reflective 10)
+        , lawsToTest $ ixLaws (Proxy @(Reflective 10))
         , aesonLaws @(Reflective 10)
         , lawsToTest $ jsonLaws (Proxy @(Reflective 10))
         , jsonKeyLaws @(Reflective 10)
@@ -275,6 +383,7 @@ main =
         ]
       reflect101 =
         [ affineSpaceLaws @(Reflect101 10)
+        , lawsToTest $ ixLaws (Proxy @(Reflect101 10))
         , aesonLaws @(Reflect101 10)
         , lawsToTest $ jsonLaws (Proxy @(Reflect101 10))
         , jsonKeyLaws @(Reflect101 10)
@@ -290,6 +399,8 @@ main =
         , affineSpaceLaws @(Coord '[ Clamped 10, Periodic 20])
         , aesonLaws @(Coord '[ Clamped 10, Periodic 20])
         , lawsToTest $ jsonLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+        , lawsToTest $ boundedEnumLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
+        , lawsToTest $ enumLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , isoLaws
@@ -312,6 +423,8 @@ main =
         , abelianLaws @(Coord '[ Periodic 10, Periodic 20])
         , aesonLaws @(Coord '[ Periodic 10, Periodic 20])
         , lawsToTest $ jsonLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , lawsToTest $ boundedEnumLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
+        , lawsToTest $ enumLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , lawsToTest $ eqLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
@@ -322,6 +435,8 @@ main =
      testGroup
        "tests"
        [ testGroup "Ordinal 10" ordinal
+      , universeTests
+      , semialignZipTests
        , testGroup "Periodic 10" periodic
        , testGroup "Clamped 10" clamped
        , testGroup "Reflective 10" reflective
@@ -329,6 +444,7 @@ main =
        , reflectiveTests
        , testGroup "Coord [Clamped 10, Periodic 20]" coord
        , testGroup "Coord [Periodic 10, Periodic 20]" coord2
+      , coordIxTests
        , testGroup "2D Coords" $
          twoDimensionalCoordTests (Proxy @(Coord '[ Clamped 10, Periodic 10]))
          -- The element proxy is an axis type, not 'Int'. It used to be able to
@@ -361,6 +477,12 @@ main =
              , lawsToTest $
                genericLaws (Proxy @(Grid '[ Periodic 10, Periodic 11] Int))
              , eq1Laws (Proxy @(Grid '[ Periodic 10, Periodic 20]))
+             ] ++
+             [ semigroupLaws @(Grid '[ Periodic 10, Periodic 11] (Sum Int))
+             , monoidLaws @(Grid '[ Periodic 10, Periodic 11] (Sum Int))
+             , lawsToTest $
+               semigroupMonoidLaws
+                 (Proxy @(Grid '[ Periodic 10, Periodic 11] (Sum Int)))
              ])
          -- Two transforms that do not commute with each other, so a
          -- composition that ran them in the wrong order would show up.
@@ -462,6 +584,7 @@ main =
        , rayTests
        , pathTests
        , focusedTests
+      , cellTests
        , invariantTests
        , ordinalTests
        , periodicTests

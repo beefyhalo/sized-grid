@@ -11,6 +11,11 @@ import           Control.DeepSeq       (NFData)
 import           Control.Lens          (iso)
 import           Data.Aeson
 import           Data.AffineSpace
+import           Data.Hashable        (Hashable)
+import           Data.Ix              (Ix)
+import           Data.Primitive.Types  (Prim)
+import           Data.Universe.Class  (universe, universeF)
+import qualified Data.Universe.Class  as U
 import           GHC.TypeLits
 import           System.Random         (Random (..))
 
@@ -25,6 +30,10 @@ deriving instance KnownNat n => Show (Reflect101 n)
 
 deriving instance NFData (Reflect101 n)
 
+deriving newtype instance Ix (Reflect101 n)
+deriving newtype instance Hashable (Reflect101 n)
+deriving newtype instance Prim (Reflect101 n)
+
 deriving instance (KnownNat n, 1 <= n) => Random (Reflect101 n)
 deriving instance (KnownNat n, 1 <= n) => Enum (Reflect101 n)
 deriving instance (KnownNat n, 1 <= n) => Bounded (Reflect101 n)
@@ -32,6 +41,12 @@ deriving instance KnownNat n => ToJSON (Reflect101 n)
 deriving instance KnownNat n => FromJSON (Reflect101 n)
 deriving instance KnownNat n => ToJSONKey (Reflect101 n)
 deriving instance KnownNat n => FromJSONKey (Reflect101 n)
+
+instance (1 <= n, KnownNat n) => U.Universe (Reflect101 n) where
+  universe = allCoordLike
+
+instance (1 <= n, KnownNat n) => U.Finite (Reflect101 n) where
+  universeF = allCoordLike
 
 instance IsCoord Reflect101 where
   asOrdinal = iso unReflect101 Reflect101

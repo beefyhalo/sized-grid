@@ -56,7 +56,7 @@ windowsAreSlices src =
 -- there is no lawful write-back to test.
 windowsIsGridWindows :: Grid '[ Ordinal 5] Int -> Property
 windowsIsGridWindows src =
-  toListOf (windows @(Ordinal 3)) src === (gridWindows @(Ordinal 3) src)
+  toListOf (windows @(Ordinal 3)) src === gridWindows @(Ordinal 3) src
 
 windowTests :: TestTree
 windowTests =

@@ -9,6 +9,11 @@ import           Control.DeepSeq       (NFData)
 import           Control.Lens          (iso)
 import           Data.Aeson
 import           Data.AffineSpace
+import           Data.Hashable        (Hashable)
+import           Data.Ix              (Ix)
+import           Data.Primitive.Types  (Prim)
+import           Data.Universe.Class  (universe, universeF)
+import qualified Data.Universe.Class  as U
 import           GHC.TypeLits
 import           System.Random         (Random (..))
 
@@ -22,6 +27,10 @@ deriving instance KnownNat n => Show (Clamped n)
 
 deriving instance NFData (Clamped n)
 
+deriving newtype instance Ix (Clamped n)
+deriving newtype instance Hashable (Clamped n)
+deriving newtype instance Prim (Clamped n)
+
 deriving instance (KnownNat n, 1 <= n) => Random (Clamped n)
 deriving instance (KnownNat n, 1 <= n) => Enum (Clamped n)
 deriving instance (KnownNat n, 1 <= n) => Bounded (Clamped n)
@@ -29,6 +38,12 @@ deriving instance KnownNat n => ToJSON (Clamped n)
 deriving instance KnownNat n => FromJSON (Clamped n)
 deriving instance KnownNat n => ToJSONKey (Clamped n)
 deriving instance KnownNat n => FromJSONKey (Clamped n)
+
+instance (1 <= n, KnownNat n) => U.Universe (Clamped n) where
+  universe = allCoordLike
+
+instance (1 <= n, KnownNat n) => U.Finite (Clamped n) where
+  universeF = allCoordLike
 
 instance IsCoord Clamped where
   asOrdinal = iso unClamped Clamped

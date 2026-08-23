@@ -73,7 +73,7 @@ foldGridAgreesWithStencilGrid ::
 foldGridAgreesWithStencilGrid name r =
     testProperty name $ \(g :: Grid cs Int) ->
         gridVector (stencilFoldGrid (mooreStencil r) (+) id g) ===
-        gridVector (stencilGrid (mooreStencil r) (\x ns -> foldl' (+) x ns) g)
+        gridVector (stencilGrid (mooreStencil r) (foldl' (+)) g)
 
 -- | 'stencilAt' against the same loop, one cell at a time.
 --
@@ -90,7 +90,7 @@ readsOneCellLikeTheLoop name r =
     testProperty name $ \(g :: Grid cs Int) ->
         let s = mooreStencil r
          in map (stencilAt s g) (allCoord @cs) ===
-            map (\c -> map (indexGrid g) (mooreNeighbours r c)) (allCoord @cs)
+            map (map (indexGrid g) . mooreNeighbours r) (allCoord @cs)
 
 -- | The width a stencil discovers, against the widest row @mooreNeighbours@
 -- actually produces. Separate from the agreement properties because those

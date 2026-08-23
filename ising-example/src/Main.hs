@@ -105,7 +105,7 @@ energyAtPoint ::
   -> grid GridType Spin
   -> Coord GridType
   -> Double
-energyAtPoint po g c = singleEnergy po (g ^. asGrid) c
+energyAtPoint po g = singleEnergy po (g ^. asGrid)
 
 attempFlip ::
      (IsGrid GridType (grid GridType), MonadRandom m)

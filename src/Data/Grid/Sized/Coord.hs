@@ -126,9 +126,15 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Constraint
+import           Data.Finitary          (Finitary (..))
 import           Data.Group            (Abelian, Group (..))
+import           Data.Hashable         (Hashable (..))
+import           Data.Ix               (Ix (..))
+import qualified Data.Ix               as Ix
 import           Data.Kind (Type)
 import           Data.List             (intercalate, unfoldr)
+import           Data.Universe.Class   (universe, universeF)
+import qualified Data.Universe.Class   as U
 import qualified Data.Vector           as V
 import           Generics.SOP          hiding (Generic, S, Z)
 import qualified Generics.SOP          as SOP
@@ -289,6 +295,88 @@ instance forall cs. (IsCoordList cs, All AdditiveGroup cs) =>
         Coord $
         npToPosition $
         hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^-^)) (unCoord a) (unCoord b)
+
+-- | The dense position is a perfect hash within a coordinate shape. Hashing
+-- it directly avoids paying for each axis and preserves the shape in the type.
+instance forall cs. IsCoordList cs => Hashable (Coord cs) where
+    hashWithSalt salt = hashWithSalt salt . coordPosition
+
+instance forall cs. (IsCoordList cs, All Bounded cs) => Bounded (Coord cs) where
+    minBound =
+        Coord $
+        npToPosition @cs $
+        hcpure (Proxy :: Proxy Bounded) (pure minBound)
+    maxBound =
+        Coord $
+        npToPosition @cs $
+        hcpure (Proxy :: Proxy Bounded) (pure maxBound)
+
+class IxCoordList cs where
+    ixRangeNP :: NP I cs -> NP I cs -> [NP I cs]
+    ixIndexNP :: NP I cs -> NP I cs -> NP I cs -> Int
+    ixInRangeNP :: NP I cs -> NP I cs -> NP I cs -> Bool
+    ixRangeSizeNP :: NP I cs -> NP I cs -> Int
+
+instance IxCoordList '[] where
+    ixRangeNP Nil Nil = [Nil]
+    ixIndexNP Nil Nil Nil = 0
+    ixInRangeNP Nil Nil Nil = True
+    ixRangeSizeNP Nil Nil = 1
+
+instance (Ix c, IxCoordList cs) => IxCoordList (c ': cs) where
+    ixRangeNP (I lower :* lowers) (I upper :* uppers) =
+      [I value :* rest | value <- range (lower, upper),
+                 rest <- ixRangeNP lowers uppers]
+    ixIndexNP (I lower :* lowers) (I upper :* uppers) (I value :* values) =
+      Ix.index (lower, upper) value * ixRangeSizeNP lowers uppers +
+      ixIndexNP lowers uppers values
+    ixInRangeNP (I lower :* lowers) (I upper :* uppers) (I value :* values) =
+      inRange (lower, upper) value && ixInRangeNP lowers uppers values
+    ixRangeSizeNP (I lower :* lowers) (I upper :* uppers) =
+      rangeSize (lower, upper) * ixRangeSizeNP lowers uppers
+
+-- | 'Ix' treats its pair of bounds as a bounding sub-box. The coordinate
+-- instance therefore uses each axis's contiguous range and combines the
+-- resulting offsets in row-major order. For 'Periodic', this range is
+-- deliberately not cyclic: 'Ix' describes contiguous ordered sub-ranges.
+instance forall cs. (IsCoordList cs, IxCoordList cs) => Ix (Coord cs) where
+    range (Coord lower, Coord upper) =
+      map (Coord . npToPosition @cs)
+        (ixRangeNP @cs (unCoord @cs (Coord lower))
+               (unCoord @cs (Coord upper)))
+    index (Coord lower, Coord upper) (Coord value) =
+      ixIndexNP @cs
+        (unCoord @cs (Coord lower))
+        (unCoord @cs (Coord upper))
+        (unCoord @cs (Coord value))
+    inRange (Coord lower, Coord upper) (Coord value) =
+      ixInRangeNP @cs
+        (unCoord @cs (Coord lower))
+        (unCoord @cs (Coord upper))
+        (unCoord @cs (Coord value))
+    rangeSize (Coord lower, Coord upper) =
+      ixRangeSizeNP @cs
+        (unCoord @cs (Coord lower))
+        (unCoord @cs (Coord upper))
+
+instance forall cs. IsCoordList cs => Enum (Coord cs) where
+    toEnum p =
+        case coordFromPosition @cs p of
+            Just c -> c
+            Nothing ->
+                error $
+                "toEnum: " ++
+                show p ++
+                " is out of range for Coord " ++ show (coordListSize @cs)
+    fromEnum = coordPosition
+    enumFromTo a b = map Coord [coordPosition a .. coordPosition b]
+    enumFromThenTo a b c =
+        map Coord [coordPosition a, coordPosition b .. coordPosition c]
+    enumFrom a = enumFromTo a (Coord (coordListSize @cs - 1))
+    enumFromThen a b
+      | coordPosition b >= coordPosition a =
+        enumFromThenTo a b (Coord (coordListSize @cs - 1))
+      | otherwise = enumFromThenTo a b (Coord 0)
 
 -- | Per axis, not over the flat position: 'randomR' between two coordinates
 -- gives the box they span, which a flat range would not.
@@ -493,6 +581,17 @@ allCoord ::
     => [Coord cs]
 allCoord = map Coord [0 .. coordListSize @cs - 1]
 {-# INLINE allCoord #-}
+
+instance IsCoordList cs => U.Universe (Coord cs) where
+  universe = allCoord
+
+instance IsCoordList cs => U.Finite (Coord cs) where
+  universeF = allCoord
+
+instance (IsCoordList cs, AllSizedKnown cs) => Finitary (Coord cs) where
+  type Cardinality (Coord cs) = MaxCoordSize cs
+  toFinite = fromIntegral . coordPosition
+  fromFinite = unsafeCoordFromPosition . fromIntegral
 
 type family MaxCoordSize (cs :: [k]) :: GHC.Nat where
   MaxCoordSize '[] = 1

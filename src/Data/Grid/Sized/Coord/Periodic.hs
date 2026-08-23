@@ -11,6 +11,11 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Group          (Abelian, Cyclic (..), Group (..))
+import           Data.Hashable       (Hashable)
+import           Data.Ix             (Ix)
+import           Data.Primitive.Types (Prim)
+import           Data.Universe.Class (universe, universeF)
+import qualified Data.Universe.Class as U
 import           GHC.TypeLits
 import           System.Random
 
@@ -23,12 +28,22 @@ deriving instance KnownNat n => Show (Periodic n)
 
 deriving instance NFData (Periodic n)
 
+deriving newtype instance Ix (Periodic n)
+deriving newtype instance Hashable (Periodic n)
+deriving newtype instance Prim (Periodic n)
+
 deriving instance (1 <= n, KnownNat n) => Random (Periodic n)
 
 deriving instance KnownNat n => ToJSON (Periodic n)
 deriving instance KnownNat n => ToJSONKey (Periodic n)
 deriving instance KnownNat n => FromJSON (Periodic n)
 deriving instance KnownNat n => FromJSONKey (Periodic n)
+
+instance (1 <= n, KnownNat n) => U.Universe (Periodic n) where
+    universe = allCoordLike
+
+instance (1 <= n, KnownNat n) => U.Finite (Periodic n) where
+    universeF = allCoordLike
 
 instance (1 <= n, KnownNat n) => Enum (Periodic n) where
     toEnum x = Periodic $ unsafeOrdinal $ x `mod` ordinalSize @n
@@ -45,6 +60,10 @@ instance (1 <= n, KnownNat n) => Enum (Periodic n) where
         step = fromEnum b - fromEnum a
     enumFromTo a b = map toEnum [fromEnum a .. fromEnum b]
     enumFromThenTo a b c = map toEnum [fromEnum a,fromEnum b .. fromEnum c]
+
+instance (1 <= n, KnownNat n) => Bounded (Periodic n) where
+    minBound = Periodic minBound
+    maxBound = Periodic maxBound
 
 instance IsCoord Periodic where
   asOrdinal = iso unPeriodic Periodic

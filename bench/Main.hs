@@ -1,10 +1,3 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE MonoLocalBinds      #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-
-
 -- | Baseline benchmarks for the operations the real workloads hit.
 module Main (main) where
 
@@ -20,6 +13,7 @@ import           Data.Aeson              (Result (..), fromJSON, toJSON)
 import           Data.AffineSpace        ((.+^), (.-.))
 import           Data.Functor.Identity   (Identity (..))
 import           Data.Functor.Rep        (index, tabulate)
+import qualified Data.Vector             as V
 import qualified Data.Vector.Generic     as VG
 import           Test.Tasty.Bench
 
@@ -356,7 +350,7 @@ rowPrefix = runIdentity . mapLowerDim (Identity . scanl1Grid (+))
 -- consumer's table-building workload.
 power :: Int -> Coord Big -> Int
 power serial ((fromEnum -> y) :| (fromEnum -> x) :| _) =
-    ((rack * y + serial) * rack `div` 100) `mod` 10 - 5
+    (rack * y + serial) * rack `div` 100 `mod` 10 - 5
   where
     rack = x + 10
 
@@ -542,9 +536,9 @@ main = do
               , bench "imapGrid over neighbours x100, 50x50" $
                 nf (iterateNeighbourStep 100) plainStepGrid
               , bench "mooreStencil r, 50x50 (building the table)" $
-                whnf (\r -> VG.length (stencilPositions (mooreStencil @Step r))) 1
+                whnf (VG.length . stencilPositions . mooreStencil @Step) 1
               , bench "mooreStencil r, 50x50, Periodic" $
-                whnf (\r -> VG.length (stencilPositions (mooreStencil @StepPeriodic r))) 1
+                whnf (VG.length . stencilPositions . mooreStencil @StepPeriodic) 1
               , bench "stencilStep 50x50, table already built" $
                 nf (stencilStep stepStencil) plainStepGrid
               , bench "stencilStep 50x50, Periodic, table already built" $
@@ -650,6 +644,12 @@ main = do
               [ bench "toJSON 100x100" $ nf toJSON midGrid
               , bench "fromJSON . toJSON 100x100" $
                 whnf (roundTrips . toJSON) midGrid
+              , env (pure (toJSON midGrid)) $ \v ->
+                bench "fromJSON 100x100, pre-serialised" $ whnf roundTrips v
+              , env (pure (toJSON midGrid)) $ \v ->
+                bench "TEMP aeson floor [[Int]]" $ whnf floorList v
+              , env (pure (toJSON midGrid)) $ \v ->
+                bench "TEMP aeson floor Vector" $ whnf floorVec v
               ]
         ]
   where
@@ -658,5 +658,13 @@ main = do
     -- not a 'total'-style Foldable sum.
     roundTrips v =
         case fromJSON v :: Result (Grid Mid Int) of
+            Success g -> rnf g `seq` (1 :: Int)
+            Error _   -> -1
+    floorList v =
+        case fromJSON v :: Result [[Int]] of
+            Success g -> rnf g `seq` (1 :: Int)
+            Error _   -> -1
+    floorVec v =
+        case fromJSON v :: Result (V.Vector (V.Vector Int)) of
             Success g -> rnf g `seq` (1 :: Int)
             Error _   -> -1

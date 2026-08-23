@@ -16,6 +16,7 @@ module Data.Grid.Sized.Internal.Grid
     -- $bulk
   , tabulateGrid
   , indexGrid
+  , cell
   , mapGrid
   , imapGrid
   , zipWithGrid
@@ -58,6 +59,7 @@ import           Control.DeepSeq               (NFData)
 import           Control.Lens                  hiding (index)
 import           Data.Aeson
 import           Data.Aeson.Types              (Parser)
+import           Data.Align                   (Semialign (..))
 import           Data.Constraint
 import           Data.Distributive
 import           Data.Functor.Bind             (Apply (..), Bind (..))
@@ -65,6 +67,8 @@ import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Kind                     (Type)
 import           Data.Proxy                    (Proxy (..))
+import           Data.These                    (These (..))
+import           Data.Zip                      (Zip (..))
 import qualified Data.Vector                   as V
 import qualified Data.Vector.Generic           as VG
 import qualified Data.Vector.Generic.Mutable   as VGM
@@ -77,6 +81,15 @@ import qualified GHC.TypeLits                  as GHC
 newtype GridOf v (cs :: [Type]) a = Grid
   { unGrid :: v a
   } deriving stock (GHC.Generic)
+
+type instance Index (GridOf v cs a) = Coord cs
+type instance IxValue (GridOf v cs a) = a
+
+instance (VG.Vector v a, IsCoordList cs) => Ixed (GridOf v cs a) where
+  ix c f (Grid v) =
+    let position = coordPosition c
+        replace value = Grid (v VG.// [(position, value)])
+    in replace <$> f (VG.unsafeIndex v position)
 
 -- | Kept nullary so it stays partially applicable, e.g. @'Functor' ('Grid' cs)@.
 type Grid = GridOf V.Vector
@@ -134,6 +147,9 @@ deriving newtype instance Foldable v => Foldable (GridOf v cs)
 -- applicative parameter.
 instance Traversable v => Traversable (GridOf v cs) where
   traverse f (Grid v) = Grid <$> traverse f v
+
+instance IsCoordList cs => Each (Grid cs a) (Grid cs b) a b where
+  each = traverse
 
 -- | Asserts, rather than checks, that the vector holds exactly
 -- @MaxCoordSize cs@ elements. Re-exported from "Data.Grid.Sized.Unsafe".
@@ -226,6 +242,14 @@ indexGrid ::
 indexGrid (Grid v) c = VG.unsafeIndex v (coordPosition c)
 {-# INLINE indexGrid #-}
 
+cell :: forall v cs a. (VG.Vector v a, IsCoordList cs) => Coord cs -> Lens' (GridOf v cs a) a
+cell c = requiring @(IsCoordList cs) $ lens getter setter
+  where
+    position = coordPosition c
+    getter (Grid v) = VG.unsafeIndex v position
+    setter (Grid v) value = Grid (v VG.// [(position, value)])
+{-# INLINE cell #-}
+
 mapGrid ::
        (VG.Vector v a, VG.Vector v b)
     => (a -> b)
@@ -295,6 +319,12 @@ instance IsCoordList cs => Apply (Grid cs) where
 instance IsCoordList cs => Bind (Grid cs) where
   g >>- f = imap (\p a -> indexGrid (f a) p) g
 
+instance IsCoordList cs => Semialign (Grid cs) where
+  alignWith f = zipWithGrid (\a b -> f (These a b))
+
+instance IsCoordList cs => Zip (Grid cs) where
+  zipWith = zipWithGrid
+
 -- | Boxed only, and necessarily so: `pure` must produce a grid of /any/ element
 -- type, which no unboxed vector can hold. 'tabulateGrid' is the unboxed
 -- counterpart for the cases that have a concrete element type in hand.
@@ -302,6 +332,27 @@ instance AllSizedKnown cs => Applicative (Grid cs) where
     pure =
         Grid . V.replicate (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
     Grid fs <*> Grid as = Grid $ V.zipWith ($) fs as
+
+-- | A grid has no concatenation operation that preserves its shape, so the
+-- semigroup operation is pointwise. This is the same reading as for an array:
+-- values at corresponding coordinates are combined.
+instance (IsCoordList cs, Semigroup a) => Semigroup (Grid cs a) where
+  (<>) = zipWithGrid (<>)
+
+-- | The monoid operation is pointwise, and 'mempty' fills every cell with the
+-- element monoid's identity.
+instance (AllSizedKnown cs, IsCoordList cs, Monoid a) => Monoid (Grid cs a) where
+  mempty = pure mempty
+
+-- | Arithmetic on a grid is pointwise. In particular, multiplication is the
+-- Hadamard product, while 'abs' and 'signum' act independently on each cell.
+instance (AllSizedKnown cs, IsCoordList cs, Num a) => Num (Grid cs a) where
+  (+) = zipWithGrid (+)
+  (*) = zipWithGrid (*)
+  abs = mapGrid abs
+  signum = mapGrid signum
+  negate = mapGrid negate
+  fromInteger = pure . fromInteger
 
 -- | Defined via '(>>-)' so the two cannot drift.
 instance (AllSizedKnown cs, IsCoordList cs) =>
@@ -485,13 +536,24 @@ nestedToJSON ::
      forall cs a. (AllSizedKnown cs, ToJSON a)
   => V.Vector a
   -> Value
+-- The last axis is a case of its own, and that is sized-grid-adr.12: aeson's
+-- own @'ToJSON' ('V.Vector' a)@ turns the innermost row into an 'Array'
+-- directly. Without it the general branch reaches this row too, and splits it
+-- into one single-element slice per cell only for @SizeNil@ to read the cell
+-- back out of it and @'toJSON' :: ['Value'] -> 'Value'@ to rebuild a vector
+-- from the list of results -- three intermediates per cell to produce what the
+-- vector instance produces in one pass. Measured on @toJSON 100x100@:
+-- 652 us and 3.7 MB became 288 us and 1.3 MB.
 nestedToJSON v =
   case sizeProof @cs of
     SizeNil -> toJSON (v V.! 0)
     SizeCons @_ @_ @rest ->
-      toJSON $
-      map (nestedToJSON @rest) $
-      splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
+      case sizeProof @rest of
+        SizeNil -> toJSON v
+        SizeCons{} ->
+          toJSON $
+          map (nestedToJSON @rest) $
+          splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
 
 -- | Decoding validates the length at every dimension, so a successfully decoded
 -- grid always satisfies @VG.length (gridVector g) == MaxCoordSize cs@. Without
@@ -512,17 +574,48 @@ nestedParseJSON ::
      forall cs a. (AllSizedKnown cs, FromJSON a)
   => Value
   -> Parser (V.Vector a)
+-- The last axis is a case of its own, for the reason given on 'nestedToJSON'
+-- and with the same measurement behind it (sized-grid-adr.12). At the
+-- innermost row aeson's own @'FromJSON' [a]@ parses the elements in one pass;
+-- the general branch would parse the row to a @['Value']@ first and then hand
+-- each 'Value' to @SizeNil@, which wraps every cell in a one-element vector
+-- for 'V.concat' to copy straight back out. The explicit value traversal also
+-- avoids Aeson's special @[Char]@ instance, which expects a JSON string rather
+-- than the array of singleton strings emitted for a character row. Measured on
+-- the isolated parse of
+-- a 100x100 grid: 1.91 ms and 8.1 MB became 957 us and 5.1 MB, which is
+-- within 1.5x of what aeson charges to parse the same 'Value' as a plain
+-- @[[Int]]@ -- the floor this recursion can reach without replacing aeson's
+-- element parser.
+--
+-- The order of the two failures differs at that row and only there: the
+-- element parses now happen before the length check, so a row that is both
+-- ragged /and/ badly typed reports the element rather than the length. Both
+-- are still rejected, which is what
+-- "Test.Invariant"'s @Malformed JSON must be rejected@ pins.
 nestedParseJSON val =
   case sizeProof @cs of
     SizeNil -> V.singleton <$> parseJSON val
-    SizeCons @_ @n @rest -> do
-      vals :: [Value] <- parseJSON val
-      let expected = fromIntegral $ GHC.natVal (Proxy @n) :: Int
-      if length vals == expected
-        then V.concat <$> traverse (nestedParseJSON @rest) vals
-        else fail $
-             "Grid: expected " ++
-             show expected ++ " elements, got " ++ show (length vals)
+    SizeCons @_ @n @rest ->
+      case sizeProof @rest of
+        SizeNil -> do
+          vals :: [Value] <- parseJSON val
+          checkLength @n (length vals)
+          V.fromList <$> traverse parseJSON vals
+        SizeCons{} -> do
+          vals :: [Value] <- parseJSON val
+          checkLength @n (length vals)
+          V.concat <$> traverse (nestedParseJSON @rest) vals
+
+-- | The per-dimension length check both branches of 'nestedParseJSON' share:
+-- @n@ elements at this axis, or a parse failure naming both counts.
+checkLength :: forall n. GHC.KnownNat n => Int -> Parser ()
+checkLength got
+  | got == expected = pure ()
+  | otherwise =
+      fail $ "Grid: expected " ++ show expected ++ " elements, got " ++ show got
+  where
+    expected = fromIntegral (GHC.natVal (Proxy @n)) :: Int
 
 -- | @tabulate (index g . f)@ for a coordinate endomorphism-or-relabelling @f@
 -- is a permutation of the underlying vector: which source position feeds
@@ -580,7 +673,7 @@ transposeGrid ::
      )
   => GridOf v '[ w x, h y] a
   -> GridOf v '[ h y, w x] a
-transposeGrid g = permuteGrid tranposeCoord g
+transposeGrid = permuteGrid tranposeCoord
 {-# INLINABLE transposeGrid #-}
 
 -- | The outer grid holds grids, and a grid is never an unboxed element, so the

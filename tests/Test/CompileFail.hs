@@ -1,8 +1,6 @@
 -- | Compile-fail harness: each case under @tests\/compile-fail@ is a
 -- deliberately ill-typed use of the API, and 'assertCompileFails' shells out
 -- to GHC to check that it is rejected with the expected diagnostic.
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Test.CompileFail
   ( compileFailTests
   ) where
