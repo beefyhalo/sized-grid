@@ -5,6 +5,7 @@
 module Data.Grid.Sized.Optics
   ( -- * Coordinates
     _CoordAxes
+  , _TransposedCoord
   , _Position
   , _Strengthened
   , _Weakened
@@ -19,6 +20,8 @@ module Data.Grid.Sized.Optics
   , _Ordinal
     -- * Grids
   , _GridVector
+  , permuted
+  , _Transposed
   , _SplitGrid
   , cell
   , gridIndex
@@ -42,6 +45,7 @@ import           Data.Grid.Sized.Coord            (AffineCoordList, AllSizedKnow
                                                    coordPosition,
                                                    unCoord,
                                                    unsafeCoordFromPosition,
+                                                   transposeCoord,
                                                    strengthenCoord,
                                                    weakenCoord)
 import           Data.Grid.Sized.Coord.Class      (IsCoordLifted,
@@ -58,7 +62,8 @@ import           Data.Grid.Sized.Focused          (FocusedGrid (..))
 import           Data.Grid.Sized.Internal.Grid   (Grid, GridOf (..),
                                                    combineGrid, dropGrid,
                                                    gridFromVector, gridVector,
-                                                   mapLowerDim, splitGrid,
+                                                   mapLowerDim, permuteGrid,
+                                                   splitGrid,
                                                    sliceGrid)
 import           Data.Grid.Sized.Internal.Type   (requiring)
 import           Data.Grid.Sized.Ordinal         (Ordinal, ordinalToNum,
@@ -80,6 +85,31 @@ import           GHC.TypeLits                    (KnownNat, natVal, type (+),
 -- therefore costs one 'quotRem' per axis; it is not a representation coercion.
 _CoordAxes :: forall cs. IsCoordList cs => Iso' (Coord cs) (NP I cs)
 _CoordAxes = iso unCoord (unsafeCoordFromPosition . npToPosition @cs)
+
+-- | The coordinate transpose, which is its own inverse.
+_TransposedCoord :: (IsCoordLifted a, IsCoordLifted b)
+                 => Iso' (Coord '[a, b]) (Coord '[b, a])
+_TransposedCoord = iso transposeCoord transposeCoord
+
+-- | Lift a bijective coordinate optic to a grid permutation. Each direction
+-- builds its own index vector when applied.
+permuted :: (VG.Vector v a, VG.Vector v Int, IsCoordList cs, IsCoordList ds)
+     => Iso' (Coord cs) (Coord ds)
+     -> Iso' (GridOf v ds a) (GridOf v cs a)
+permuted i = iso (permuteGrid (view i)) (permuteGrid (review i))
+
+-- | Transpose a two-dimensional grid as an 'Iso'.
+_Transposed :: ( VG.Vector v a
+               , VG.Vector v Int
+               , IsCoord h
+               , IsCoord w
+               , KnownNat x
+               , KnownNat y
+               , 1 <= y
+               , 1 <= x
+               )
+            => Iso' (GridOf v '[w x, h y] a) (GridOf v '[h y, w x] a)
+_Transposed = permuted _TransposedCoord
 
 -- | The checked conversion between a flat position and a coordinate.
 _Position :: IsCoordList cs => Prism' Int (Coord cs)

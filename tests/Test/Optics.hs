@@ -20,6 +20,7 @@ import           Test.Utils          (isoLaws, lensLaws, prismLaws, prismLawsFro
 
 type Coord2 = Coord '[Ordinal 5, Ordinal 7]
 type Grid2 = Grid '[Ordinal 5, Ordinal 7] Int
+type TransposedGrid2 = Grid '[Ordinal 7, Ordinal 5] Int
 type Focused2 = FocusedGrid '[Ordinal 5, Ordinal 7] Int
 type Torus2 = Coord '[Periodic 5, Periodic 3]
 
@@ -92,7 +93,13 @@ gridOpticTests :: TestTree
 gridOpticTests =
   testGroup
     "Grid optics"
-    [ isoLaws "_SplitGrid"
+    [ isoLaws "_TransposedCoord"
+        (_TransposedCoord :: Iso' Coord2 (Coord '[Ordinal 7, Ordinal 5]))
+    , isoLaws "permuted _TransposedCoord"
+        (permuted _TransposedCoord :: Iso' TransposedGrid2 Grid2)
+    , isoLaws "_Transposed"
+        (_Transposed :: Iso' Grid2 TransposedGrid2)
+    , isoLaws "_SplitGrid"
         (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int)))
     , testGroup "_GridVector is a prism"
       [ prismLawsFrom (V.replicate 35 <$> chooseInt (-100, 100))
