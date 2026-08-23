@@ -9,6 +9,7 @@ module Data.Grid.Sized.Optics
   , _Strengthened
   , _Weakened
   , _WeakenedCoord
+  , translated
   , coordHead
   , coordTail
   , _WrappedDelta
@@ -33,7 +34,8 @@ module Data.Grid.Sized.Optics
   ) where
 
 import           Data.Grid.Sized.Class            (IsGrid (..))
-import           Data.Grid.Sized.Coord            (AllSizedKnown, Coord,
+import           Data.Grid.Sized.Coord            (AffineCoordList, AllSizedKnown, Coord,
+                                                   MapDiff,
                                                    StrengthenCoord,
                                                    WeakenCoord,
                                                    coordFromPosition,
@@ -45,6 +47,7 @@ import           Data.Grid.Sized.Coord            (AllSizedKnown, Coord,
 import           Data.Grid.Sized.Coord.Class      (IsCoordLifted,
                                                    IsCoord,
                                                    IsCoordList (..),
+                                                   Boundaryless,
                                                    coordListSize,
                                                    strengthenIsCoord,
                                                    toAxisIndex,
@@ -64,9 +67,11 @@ import           Data.Grid.Sized.Ordinal         (Ordinal, ordinalToNum,
                                                    weakenOrdinal)
 
 import           Control.Lens
+import           Data.AdditiveGroup              (AdditiveGroup (..))
+import           Data.AffineSpace                (Diff, (.+^))
 import           Data.Vector.Generic              (Vector)
 import qualified Data.Vector.Generic             as VG
-import           Generics.SOP                     (I (..), NP (..))
+import           Generics.SOP                     (All, I (..), NP (..))
 import           Data.Proxy                       (Proxy (..))
 import           GHC.TypeLits                    (KnownNat, natVal, type (+),
                                                    type (-), type (<=))
@@ -94,6 +99,18 @@ _Weakened = prism' strengthenIsCoord weakenIsCoord
 _WeakenedCoord :: (StrengthenCoord as bs, WeakenCoord bs as)
                => Prism' (Coord bs) (Coord as)
 _WeakenedCoord = prism' strengthenCoord weakenCoord
+
+-- | Translate a boundaryless coordinate by a displacement. The inverse moves
+-- by the additive inverse, so this is total exactly when every axis is
+-- 'Boundaryless'.
+translated ::
+  forall cs. ( All Boundaryless cs
+     , AffineCoordList cs
+     , All AdditiveGroup (MapDiff cs)
+     )
+  => Diff (Coord cs)
+  -> Iso' (Coord cs) (Coord cs)
+translated d = requiring @(All Boundaryless cs) $ iso (.+^ d) (.+^ negateV d)
 
 coordHead ::
        forall a a' as. (IsCoordLifted a, IsCoordLifted a', IsCoordList as)

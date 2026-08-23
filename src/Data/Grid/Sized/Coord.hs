@@ -54,6 +54,11 @@ module Data.Grid.Sized.Coord
   , coordFromPosition
   , unsafeCoordFromPosition
   , coordSpaceSize
+    -- * Boundaryless displacement group
+  , TorusCoord(..)
+  , torusCoordFromDelta
+  , torusCoordToDelta
+  , allTorusCoords
     -- * Centred coordinates
   , CentredAxis
   , centreCoord
@@ -167,6 +172,49 @@ newtype Coord (cs :: [Type]) = Coord Int
 -- 'Data.Grid.Sized.Ordinal.Ordinal'\'s own role annotation closes, and the one
 -- @tests\/compile-fail@ checks stays shut.
 type role Coord nominal
+
+-- | A displacement modulo the shape of an all-'Boundaryless' coordinate.
+-- Unlike 'Delta', this is bounded: its values are the elements of the finite
+-- product group represented by the coordinate axes.
+newtype TorusCoord (cs :: [Type]) = TorusCoord (Coord cs)
+  deriving newtype (Eq, Ord, NFData)
+
+type role TorusCoord nominal
+
+instance (IsCoordList cs, All Show cs) => Show (TorusCoord cs) where
+  show (TorusCoord c) = "TorusCoord " ++ show c
+
+instance IsCoordList cs => Hashable (TorusCoord cs) where
+  hashWithSalt salt (TorusCoord c) = hashWithSalt salt (coordPosition c)
+
+instance IsCoordList cs => Bounded (TorusCoord cs) where
+  minBound = TorusCoord (Coord 0)
+  maxBound = TorusCoord (Coord (coordListSize @cs - 1))
+
+instance IsCoordList cs => Enum (TorusCoord cs) where
+  toEnum p =
+    case coordFromPosition @cs p of
+      Just c -> TorusCoord c
+      Nothing -> error "toEnum: TorusCoord position out of range"
+  fromEnum (TorusCoord c) = coordPosition c
+  succ (TorusCoord c) = TorusCoord (succ c)
+  pred (TorusCoord c) = TorusCoord (pred c)
+  enumFromTo (TorusCoord a) (TorusCoord b) = TorusCoord <$> enumFromTo a b
+  enumFromThenTo (TorusCoord a) (TorusCoord b) (TorusCoord c) =
+    TorusCoord <$> enumFromThenTo a b c
+  enumFrom (TorusCoord a) = TorusCoord <$> enumFrom a
+  enumFromThen (TorusCoord a) (TorusCoord b) = TorusCoord <$> enumFromThen a b
+
+instance IsCoordList cs => U.Universe (TorusCoord cs) where
+  universe = allTorusCoords
+
+instance IsCoordList cs => U.Finite (TorusCoord cs) where
+  universeF = allTorusCoords
+
+instance (IsCoordList cs, AllSizedKnown cs) => Finitary (TorusCoord cs) where
+  type Cardinality (TorusCoord cs) = MaxCoordSize cs
+  toFinite (TorusCoord c) = fromIntegral (coordPosition c)
+  fromFinite = TorusCoord . unsafeCoordFromPosition . fromIntegral
 
 -- | The coordinate's value axis by axis, rebuilt.
 --
@@ -434,6 +482,63 @@ coordFromTuple = Coord . npToPosition . productTypeFrom
 
 coordToTuple :: (IsProductType t xs, IsCoordList xs) => Coord xs -> t
 coordToTuple = productTypeTo . unCoord
+
+-- | Convert an unbounded displacement to its residue in the finite torus.
+torusCoordFromDelta ::
+  forall cs. ( AffineCoordList cs
+          , All AdditiveGroup (MapDiff cs)
+          )
+  => Delta (MapDiff cs)
+  -> TorusCoord cs
+torusCoordFromDelta d = TorusCoord (zeroCoord @cs .+^ d)
+
+-- | Recover the representative displacement from the zero coordinate.
+torusCoordToDelta ::
+  forall cs. ( AffineCoordList cs
+          , All AdditiveGroup (MapDiff cs)
+          )
+  => TorusCoord cs
+  -> Delta (MapDiff cs)
+torusCoordToDelta (TorusCoord c) = c .-. zeroCoord @cs
+
+-- | Every residue in row-major order.
+allTorusCoords :: forall cs. IsCoordList cs => [TorusCoord cs]
+allTorusCoords = TorusCoord <$> allCoord @cs
+
+instance ( IsCoordList cs
+     , All AdditiveGroup cs
+     , All Boundaryless cs
+     ) => AdditiveGroup (TorusCoord cs) where
+  zeroV = TorusCoord (zeroV :: Coord cs)
+  TorusCoord a ^+^ TorusCoord b = TorusCoord (a ^+^ b)
+  negateV (TorusCoord a) = TorusCoord (negateV a)
+  TorusCoord a ^-^ TorusCoord b = TorusCoord (a ^-^ b)
+
+instance (IsCoordList cs, All Semigroup cs) => Semigroup (TorusCoord cs) where
+  TorusCoord a <> TorusCoord b = TorusCoord (a <> b)
+
+instance (IsCoordList cs, All Semigroup cs, All Monoid cs) => Monoid (TorusCoord cs) where
+  mappend = (<>)
+  mempty = TorusCoord mempty
+
+instance ( IsCoordList cs
+     , All AdditiveGroup cs
+         , All Semigroup cs
+         , All Monoid cs
+         , All Group cs
+     , All Boundaryless cs
+         , Monoid (TorusCoord cs)
+     ) => Group (TorusCoord cs) where
+  invert (TorusCoord a) = TorusCoord (invert a)
+
+instance ( IsCoordList cs
+     , All AdditiveGroup cs
+         , All Semigroup cs
+         , All Monoid cs
+         , All Group cs
+     , All Boundaryless cs
+     , All Abelian cs
+     ) => Abelian (TorusCoord cs)
 
 -- | A class, not a pair of @where@ helpers: a self-recursive fold cannot
 -- unroll per axis, so the dictionary would be carried at run time instead of
