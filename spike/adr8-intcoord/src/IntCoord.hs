@@ -334,7 +334,7 @@ ifoldlI' f z (IGrid v) = V.ifoldl' (\acc i x -> f (Coord i) acc x) z v
 {-# INLINABLE ifoldlI' #-}
 
 -- | 'Data.Grid.Sized.transposeGrid'. The permutation table the real one
--- builds out of @map (coordPosition . tranposeCoord) allCoord@ is index
+-- builds out of @map (coordPosition . transposeCoord) allCoord@ is index
 -- arithmetic here, so there is nothing to build.
 transposeI ::
        forall w h a. (KnownAxis w, KnownAxis h)

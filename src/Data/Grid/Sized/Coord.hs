@@ -47,7 +47,7 @@ module Data.Grid.Sized.Coord
   , appendCoord
   , coordFromTuple
   , coordToTuple
-  , tranposeCoord
+  , transposeCoord
   , zeroCoord
   , allCoord
   , coordPosition
@@ -778,9 +778,9 @@ isCorner (Coord p) =
 interiorCoords :: IsCoordList cs => [Coord cs]
 interiorCoords = filter (not . onBoundary) allCoord
 
-tranposeCoord ::
+transposeCoord ::
        (IsCoordLifted a, IsCoordLifted b) => Coord '[a, b] -> Coord '[b, a]
-tranposeCoord (a :| b :| EmptyCoord) = b :| a :| EmptyCoord
+transposeCoord (a :| b :| EmptyCoord) = b :| a :| EmptyCoord
 
 zeroCoord :: forall cs. IsCoordList cs => Coord cs
 zeroCoord =

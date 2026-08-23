@@ -297,7 +297,7 @@ twoDimensionalCoordTests ::
   -> [TestTree]
 twoDimensionalCoordTests _ =
   let doubleTranspose :: Coord cs -> Property
-      doubleTranspose c = c === tranposeCoord (tranposeCoord c)
+      doubleTranspose c = c === transposeCoord (transposeCoord c)
   in [testProperty "Transpose twice is id" doubleTranspose]
 
 coordCreationTests ::

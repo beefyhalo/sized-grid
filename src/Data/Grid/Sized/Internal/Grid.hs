@@ -664,7 +664,7 @@ transposeGrid ::
      )
   => GridOf v '[ w x, h y] a
   -> GridOf v '[ h y, w x] a
-transposeGrid = permuteGrid tranposeCoord
+transposeGrid = permuteGrid transposeCoord
 {-# INLINABLE transposeGrid #-}
 
 -- | The outer grid holds grids, and a grid is never an unboxed element, so the
