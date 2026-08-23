@@ -1,14 +1,15 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | A sudoku board sliced into its rows, columns and 3x3 squares purely by
--- type-level shape. Validates the board; does not solve it.
+-- type-level shape, then solved by backtracking.
 module Main (main) where
 
 import           Data.Grid.Sized            hiding (All, Compose)
 
 import           Data.Foldable        (toList)
 import           Data.List            (intercalate)
-import           Data.Maybe           (catMaybes, fromJust, isJust)
+import           Data.Maybe           (catMaybes, fromJust, isJust, isNothing,
+                                      listToMaybe)
 import           Data.Monoid          (All (..), Any (..))
 
 newtype Symbol = Symbol (Ordinal 9)
@@ -94,6 +95,37 @@ allValues b =
         helper (Just x) = [x]
      in helper <$> b
 
+candidateAllowed :: Coord '[ Ordinal 9, Ordinal 9] -> Board -> Symbol -> Bool
+candidateAllowed point board symbol =
+    notElem symbol (catMaybes (toList (rowAtPoint point board))) &&
+    notElem symbol (catMaybes (toList (columAtPoint point board))) &&
+    notElem symbol (catMaybes (toList (squareAtPoint point board)))
+
+placeSymbol :: Coord '[ Ordinal 9, Ordinal 9] -> Symbol -> Board -> Board
+placeSymbol point symbol =
+    imapGrid (\currentPoint value ->
+        if currentPoint == point then Just symbol else value)
+
+firstJust :: [Maybe a] -> Maybe a
+firstJust = listToMaybe . catMaybes
+
+solveBoard :: Board -> Maybe Board
+solveBoard board
+    | gameIsInvalid board = Nothing
+    | otherwise =
+        case findEmpty board of
+            Nothing -> if gameIsSolved board then Just board else Nothing
+            Just point ->
+                firstJust
+                    [ solveBoard (placeSymbol point symbol board)
+                    | symbol <- indexGrid (allValues board) point
+                    , candidateAllowed point board symbol
+                    ]
+  where
+    findEmpty :: Board -> Maybe (Coord '[ Ordinal 9, Ordinal 9])
+    findEmpty currentBoard =
+        listToMaybe (filter (isNothing . indexGrid currentBoard) allCoord)
+
 displayBoard :: Board -> String
 displayBoard = unlines . map (concatMap displaySymbol) . collapseGrid
 
@@ -128,3 +160,9 @@ main = do
     putStr (showSlices "square" [squareAtPoint samplePoint exampleGrid])
     putStrLn ("candidates at (4,4): " ++
               displaySlice (map Just (indexGrid (allValues exampleGrid) samplePoint)))
+    putStrLn ""
+    case solveBoard exampleGrid of
+        Nothing -> putStrLn "No solution."
+        Just solved -> do
+            putStrLn "Solved board:"
+            putStr (displayBoard solved)
