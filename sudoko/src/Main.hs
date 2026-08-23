@@ -6,10 +6,9 @@ module Main (main) where
 
 import           Data.Grid.Sized            hiding (All, Compose)
 
-import           Data.Foldable        (toList)
-import           Data.List            (intercalate)
-import           Data.Maybe           (catMaybes, fromJust, isJust, isNothing,
-                                      listToMaybe)
+import           Data.Foldable        (asum, toList)
+import           Data.List            (find, intercalate)
+import           Data.Maybe           (catMaybes, fromJust, isJust, isNothing)
 import           Data.Monoid          (All (..), Any (..))
 
 newtype Symbol = Symbol (Ordinal 9)
@@ -106,9 +105,6 @@ placeSymbol point symbol =
     imapGrid (\currentPoint value ->
         if currentPoint == point then Just symbol else value)
 
-firstJust :: [Maybe a] -> Maybe a
-firstJust = listToMaybe . catMaybes
-
 solveBoard :: Board -> Maybe Board
 solveBoard board
     | gameIsInvalid board = Nothing
@@ -116,7 +112,7 @@ solveBoard board
         case findEmpty board of
             Nothing -> if gameIsSolved board then Just board else Nothing
             Just point ->
-                firstJust
+                asum
                     [ solveBoard (placeSymbol point symbol board)
                     | symbol <- indexGrid (allValues board) point
                     , candidateAllowed point board symbol
@@ -124,7 +120,7 @@ solveBoard board
   where
     findEmpty :: Board -> Maybe (Coord '[ Ordinal 9, Ordinal 9])
     findEmpty currentBoard =
-        listToMaybe (filter (isNothing . indexGrid currentBoard) allCoord)
+        find (isNothing . indexGrid currentBoard) allCoord
 
 displayBoard :: Board -> String
 displayBoard = unlines . map (concatMap displaySymbol) . collapseGrid
