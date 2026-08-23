@@ -9,12 +9,14 @@ module Test.Optics
 import           Control.Lens
 import           Data.Grid.Sized
 import           Data.Maybe          (isNothing)
+import qualified Data.Vector         as V
 import           Generics.SOP        (NP)
 import           Test.Arbitrary      ()
 import           Test.Tasty
 import           Test.Tasty.QuickCheck (chooseInt, forAll, oneof, testProperty,
                                         (===))
-import           Test.Utils          (isoLaws, lensLaws, traversalLaws)
+import           Test.Utils          (isoLaws, lensLaws, prismLaws,
+                                      traversalLaws)
 
 type Coord2 = Coord '[Ordinal 5, Ordinal 7]
 type Grid2 = Grid '[Ordinal 5, Ordinal 7] Int
@@ -26,6 +28,13 @@ coordOpticTests =
     "Coordinate optics"
     [ isoLaws "_CoordAxes"
       (_CoordAxes :: Iso' Coord2 (NP I '[Ordinal 5, Ordinal 7]))
+    , prismLaws "_Position" (_Position :: Prism' Int Coord2)
+    , prismLaws "_Strengthened"
+      (_Strengthened :: Prism' (Ordinal 7) (Ordinal 5))
+    , prismLaws "_Weakened"
+      (_Weakened :: Prism' (Clamped 7) (Clamped 5))
+    , prismLaws "_WeakenedCoord"
+      (_WeakenedCoord :: Prism' (Coord '[Ordinal 7, Ordinal 9]) Coord2)
     , lensLaws "coordHead" (coordHead :: Lens' Coord2 (Ordinal 5))
     , lensLaws "coordTail" (coordTail :: Lens' Coord2 (Coord '[Ordinal 7]))
     ]
@@ -60,6 +69,14 @@ gridOpticTests =
     "Grid optics"
     [ isoLaws "_SplitGrid"
         (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int)))
+    , testGroup "_GridVector is a prism"
+      [ testProperty "preview after review is Just" $ \grid ->
+        preview (_GridVector :: Prism' (V.Vector Int) Grid2)
+          (review _GridVector grid) === Just grid
+      , testProperty "preview rejects the wrong length" $
+        isNothing $ preview (_GridVector :: Prism' (V.Vector Int) Grid2)
+          (V.replicate 34 0)
+      ]
     , testGroup "lowerDim"
       [ traversalLaws
         (lowerDim :: Traversal' Grid2 (Grid '[Ordinal 7] Int))

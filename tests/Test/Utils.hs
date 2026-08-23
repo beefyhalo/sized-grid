@@ -21,6 +21,7 @@ module Test.Utils
   , interiorActionLaws
   , traversalLaws
   , isoLaws
+  , prismLaws
   , lensLaws
   , setterLaws
   , isCoordLaws
@@ -373,6 +374,22 @@ isoLaws name i =
       , testProperty ("view " ++ name ++ " . review " ++ name ++ " == id") $
         \a -> there (back a) === a
       ]
+
+prismLaws ::
+     (Eq s, Show s, Arbitrary s, Eq a, Show a, Arbitrary a)
+  => String
+  -> Prism' s a
+  -> TestTree
+prismLaws name p =
+  testGroup
+    (name ++ " is a prism")
+    [ testProperty ("preview " ++ name ++ " (review " ++ name ++ " a) == Just a") $
+      \a -> preview p (review p a) === Just a
+    , testProperty ("review " ++ name ++ " a == s when preview succeeds") $
+      \s -> case preview p s of
+        Just a -> review p a === s
+        Nothing -> property True
+    ]
 
 -- | The three lens laws: get-put, put-get and put-put.
 lensLaws ::
