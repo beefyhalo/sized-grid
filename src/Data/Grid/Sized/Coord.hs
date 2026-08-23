@@ -706,11 +706,9 @@ offsetCoord (Coord p) (Delta d) = Coord <$> posOffset @cs p d
 data OffGrid cs = OffGrid
     { lastInside :: Coord cs
     , stepsTaken :: Int
-    } deriving (Generic)
+  } deriving stock (Generic, Eq)
 
-deriving instance Eq (OffGrid cs)
-
-deriving instance (IsCoordList cs, All Show cs) => Show (OffGrid cs)
+deriving stock instance (IsCoordList cs, All Show cs) => Show (OffGrid cs)
 
 -- | Take up to @n@ steps of @d@ from @c@: 'Right' the coordinate @n@ steps away, or 'Left' how far the walk got before the grid ran out.
 offsetCoordUpTo ::
@@ -743,11 +741,11 @@ coordRay c d = unfoldr (\x -> (\y -> (y, y)) <$> offsetCoord x d) c
 -- | An ordered sequence of displacements, kept separate rather than summed into one 'Diff': only matters where a boundary policy is not separable per axis.
 newtype Path cs = Path
     { pathSteps :: [Diff (Coord cs)]
-    }
+  }
 
-deriving instance Eq (Diff (Coord cs)) => Eq (Path cs)
+deriving newtype instance Eq (Diff (Coord cs)) => Eq (Path cs)
 
-deriving instance Show (Diff (Coord cs)) => Show (Path cs)
+deriving newtype instance Show (Diff (Coord cs)) => Show (Path cs)
 
 instance Semigroup (Path cs) where
     Path a <> Path b = Path (a <> b)

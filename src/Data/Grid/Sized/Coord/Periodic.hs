@@ -22,22 +22,11 @@ import           System.Random
 -- | A coordinate with periodic boundaries, as if on a taurus
 newtype Periodic (n :: Nat) = Periodic
     { unPeriodic :: Ordinal n
-    } deriving (Eq, Ord)
+    } deriving stock (Eq, Ord)
+            deriving newtype (Show, NFData, Ix, Hashable, Prim, ToJSON, ToJSONKey,
+                                                FromJSON, FromJSONKey)
 
-deriving instance KnownNat n => Show (Periodic n)
-
-deriving instance NFData (Periodic n)
-
-deriving newtype instance Ix (Periodic n)
-deriving newtype instance Hashable (Periodic n)
-deriving newtype instance Prim (Periodic n)
-
-deriving instance (1 <= n, KnownNat n) => Random (Periodic n)
-
-deriving instance KnownNat n => ToJSON (Periodic n)
-deriving instance KnownNat n => ToJSONKey (Periodic n)
-deriving instance KnownNat n => FromJSON (Periodic n)
-deriving instance KnownNat n => FromJSONKey (Periodic n)
+deriving newtype instance (1 <= n, KnownNat n) => Random (Periodic n)
 
 instance (1 <= n, KnownNat n) => U.Universe (Periodic n) where
     universe = allCoordLike

@@ -26,13 +26,11 @@ import           Generics.SOP
 data FocusedGrid cs a = FocusedGrid
     { focusedGrid         :: Grid cs a
     , focusedGridPosition :: Coord cs
-    } deriving (Functor,Foldable,Traversable)
+    } deriving stock (Functor, Foldable, Traversable)
 
--- | Equality is on both fields: two grids with the same cells but different
--- focus are distinct.
-deriving instance Eq a => Eq (FocusedGrid cs a)
+deriving stock instance Eq a => Eq (FocusedGrid cs a)
 
-deriving instance (IsCoordList cs, All Show cs, Show a) =>
+deriving stock instance (IsCoordList cs, All Show cs, Show a) =>
                   Show (FocusedGrid cs a)
 
 -- @NFData (Coord cs)@ is unconditional now that a coordinate is one 'Int'.
@@ -102,16 +100,16 @@ data Walker cs a = Walker
     { walkerGrid    :: FocusedGrid cs a
     , walkerHeading :: Diff (Coord cs)
     }
-    deriving (Functor)
+    deriving stock (Functor)
 
-deriving instance (Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
+deriving stock instance (Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
 
-deriving instance ( IsCoordList cs
-                  , All Show cs
-                  , Show a
-                  , Show (Diff (Coord cs))
-                  ) =>
-                  Show (Walker cs a)
+deriving stock instance ( IsCoordList cs
+                        , All Show cs
+                        , Show a
+                        , Show (Diff (Coord cs))
+                        ) =>
+                        Show (Walker cs a)
 
 -- | Take one step in the walker's own heading, transporting the heading
 -- through 'transportCoord' so the boundary policy decides what the heading

@@ -79,7 +79,8 @@ import qualified GHC.TypeLits                  as GHC
 -- record-update syntax, which could break the length invariant.
 newtype GridOf v (cs :: [Type]) a = Grid
   { unGrid :: v a
-  } deriving stock (GHC.Generic)
+  } deriving stock (GHC.Generic, Eq, Show)
+    deriving newtype (NFData, Eq1, Show1, Functor)
 
 type instance Index (GridOf v cs a) = Coord cs
 type instance IxValue (GridOf v cs a) = a
@@ -92,18 +93,6 @@ instance (VG.Vector v a, IsCoordList cs) => Ixed (GridOf v cs a) where
 
 -- | Kept nullary so it stays partially applicable, e.g. @'Functor' ('Grid' cs)@.
 type Grid = GridOf V.Vector
-
-deriving stock instance Eq (v a) => Eq (GridOf v cs a)
-
-deriving stock instance Show (v a) => Show (GridOf v cs a)
-
-deriving newtype instance NFData (v a) => NFData (GridOf v cs a)
-
-deriving newtype instance Eq1 v => Eq1 (GridOf v cs)
-
-deriving newtype instance Show1 v => Show1 (GridOf v cs)
-
-deriving newtype instance Functor v => Functor (GridOf v cs)
 
 -- | Derived, and deliberately so. @GeneralizedNewtypeDeriving@ coerces @v@'s
 -- whole dictionary, so every method @v@ overrides comes across with it, and

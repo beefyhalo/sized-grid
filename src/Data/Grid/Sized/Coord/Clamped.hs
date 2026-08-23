@@ -21,23 +21,13 @@ import           System.Random         (Random (..))
 -- the nearest end rather than rejected or wrapped.
 newtype Clamped (n :: Nat) = Clamped
     { unClamped :: Ordinal n
-    } deriving (Eq, Ord)
+  } deriving stock (Eq, Ord)
+      deriving newtype (Show, NFData, Ix, Hashable, Prim, ToJSON, FromJSON,
+                        ToJSONKey, FromJSONKey)
 
-deriving instance KnownNat n => Show (Clamped n)
-
-deriving instance NFData (Clamped n)
-
-deriving newtype instance Ix (Clamped n)
-deriving newtype instance Hashable (Clamped n)
-deriving newtype instance Prim (Clamped n)
-
-deriving instance (KnownNat n, 1 <= n) => Random (Clamped n)
-deriving instance (KnownNat n, 1 <= n) => Enum (Clamped n)
-deriving instance (KnownNat n, 1 <= n) => Bounded (Clamped n)
-deriving instance KnownNat n => ToJSON (Clamped n)
-deriving instance KnownNat n => FromJSON (Clamped n)
-deriving instance KnownNat n => ToJSONKey (Clamped n)
-deriving instance KnownNat n => FromJSONKey (Clamped n)
+deriving newtype instance (KnownNat n, 1 <= n) => Random (Clamped n)
+deriving newtype instance (KnownNat n, 1 <= n) => Enum (Clamped n)
+deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Clamped n)
 
 instance (1 <= n, KnownNat n) => U.Universe (Clamped n) where
   universe = allCoordLike

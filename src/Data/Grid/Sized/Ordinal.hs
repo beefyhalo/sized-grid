@@ -41,7 +41,8 @@ import           System.Random
 -- particular) would only be partial.
 newtype Ordinal (m :: Nat) = UnsafeOrdinal
     { ordinalToInt :: Int
-    } deriving (Eq, Ord)
+        } deriving stock (Eq, Ord)
+            deriving newtype (Ix, Hashable, Prim)
 
 -- | Nominal, not the phantom role GHC would infer: a phantom role would let
 -- @coerce@ forge an out-of-range value.
@@ -212,9 +213,6 @@ weakenOrdinal = numToOrdinal . ordinalToInt
 instance NFData (Ordinal m) where
     rnf = rnf . ordinalToInt
 
-deriving newtype instance Ix (Ordinal m)
-deriving newtype instance Hashable (Ordinal m)
-
 instance KnownNat m => Show (Ordinal m) where
     show o =
         "Ordinal (" ++
@@ -314,8 +312,6 @@ instance VU.Unbox (Ordinal m)
 -- type-level size @m@ is still nominal ('Data.Primitive.Types.readByteArray
 -- (arr :: ByteArray) (i :: Int) :: Ordinal m' does not change the stored
 -- integer), so only its own construction code can ensure the invariant.
-deriving newtype instance Prim (Ordinal m)
-
 instance KnownNat m => FromJSON (Ordinal m) where
     parseJSON =
         withObject "Ordinal" $ \v -> do

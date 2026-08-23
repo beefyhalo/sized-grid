@@ -24,23 +24,13 @@ import           System.Random         (Random (..))
 -- @-2@ becomes @2@.
 newtype Reflect101 (n :: Nat) = Reflect101
     { unReflect101 :: Ordinal n
-    } deriving (Eq, Ord)
+  } deriving stock (Eq, Ord)
+      deriving newtype (Show, NFData, Ix, Hashable, Prim, ToJSON, FromJSON,
+                        ToJSONKey, FromJSONKey)
 
-deriving instance KnownNat n => Show (Reflect101 n)
-
-deriving instance NFData (Reflect101 n)
-
-deriving newtype instance Ix (Reflect101 n)
-deriving newtype instance Hashable (Reflect101 n)
-deriving newtype instance Prim (Reflect101 n)
-
-deriving instance (KnownNat n, 1 <= n) => Random (Reflect101 n)
-deriving instance (KnownNat n, 1 <= n) => Enum (Reflect101 n)
-deriving instance (KnownNat n, 1 <= n) => Bounded (Reflect101 n)
-deriving instance KnownNat n => ToJSON (Reflect101 n)
-deriving instance KnownNat n => FromJSON (Reflect101 n)
-deriving instance KnownNat n => ToJSONKey (Reflect101 n)
-deriving instance KnownNat n => FromJSONKey (Reflect101 n)
+deriving newtype instance (KnownNat n, 1 <= n) => Random (Reflect101 n)
+deriving newtype instance (KnownNat n, 1 <= n) => Enum (Reflect101 n)
+deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflect101 n)
 
 instance (1 <= n, KnownNat n) => U.Universe (Reflect101 n) where
   universe = allCoordLike

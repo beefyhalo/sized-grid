@@ -25,23 +25,13 @@ import           System.Random         (Random (..))
 -- not around the edge cell, so the edge cell is visited twice in a row.
 newtype Reflective (n :: Nat) = Reflective
     { unReflective :: Ordinal n
-    } deriving (Eq, Ord)
+  } deriving stock (Eq, Ord)
+      deriving newtype (Show, NFData, Ix, Hashable, Prim, ToJSON, FromJSON,
+                        ToJSONKey, FromJSONKey)
 
-deriving instance KnownNat n => Show (Reflective n)
-
-deriving instance NFData (Reflective n)
-
-deriving newtype instance Ix (Reflective n)
-deriving newtype instance Hashable (Reflective n)
-deriving newtype instance Prim (Reflective n)
-
-deriving instance (KnownNat n, 1 <= n) => Random (Reflective n)
-deriving instance (KnownNat n, 1 <= n) => Enum (Reflective n)
-deriving instance (KnownNat n, 1 <= n) => Bounded (Reflective n)
-deriving instance KnownNat n => ToJSON (Reflective n)
-deriving instance KnownNat n => FromJSON (Reflective n)
-deriving instance KnownNat n => ToJSONKey (Reflective n)
-deriving instance KnownNat n => FromJSONKey (Reflective n)
+deriving newtype instance (KnownNat n, 1 <= n) => Random (Reflective n)
+deriving newtype instance (KnownNat n, 1 <= n) => Enum (Reflective n)
+deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflective n)
 
 instance (1 <= n, KnownNat n) => U.Universe (Reflective n) where
   universe = allCoordLike
