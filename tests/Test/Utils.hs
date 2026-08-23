@@ -17,7 +17,7 @@ module Test.Utils
   , groupLaws
   , abelianLaws
   , additiveGroupLaws
-  , affineSpaceLaws
+  , pseudoAffineLaws
   , interiorActionLaws
   , traversalLaws
   , isoLaws
@@ -166,11 +166,14 @@ additiveGroupLaws =
        , testProperty "a - (a - b) = b" takeLeaves
        ]
 
-affineSpaceLaws ::
+-- | The PseudoAffine laws shared by the coordinate policies. Full
+-- 'AffineSpace' associativity is intentionally omitted because a bounded
+-- policy can retract a step at its wall.
+pseudoAffineLaws ::
      forall a.
      (Arbitrary a, Show a, Eq a, AffineSpace a, Eq (Diff a), Show (Diff a))
   => TestTree
-affineSpaceLaws =
+pseudoAffineLaws =
   let addZero :: a -> Property
       addZero a = a === a .+^ zeroV
       takeSelf :: a -> Property
@@ -179,7 +182,7 @@ affineSpaceLaws =
       subtractThenAdd :: a -> a -> Property
       subtractThenAdd a b = a === b .+^ (a .-. b)
   in testGroup
-       "AffineSpace Laws"
+       "PseudoAffine Laws"
        -- Associativity is intentionally absent: it fails at the walls for
        -- retracting actions, although it holds wherever every leg stays
        -- inside the space. 'interiorActionLaws' records that restricted law.

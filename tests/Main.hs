@@ -355,7 +355,7 @@ main =
         , additiveGroupLaws @(Periodic 10)
         , groupLaws @(Periodic 10)
         , abelianLaws @(Periodic 10)
-        , affineSpaceLaws @(Periodic 10)
+        , pseudoAffineLaws @(Periodic 10)
         , interiorActionLaws @Periodic @10
         , aesonLaws @(Periodic 10)
         , lawsToTest $ jsonLaws (Proxy @(Periodic 10))
@@ -370,7 +370,7 @@ main =
         , monoidLaws @(Clamped 10)
         , lawsToTest $ commutativeMonoidLaws (Proxy @(Clamped 10))
         , lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10))
-        , affineSpaceLaws @(Clamped 10)
+        , pseudoAffineLaws @(Clamped 10)
         , interiorActionLaws @Clamped @10
         , aesonLaws @(Clamped 10)
         , lawsToTest $ jsonLaws (Proxy @(Clamped 10))
@@ -381,7 +381,7 @@ main =
       -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance;
       -- 'Test.Reflective' has the bounce-specific properties.
       reflective =
-        [ affineSpaceLaws @(Reflective 10)
+        [ pseudoAffineLaws @(Reflective 10)
         , interiorActionLaws @Reflective @10
         , lawsToTest $ ixLaws (Proxy @(Reflective 10))
         , aesonLaws @(Reflective 10)
@@ -390,7 +390,7 @@ main =
         , isCoordLaws @Reflective @10
         ]
       reflect101 =
-        [ affineSpaceLaws @(Reflect101 10)
+        [ pseudoAffineLaws @(Reflect101 10)
         , interiorActionLaws @Reflect101 @10
         , lawsToTest $ ixLaws (Proxy @(Reflect101 10))
         , aesonLaws @(Reflect101 10)
@@ -405,7 +405,7 @@ main =
           commutativeMonoidLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , lawsToTest $
           semigroupMonoidLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
-        , affineSpaceLaws @(Coord '[ Clamped 10, Periodic 20])
+        , pseudoAffineLaws @(Coord '[ Clamped 10, Periodic 20])
         , aesonLaws @(Coord '[ Clamped 10, Periodic 20])
         , lawsToTest $ jsonLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , lawsToTest $ boundedEnumLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
@@ -425,7 +425,7 @@ main =
           commutativeMonoidLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , lawsToTest $
           semigroupMonoidLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
-        , affineSpaceLaws @(Coord '[ Periodic 10, Periodic 20])
+        , pseudoAffineLaws @(Coord '[ Periodic 10, Periodic 20])
         , additiveGroupLaws @(Coord '[ Periodic 10, Periodic 20])
         , groupLaws @(Coord '[ Periodic 10, Periodic 20])
         , abelianLaws @(Coord '[ Periodic 10, Periodic 20])

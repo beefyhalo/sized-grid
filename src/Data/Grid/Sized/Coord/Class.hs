@@ -43,8 +43,14 @@ data Extremum
     | AtMax
     deriving (Eq, Ord, Show, Enum, Bounded)
 
--- | The only required methods are 'asOrdinal' and the 'CoordSized' type
--- instance; the rest can be derived automatically.
+-- | An axis coordinate and its boundary policy. The policies have a useful
+-- geometric correspondence: 'Periodic' is the discrete analogue of the
+-- boundaryless circle S1; 'Clamped' is the closed interval D1; and
+-- 'Reflective' and 'Reflect101' are D1 quotiented by reflection. 'Ordinal'
+-- has no affine action because it cannot leave its interval.
+--
+-- The only required method is 'asOrdinal'; the rest can be derived
+-- automatically.
 class IsCoord (c :: Nat -> Type) where
   asOrdinal :: Iso' (c n) (Ordinal n)
 
