@@ -355,6 +355,7 @@ main =
         , groupLaws @(Periodic 10)
         , abelianLaws @(Periodic 10)
         , affineSpaceLaws @(Periodic 10)
+        , interiorActionLaws @Periodic @10
         , aesonLaws @(Periodic 10)
         , lawsToTest $ jsonLaws (Proxy @(Periodic 10))
         , jsonKeyLaws @(Periodic 10)
@@ -367,6 +368,7 @@ main =
         , lawsToTest $ commutativeMonoidLaws (Proxy @(Clamped 10))
         , lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10))
         , affineSpaceLaws @(Clamped 10)
+        , interiorActionLaws @Clamped @10
         , aesonLaws @(Clamped 10)
         , lawsToTest $ jsonLaws (Proxy @(Clamped 10))
         , jsonKeyLaws @(Clamped 10)
@@ -376,6 +378,7 @@ main =
       -- 'Test.Reflective' has the bounce-specific properties.
       reflective =
         [ affineSpaceLaws @(Reflective 10)
+        , interiorActionLaws @Reflective @10
         , lawsToTest $ ixLaws (Proxy @(Reflective 10))
         , aesonLaws @(Reflective 10)
         , lawsToTest $ jsonLaws (Proxy @(Reflective 10))

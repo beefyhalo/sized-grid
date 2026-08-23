@@ -62,6 +62,8 @@ instance IsCoord Reflect101 where
 instance (1 <= n, KnownNat n) => AffineSpace (Reflect101 n) where
   type Diff (Reflect101 n) = Int
   Reflect101 a .-. Reflect101 b = ordinalToInt a - ordinalToInt b
+  -- This is a retraction of the partial interior action; associativity fails
+  -- when a displacement reaches a wall.
   Reflect101 a .+^ d = Reflect101 $ unsafeOrdinal $ fst (mirrorAt @n (ordinalToInt a) d)
 
 -- | Billiard bounce with period @2 * m@, @m = size - 1@. @m == 0@ has no

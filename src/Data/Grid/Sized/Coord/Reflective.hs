@@ -63,6 +63,8 @@ instance IsCoord Reflective where
 instance (1 <= n, KnownNat n) => AffineSpace (Reflective n) where
   type Diff (Reflective n) = Int
   Reflective a .-. Reflective b = ordinalToInt a - ordinalToInt b
+  -- This is a retraction of the partial interior action; associativity fails
+  -- when a displacement reaches a wall.
   Reflective a .+^ d = Reflective $ unsafeOrdinal $ fst (bounceAt @n (ordinalToInt a) d)
 
 -- | Closed form of a recursive billiard bounce, computed as a triangle wave

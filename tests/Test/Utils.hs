@@ -18,6 +18,7 @@ module Test.Utils
   , abelianLaws
   , additiveGroupLaws
   , affineSpaceLaws
+  , interiorActionLaws
   , traversalLaws
   , isoLaws
   , lensLaws
@@ -175,10 +176,38 @@ affineSpaceLaws =
       subtractThenAdd a b = a === b .+^ (a .-. b)
   in testGroup
        "AffineSpace Laws"
+       -- Associativity is intentionally absent: it fails at the walls for
+       -- retracting actions, although it holds wherever every leg stays
+       -- inside the space. 'interiorActionLaws' records that restricted law.
        [ testProperty "Add Zero" addZero
        , testProperty "Take self" takeSelf
        , testProperty "b .+^ (a .-. b) == a" subtractThenAdd
        ]
+
+interiorActionLaws ::
+     forall c n.
+     ( IsCoord c
+     , KnownNat n
+     , 1 <= n
+     , Arbitrary (c n)
+     , Show (c n)
+     , Eq (c n)
+     , AffineSpace (c n)
+     , Diff (c n) ~ Int
+     )
+  => TestTree
+interiorActionLaws =
+  let associativity :: c n -> Int -> Int -> Property
+      associativity p u v =
+        case offsetIsCoord p u of
+          Nothing -> property True
+          Just pu ->
+            case (offsetIsCoord pu v, offsetIsCoord p (u + v)) of
+              (Just _, Just fused) -> pu .+^ v === fused
+              _ -> property True
+  in testGroup
+       "Interior AffineSpace Laws"
+       [testProperty "Associative where every leg stays inside" associativity]
 
 -- | Renders a @quickcheck-classes@ 'Laws' bundle as a 'TestTree'.
 lawsToTest :: Laws -> TestTree

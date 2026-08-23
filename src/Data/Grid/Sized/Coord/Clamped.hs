@@ -61,6 +61,8 @@ instance (KnownNat n, 1 <= n) => Monoid (Clamped n) where
 instance (1 <= n, KnownNat n) => AffineSpace (Clamped n) where
   type Diff (Clamped n) = Int
   Clamped a .-. Clamped b = ordinalToInt a - ordinalToInt b
+  -- This is a retraction of the partial interior action; associativity fails
+  -- when a displacement reaches a wall.
   -- Clamped by comparison, not by addition-then-clamp: adding first can
   -- overflow for a @b@ near 'maxBound' and clamp to the wrong end. Both
   -- bounds compared against here are built from @i@ and the size alone, so
