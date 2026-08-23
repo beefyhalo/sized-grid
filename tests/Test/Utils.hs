@@ -22,6 +22,7 @@ module Test.Utils
   , traversalLaws
   , isoLaws
   , prismLaws
+  , prismLawsFrom
   , lensLaws
   , setterLaws
   , isCoordLaws
@@ -380,13 +381,21 @@ prismLaws ::
   => String
   -> Prism' s a
   -> TestTree
-prismLaws name p =
+prismLaws name = prismLawsFrom arbitrary name
+
+prismLawsFrom ::
+     (Eq s, Show s, Eq a, Show a, Arbitrary a)
+  => Gen s
+  -> String
+  -> Prism' s a
+  -> TestTree
+prismLawsFrom source name p =
   testGroup
     (name ++ " is a prism")
     [ testProperty ("preview " ++ name ++ " (review " ++ name ++ " a) == Just a") $
       \a -> preview p (review p a) === Just a
     , testProperty ("review " ++ name ++ " a == s when preview succeeds") $
-      \s -> case preview p s of
+      forAll source $ \s -> case preview p s of
         Just a -> review p a === s
         Nothing -> property True
     ]

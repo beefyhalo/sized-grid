@@ -13,9 +13,8 @@ import qualified Data.Vector         as V
 import           Generics.SOP        (NP)
 import           Test.Arbitrary      ()
 import           Test.Tasty
-import           Test.Tasty.QuickCheck (chooseInt, forAll, oneof, testProperty,
-                                        (===))
-import           Test.Utils          (isoLaws, lensLaws, prismLaws,
+import           Test.Tasty.QuickCheck (chooseInt, testProperty)
+import           Test.Utils          (isoLaws, lensLaws, prismLaws, prismLawsFrom,
                                       traversalLaws)
 
 type Coord2 = Coord '[Ordinal 5, Ordinal 7]
@@ -70,9 +69,8 @@ gridOpticTests =
     [ isoLaws "_SplitGrid"
         (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int)))
     , testGroup "_GridVector is a prism"
-      [ testProperty "preview after review is Just" $ \grid ->
-        preview (_GridVector :: Prism' (V.Vector Int) Grid2)
-          (review _GridVector grid) === Just grid
+      [ prismLawsFrom (V.replicate 35 <$> chooseInt (-100, 100))
+          "_GridVector" (_GridVector :: Prism' (V.Vector Int) Grid2)
       , testProperty "preview rejects the wrong length" $
         isNothing $ preview (_GridVector :: Prism' (V.Vector Int) Grid2)
           (V.replicate 34 0)
@@ -91,14 +89,7 @@ ordinalOpticTests :: TestTree
 ordinalOpticTests =
   testGroup
     "Ordinal prism"
-    [ testProperty "preview after review is Just" $ \(value :: Ordinal 5) ->
-        preview (_Ordinal :: Prism' Int (Ordinal 5)) (review _Ordinal value) === Just value
-    , testProperty "review preserves every valid Int" $
-        forAll (chooseInt (0, 4)) $ \value ->
-          review (_Ordinal :: Prism' Int (Ordinal 5)) (unsafeOrdinal @5 value) === value
-    , testProperty "preview rejects every invalid Int" $
-        forAll (oneof [chooseInt (-100, -1), chooseInt (5, 100)]) $ \value ->
-          isNothing (preview (_Ordinal :: Prism' Int (Ordinal 5)) value)
+    [ prismLaws "_Ordinal" (_Ordinal :: Prism' Int (Ordinal 5))
     ]
 
 opticTests :: TestTree
