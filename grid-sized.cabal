@@ -219,6 +219,7 @@ library
     Data.Grid.Sized.Coord.Reflect101
     Data.Grid.Sized.Coord.Reflective
     Data.Grid.Sized.Focused
+    Data.Grid.Sized.Optics
     Data.Grid.Sized.Ordinal
     Data.Grid.Sized.Stencil
     Data.Grid.Sized.Unboxed

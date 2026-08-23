@@ -12,7 +12,6 @@ module Data.Grid.Sized
       -- * Access
     , gridVector
     , collapseGrid
-    , cell
       -- * Bulk operations
     , tabulateGrid
     , indexGrid
@@ -26,17 +25,12 @@ module Data.Grid.Sized
     , permuteGrid
     , transposeGrid
     , splitGrid
-    , _SplitGrid
     , combineGrid
     , combineHigherDim
     , splitHigherDim
     , dropGrid
     , takeGrid
-    , slice
-    , prefix
-    , suffix
     , mapLowerDim
-    , lowerDim
     , zipLowerDim
     , scanl1Grid
     , MapAxis(..)
@@ -53,6 +47,7 @@ module Data.Grid.Sized
     , splitVectorBySize
       -- * The rest of the public API
     , module X
+    , module Optics
       -- * Rexported for generics-sop
     , All
     , SListI
@@ -60,21 +55,27 @@ module Data.Grid.Sized
     , I(..)
     ) where
 
-import           Data.Grid.Sized.Class            as X
-import           Data.Grid.Sized.Coord            as X
+import           Data.Grid.Sized.Class            as X hiding (asGrid, gridIndex)
+import           Data.Grid.Sized.Coord            as X hiding (coordHead, coordTail,
+                                                               deltaHead, deltaTail,
+                                                               _WrappedCoord,
+                                                               _WrappedDelta)
 import           Data.Grid.Sized.Coord.Clamped    as X
 import           Data.Grid.Sized.Coord.Class      as X
 import           Data.Grid.Sized.Coord.Periodic   as X
 import           Data.Grid.Sized.Coord.Reflect101 as X
 import           Data.Grid.Sized.Coord.Reflective as X
-import           Data.Grid.Sized.Focused          as X
-import           Data.Grid.Sized.Ordinal          as X
+import           Data.Grid.Sized.Focused          as X hiding (_FocusedGrid, focus,
+                                                               unfocused)
+import           Data.Grid.Sized.Optics           as Optics
+import           Data.Grid.Sized.Ordinal          as X hiding (_Ordinal)
 import           Data.Grid.Sized.Stencil          as X
 
 -- The `Grid` type is defined in the hidden "Data.Grid.Sized.Internal.Grid", and
 -- this module publishes the safe half of it -- hence the explicit export list
 -- above rather than a `module X` re-export, which would carry the constructor
 -- and `sliceGrid` out with everything else.
-import           Data.Grid.Sized.Internal.Grid
+import           Data.Grid.Sized.Internal.Grid hiding (_SplitGrid, cell, lowerDim,
+                                                        prefix, slice, suffix)
 
 import           Generics.SOP
