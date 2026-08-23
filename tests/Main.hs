@@ -12,6 +12,7 @@ import           Test.Focused
 import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
+import           Test.Optics
 import           Test.Path
 import           Test.Periodic
 import           Test.Ray
@@ -387,6 +388,7 @@ main =
         ]
       reflect101 =
         [ affineSpaceLaws @(Reflect101 10)
+        , interiorActionLaws @Reflect101 @10
         , lawsToTest $ ixLaws (Proxy @(Reflect101 10))
         , aesonLaws @(Reflect101 10)
         , lawsToTest $ jsonLaws (Proxy @(Reflect101 10))
@@ -589,6 +591,7 @@ main =
        , focusedTests
       , cellTests
        , invariantTests
+      , opticTests
        , ordinalTests
        , periodicTests
        , compileFailTests
