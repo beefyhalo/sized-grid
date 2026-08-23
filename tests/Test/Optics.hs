@@ -7,7 +7,6 @@ module Test.Optics
   ) where
 
 import           Control.Lens
-import           Data.AffineSpace       ((.+^))
 import           Data.Grid.Sized
 import           Data.Maybe          (isNothing)
 import qualified Data.Vector         as V
@@ -26,9 +25,6 @@ type Torus2 = Coord '[Periodic 5, Periodic 3]
 
 torusDelta :: Int -> Int -> Delta '[Int, Int]
 torusDelta a b = a :^ b :^ NoDelta
-
-torusCoord :: Int -> Int -> Torus2
-torusCoord a b = (toEnum a :: Periodic 5) :| (toEnum b :: Periodic 3) :| EmptyCoord
 
 translationOptic :: Delta '[Int, Int] -> Iso' Torus2 Torus2
 translationOptic = translated
@@ -77,16 +73,7 @@ torusTests =
           (torusDelta 1 2)
           (torusCoordToDelta @'[Periodic 5, Periodic 3]
             (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 (-1))))
-    , testCase "translation is an Iso" $
-      let { displacement = torusDelta 2 (-1)
-        ; point = torusCoord 4 0
-        }
-        in do
-          assertEqual "forward" (point .+^ displacement)
-            (view (translationOptic displacement) point)
-          assertEqual "backward" point
-            (review (translationOptic displacement)
-              (view (translationOptic displacement) point))
+    , isoLaws "translated" (translationOptic (torusDelta 2 (-1)))
     ]
 
 focusedOpticTests :: TestTree
