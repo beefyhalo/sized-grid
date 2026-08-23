@@ -11,7 +11,6 @@ module Data.Grid.Sized.Ordinal
     , numToOrdinal
     , unsafeOrdinal
     , unsafeOrdinalUnchecked
-    , _Ordinal
       -- * Sizes and evidence
     , ordinalSize
     , reifyOrdinal
@@ -22,7 +21,6 @@ module Data.Grid.Sized.Ordinal
 import           Data.Grid.Sized.Internal.Type (requiring)
 
 import           Control.DeepSeq         (NFData (..))
-import           Control.Lens            (Prism', prism')
 import           Control.Monad           (unless)
 import           Data.Aeson
 import           Data.Hashable          (Hashable)
@@ -210,9 +208,6 @@ strengthenOrdinal (UnsafeOrdinal i) =
 
 weakenOrdinal :: KnownNat m => Ordinal n -> Maybe (Ordinal m)
 weakenOrdinal = numToOrdinal . ordinalToInt
-
-_Ordinal :: (KnownNat n, Integral a) => Prism' a (Ordinal n)
-_Ordinal = prism' ordinalToNum numToOrdinal
 
 instance NFData (Ordinal m) where
     rnf = rnf . ordinalToInt

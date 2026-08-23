@@ -57,19 +57,15 @@ module Data.Grid.Sized.Coord.Delta
   , pattern (:^)
   , pattern NoDelta
   , deltaSplit
-  , _WrappedDelta
     -- * Building and taking apart
   , singleDelta
   , appendDelta
   , deltaFromTuple
   , deltaToTuple
-  , deltaHead
-  , deltaTail
   ) where
 
 import           Control.Applicative   (empty)
 import           Control.DeepSeq       (NFData (..))
-import           Control.Lens          hiding (from, to)
 import           Control.Monad.State
 import           Data.AdditiveGroup
 import           Data.Aeson
@@ -109,9 +105,6 @@ pattern NoDelta = Delta Nil
 {-# COMPLETE NoDelta #-}
 
 infixr 5 :^
-
-_WrappedDelta :: Iso' (Delta ds) (NP I ds)
-_WrappedDelta = dimap unDelta (fmap Delta)
 
 instance All Eq ds => Eq (Delta ds) where
     Delta a == Delta b =
@@ -189,12 +182,6 @@ instance (All Random ds) => Random (Delta ds) where
                     g
         in (Delta c, g')
 
-deltaHead :: Lens (Delta (a ': as)) (Delta (a' ': as)) a a'
-deltaHead f (Delta (I a :* as)) = (\a' -> Delta (I a' :* as)) <$> f a
-
-deltaTail :: Lens (Delta (a ': as)) (Delta (a ': as')) (Delta as) (Delta as')
-deltaTail f (Delta (a :* as)) = (\(Delta as') -> Delta (a :* as')) <$> f (Delta as)
-
 singleDelta :: a -> Delta '[a]
 singleDelta a = Delta (I a :* Nil)
 
@@ -208,18 +195,3 @@ deltaFromTuple = Delta . productTypeFrom
 
 deltaToTuple :: IsProductType t ds => Delta ds -> t
 deltaToTuple = productTypeTo . unDelta
-
-instance Field1 (Delta (a ': ds)) (Delta (a' ': ds)) a a' where
-  _1 = deltaHead
-
-instance Field2 (Delta (a ': b ': ds)) (Delta (a ': b' ': ds)) b b' where
-  _2 = deltaTail . _1
-
-instance Field3 (Delta (a ': b ': c ': ds)) (Delta (a ': b ': c' ': ds)) c c' where
-  _3 = deltaTail . _2
-
-instance Field4 (Delta (a ': b ': c ': d ': ds)) (Delta (a ': b ': c ': d' ': ds)) d d' where
-  _4 = deltaTail . _3
-
-instance Field5 (Delta (a ': b ': c ': d ': e ': ds)) (Delta (a ': b ': c ': d ': e' ': ds)) e e' where
-  _5 = deltaTail . _4

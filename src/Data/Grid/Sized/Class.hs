@@ -40,4 +40,4 @@ instance (AllSizedKnown cs, IsCoordList cs) =>
 instance (AllSizedKnown cs, IsCoordList cs) =>
          IsGrid cs (FocusedGrid cs) where
     gridIndex c = (\f (FocusedGrid g p) -> (`FocusedGrid` p) <$> f g) . gridIndex c
-    asGrid = unfocused
+    asGrid = lens focusedGrid (\(FocusedGrid _ p) g -> FocusedGrid g p)

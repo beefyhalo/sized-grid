@@ -16,7 +16,6 @@ module Data.Grid.Sized.Internal.Grid
     -- $bulk
   , tabulateGrid
   , indexGrid
-  , cell
   , mapGrid
   , imapGrid
   , zipWithGrid
@@ -28,18 +27,13 @@ module Data.Grid.Sized.Internal.Grid
   , permuteGrid
   , transposeGrid
   , splitGrid
-  , _SplitGrid
   , combineGrid
   , combineHigherDim
   , splitHigherDim
   , dropGrid
   , takeGrid
   , sliceGrid
-  , slice
-  , prefix
-  , suffix
   , mapLowerDim
-  , lowerDim
   , zipLowerDim
   , MapAxis(..)
   , mapAxis
@@ -246,14 +240,6 @@ indexGrid ::
     -> a
 indexGrid (Grid v) c = VG.unsafeIndex v (coordPosition c)
 {-# INLINE indexGrid #-}
-
-cell :: forall v cs a. (VG.Vector v a, IsCoordList cs) => Coord cs -> Lens' (GridOf v cs a) a
-cell c = requiring @(IsCoordList cs) $ lens getter setter
-  where
-    position = coordPosition c
-    getter (Grid v) = VG.unsafeIndex v position
-    setter (Grid v) value = Grid (v VG.// [(position, value)])
-{-# INLINE cell #-}
 
 mapGrid ::
        (VG.Vector v a, VG.Vector v b)
@@ -706,14 +692,6 @@ combineGrid ::
 combineGrid (Grid v) = Grid $ VG.concat $ map unGrid $ V.toList v
 {-# INLINE combineGrid #-}
 
--- | An isomorphism between a grid and its slices along the outermost axis.
--- The outer grid is boxed because a grid is never an unboxed element; only the
--- representation of each inner grid follows @v@.
-_SplitGrid ::
-     forall v c cs a. (VG.Vector v a, AllSizedKnown cs)
-  => Iso' (GridOf v (c ': cs) a) (Grid '[ c] (GridOf v cs a))
-_SplitGrid = iso splitGrid combineGrid
-
 -- | @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
 -- comes from @CoordNat@ on the `Data.Grid.Sized.Coord.Class.IsCoordLifted` instance,
 -- not from `IsCoord`, so the class could not have justified the @n + m@ in the
@@ -784,50 +762,6 @@ sliceGrid off len (Grid v) =
         v
 {-# INLINABLE sliceGrid #-}
 
--- | A writable optic for a one-dimensional window of a grid.
-slice :: forall v m c x. forall off len ->
-  ( VG.Vector v x
-  , KnownNat off
-  , KnownNat len
-  , off + len <= m
-  )
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c len] x)
-slice off len =
-   lens
-  (sliceGrid @v @m @c @x off len)
-      (\(Grid source) (Grid replacement) ->
-         Grid $
-            VG.take (fromIntegral $ natVal (Proxy @off)) source
-            VG.++ replacement
-            VG.++ VG.drop
-                              (fromIntegral (natVal (Proxy @off))
-                               + fromIntegral (natVal (Proxy @len)))
-                    source)
-{-# INLINABLE slice #-}
-
--- | A writable optic for the prefix of a one-dimensional grid.
-prefix :: forall v m c x. forall n ->
-       (VG.Vector v x, KnownNat n, n <= m)
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c n] x)
-prefix n = slice @v @m @c @x 0 n
-{-# INLINE prefix #-}
-
--- | A writable optic for the suffix after dropping @n@ elements.
-suffix :: forall v m c x. forall n ->
-       ( VG.Vector v x
-          , KnownNat n
-       , n <= m
-       )
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c (m - n)] x)
-suffix n =
-  lens
-    (dropGrid n)
-    (\(Grid source) (Grid replacement) ->
-       Grid $
-         VG.take (fromIntegral $ natVal (Proxy @n)) source
-         VG.++ replacement)
-{-# INLINE suffix #-}
-
 -- | The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and
 -- get a grid whose vector did not match.
@@ -849,18 +783,6 @@ splitHigherDim (Grid v) =
                 v
      in (Grid a, Grid b)
 {-# INLINABLE splitHigherDim #-}
-
--- | A lawful 'Traversal' over the disjoint sub-grids along the outermost axis.
--- The foci partition the source vector, so 'Control.Lens.traverseOf' can
--- transform each lower-dimensional grid while preserving the outer shape.
--- Identity and composition follow from the corresponding laws of 'traverse'.
--- Use 'zipLowerDim' when the operation should return a list of results zipped
--- across sub-grids; the list 'Applicative' used by 'mapLowerDim' instead forms
--- a cartesian product.
-lowerDim :: (VG.Vector v x, VG.Vector v y, AllSizedKnown as)
-         => Traversal (GridOf v (c ': as) x) (GridOf v (c ': bs) y)
-                      (GridOf v as x)        (GridOf v bs y)
-lowerDim = mapLowerDim
 
 -- | Split a grid into its @CoordNat c@ sub-grids along the outermost axis,
 -- apply @f@ to each, and glue the results back together.

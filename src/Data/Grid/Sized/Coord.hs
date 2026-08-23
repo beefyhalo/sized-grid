@@ -33,26 +33,20 @@ module Data.Grid.Sized.Coord
   , pattern (:|)
   , pattern EmptyCoord
   , coordSplit
-  , _WrappedCoord
     -- * Displacements
   , Delta(..)
   , pattern (:^)
   , pattern NoDelta
   , deltaSplit
-  , _WrappedDelta
   , singleDelta
   , appendDelta
   , deltaFromTuple
   , deltaToTuple
-  , deltaHead
-  , deltaTail
     -- * Building and taking apart
   , singleCoord
   , appendCoord
   , coordFromTuple
   , coordToTuple
-  , coordHead
-  , coordTail
   , tranposeCoord
   , zeroCoord
   , allCoord
@@ -119,7 +113,6 @@ import           Data.Grid.Sized.Ordinal
 
 import           Control.Applicative   (empty)
 import           Control.DeepSeq       (NFData (..))
-import           Control.Lens          hiding (from, to)
 import           Control.Monad         (foldM)
 import           Control.Monad.State
 import           Data.AdditiveGroup
@@ -236,9 +229,6 @@ pattern EmptyCoord <- Coord _
 {-# COMPLETE EmptyCoord #-}
 
 infixr 5 :|
-
-_WrappedCoord :: forall cs. IsCoordList cs => Iso' (Coord cs) (NP I cs)
-_WrappedCoord = iso unCoord (Coord . npToPosition @cs)
 
 instance (IsCoordList cs, All Show cs) => Show (Coord cs) where
     show c =
@@ -429,28 +419,6 @@ instance forall cs. (IsCoordList cs, All Semigroup cs, All Monoid cs, All Group 
 instance (IsCoordList cs, All Semigroup cs, All Monoid cs, All Group cs, All Abelian cs) =>
          Abelian (Coord cs)
 
--- | Changing the head axis keeps the tail's stride, so only the most
--- significant digit is rewritten.
-coordHead ::
-       forall a a' as. (IsCoordLifted a, IsCoordLifted a', IsCoordList as)
-    => Lens (Coord (a ': as)) (Coord (a' ': as)) a a'
-coordHead f (Coord p) =
-    case p `quotRem` stride of
-        (i, r) ->
-            (\a' -> Coord (toAxisIndex a' * stride + r)) <$> f (unsafeFromAxisIndex @a i)
-  where
-    stride = coordListSize @as
-
--- | Changing the tail changes the stride the head is multiplied by, so the
--- head is decoded and re-encoded even though its value does not move.
-coordTail ::
-       forall a as as'. (IsCoordList as, IsCoordList as')
-    => Lens (Coord (a ': as)) (Coord (a ': as')) (Coord as) (Coord as')
-coordTail f (Coord p) =
-    case p `quotRem` coordListSize @as of
-        (i, r) ->
-            (\(Coord r') -> Coord (i * coordListSize @as' + r')) <$> f (Coord r)
-
 singleCoord :: forall a. IsCoordLifted a => a -> Coord '[a]
 singleCoord a = Coord (toAxisIndex a)
 
@@ -466,44 +434,6 @@ coordFromTuple = Coord . npToPosition . productTypeFrom
 
 coordToTuple :: (IsProductType t xs, IsCoordList xs) => Coord xs -> t
 coordToTuple = productTypeTo . unCoord
-
-instance (IsCoordLifted a, IsCoordLifted a', IsCoordList cs) =>
-         Field1 (Coord (a ': cs)) (Coord (a' ': cs)) a a' where
-  _1 = coordHead
-
-instance (IsCoordLifted a, IsCoordLifted b, IsCoordLifted b', IsCoordList cs) =>
-         Field2 (Coord (a ': b ': cs)) (Coord (a ': b' ': cs)) b b' where
-  _2 = coordTail . _1
-
-instance ( IsCoordLifted a
-         , IsCoordLifted b
-         , IsCoordLifted c
-         , IsCoordLifted c'
-         , IsCoordList cs
-         ) =>
-         Field3 (Coord (a ': b ': c ': cs)) (Coord (a ': b ': c' ': cs)) c c' where
-  _3 = coordTail . _2
-
-instance ( IsCoordLifted a
-         , IsCoordLifted b
-         , IsCoordLifted c
-         , IsCoordLifted d
-         , IsCoordLifted d'
-         , IsCoordList cs
-         ) =>
-         Field4 (Coord (a ': b ': c ': d ': cs)) (Coord (a ': b ': c ': d' ': cs)) d d' where
-  _4 = coordTail . _3
-
-instance ( IsCoordLifted a
-         , IsCoordLifted b
-         , IsCoordLifted c
-         , IsCoordLifted d
-         , IsCoordLifted e
-         , IsCoordLifted e'
-         , IsCoordList cs
-         ) =>
-         Field5 (Coord (a ': b ': c ': d ': e ': cs)) (Coord (a ': b ': c ': d ': e' ': cs)) e e' where
-  _5 = coordTail . _4
 
 -- | A class, not a pair of @where@ helpers: a self-recursive fold cannot
 -- unroll per axis, so the dictionary would be carried at run time instead of
