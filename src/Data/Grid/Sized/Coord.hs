@@ -369,6 +369,16 @@ instance forall cs. IsCoordList cs => Enum (Coord cs) where
                 show p ++
                 " is out of range for Coord " ++ show (coordListSize @cs)
     fromEnum = coordPosition
+    succ a =
+        let p = coordPosition a
+        in if p >= coordListSize @cs - 1
+             then error "Prelude.Enum.succ: tried to take succ of maxBound"
+             else toEnum (p + 1)
+    pred a =
+        let p = coordPosition a
+        in if p <= 0
+             then error "Prelude.Enum.pred: tried to take pred of minBound"
+             else toEnum (p - 1)
     enumFromTo a b = map Coord [coordPosition a .. coordPosition b]
     enumFromThenTo a b c =
         map Coord [coordPosition a, coordPosition b .. coordPosition c]

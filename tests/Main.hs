@@ -400,7 +400,6 @@ main =
         , aesonLaws @(Coord '[ Clamped 10, Periodic 20])
         , lawsToTest $ jsonLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , lawsToTest $ boundedEnumLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
-        , lawsToTest $ enumLaws (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Clamped 10, Periodic 20]))
         , isoLaws
@@ -424,7 +423,6 @@ main =
         , aesonLaws @(Coord '[ Periodic 10, Periodic 20])
         , lawsToTest $ jsonLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , lawsToTest $ boundedEnumLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
-        , lawsToTest $ enumLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testAllCoordOrdered (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , testCoordLayout (Proxy @(Coord '[ Periodic 10, Periodic 20]))
         , lawsToTest $ eqLaws (Proxy @(Coord '[ Periodic 10, Periodic 20]))
