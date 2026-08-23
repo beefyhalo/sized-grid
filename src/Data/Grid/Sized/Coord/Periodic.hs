@@ -84,10 +84,17 @@ instance (1 <= n, KnownNat n) => AdditiveGroup (Periodic n) where
 
 instance (1 <= n, KnownNat n) => AffineSpace (Periodic n) where
     type Diff (Periodic n) = Int
-    -- (.-.) returns the canonical representative in Z/nZ. It is deliberately
-    -- not the signed shortest route; use axisDistanceIsCoord for that metric.
+    -- (.-.) returns the shortest signed representative in Z/nZ. At the
+    -- half-turn of an even-sized axis, the raw difference determines the sign.
     Periodic a .-. Periodic b =
-        (ordinalToInt a - ordinalToInt b) `mod` ordinalSize @n
+        let size = ordinalSize @n
+            difference = ordinalToInt a - ordinalToInt b
+            half = size `div` 2
+        in if difference > half
+           then difference - size
+           else if difference < negate half
+                then difference + size
+                else difference
     -- The displacement is reduced into [0, size) before adding, so the sum
     -- stays below 2 * size and cannot overflow; reducing after adding could
     -- overflow first for a b near maxBound.

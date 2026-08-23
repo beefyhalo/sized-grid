@@ -115,10 +115,10 @@ arithmeticTests =
       ""
       2
       (fromEnum (zeroPosition @Periodic @5 .+^ negate (10 ^ (18 :: Int) * 5 + 3)))
-  , testCase "Periodic .-. is the wrapped difference" $
+  , testCase "Periodic .-. is the shortest signed difference" $
     assertEqual
       ""
-      3
+      (-2)
       ((toEnum 1 :: Periodic 5) .-. toEnum 3)
   , testCase "Clamped .+^ clamps a huge positive offset to maxBound" $
     assertEqual

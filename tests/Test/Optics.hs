@@ -69,9 +69,9 @@ torusTests =
           (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 0))
     , testCase "the residue group has one value per coordinate" $
         assertEqual "cardinality" 15 (length (allTorusCoords @'[Periodic 5, Periodic 3]))
-    , testCase "conversion recovers the canonical displacement" $
-        assertEqual "canonical delta"
-          (torusDelta 1 2)
+    , testCase "conversion recovers the shortest displacement" $
+        assertEqual "shortest delta"
+          (torusDelta 1 (-1))
           (torusCoordToDelta @'[Periodic 5, Periodic 3]
             (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 (-1))))
     , isoLaws "translated" (translationOptic (torusDelta 2 (-1)))

@@ -15,7 +15,7 @@ periodicTests =
     "Periodic"
     [ testGroup "Enum stops after one lap instead of repeating forever" enumTests
     , testGroup "Cyclic: 1 generates every element, once" cyclicTests
-    , testGroup "Affine displacement and metric have distinct meanings" displacementTests
+    , testGroup "Affine displacement follows the shortest route" displacementTests
     ]
 
 enumTests :: [TestTree]
@@ -59,16 +59,24 @@ cyclicTests =
 
 displacementTests :: [TestTree]
 displacementTests =
-  [ testCase "(. -.) is the canonical non-negative residue" $
+  [ testCase "(. -.) wraps clockwise to the shortest route" $
     assertEqual
       ""
-      6
+      (-1)
       ((toEnum 6 :: Periodic 7) .-. (toEnum 0 :: Periodic 7))
-  , testCase "axisDistanceIsCoord is the shorter route" $
+  , testCase "(. -.) wraps counterclockwise to the shortest route" $
     assertEqual
       ""
       1
-      (axisDistanceIsCoord
-        (toEnum 6 :: Periodic 7)
-        (toEnum 0 :: Periodic 7))
+      ((toEnum 0 :: Periodic 7) .-. (toEnum 6 :: Periodic 7))
+  , testCase "(. -.) keeps the raw sign at an even half-turn" $
+    assertEqual
+      ""
+      2
+      ((toEnum 2 :: Periodic 4) .-. (toEnum 0 :: Periodic 4))
+  , testCase "(. -.) reverses the even half-turn sign" $
+    assertEqual
+      ""
+      (-2)
+      ((toEnum 0 :: Periodic 4) .-. (toEnum 2 :: Periodic 4))
   ]
