@@ -6,6 +6,10 @@ module Data.Grid.Sized.Optics
   ( -- * Coordinates
     _CoordAxes
   , _TransposedCoord
+  , _CoordTuple
+  , _CoordCons
+  , _SingleCoord
+  , _EmptyCoord
   , _Position
   , _Strengthened
   , _Weakened
@@ -14,6 +18,8 @@ module Data.Grid.Sized.Optics
   , coordHead
   , coordTail
   , _WrappedDelta
+  , _DeltaTuple
+  , _DeltaCons
   , deltaHead
   , deltaTail
     -- * Ordinals
@@ -23,6 +29,8 @@ module Data.Grid.Sized.Optics
   , permuted
   , _Transposed
   , _SplitGrid
+  , _SplitHigherDim
+  , _CollapsedGrid
   , cell
   , gridIndex
   , asGrid
@@ -43,6 +51,12 @@ import           Data.Grid.Sized.Coord            (AffineCoordList, AllSizedKnow
                                                    WeakenCoord,
                                                    coordFromPosition,
                                                    coordPosition,
+                                                   coordSplit,
+                                                   appendCoord,
+                                                   singleCoord,
+                                                   pattern EmptyCoord,
+                                                   coordFromTuple,
+                                                   coordToTuple,
                                                    unCoord,
                                                    unsafeCoordFromPosition,
                                                    transposeCoord,
@@ -57,11 +71,15 @@ import           Data.Grid.Sized.Coord.Class      (IsCoordLifted,
                                                    toAxisIndex,
                                                    unsafeFromAxisIndex,
                                                    weakenIsCoord)
-import           Data.Grid.Sized.Coord.Delta      (Delta (..))
+import           Data.Grid.Sized.Coord.Delta      (Delta (..), deltaSplit,
+                                                   appendDelta, deltaFromTuple,
+                                                   deltaToTuple)
 import           Data.Grid.Sized.Focused          (FocusedGrid (..))
-import           Data.Grid.Sized.Internal.Grid   (Grid, GridOf (..),
+import           Data.Grid.Sized.Internal.Grid   (CollapseGrid, Grid, GridOf (..),
                                                    combineGrid, dropGrid,
-                                                   gridFromVector, gridVector,
+                                                   combineHigherDim, splitHigherDim,
+                                                   collapseGrid,
+                                                   gridFromList, gridFromVector, gridVector,
                                                    mapLowerDim, permuteGrid,
                                                    splitGrid,
                                                    sliceGrid)
@@ -76,7 +94,7 @@ import           Data.AdditiveGroup              (AdditiveGroup (..))
 import           Data.AffineSpace                (Diff, (.+^))
 import           Data.Vector.Generic              (Vector)
 import qualified Data.Vector.Generic             as VG
-import           Generics.SOP                     (All, I (..), NP (..))
+import           Generics.SOP                     (All, I (..), IsProductType, NP (..))
 import           Data.Proxy                       (Proxy (..))
 import           GHC.TypeLits                    (KnownNat, natVal, type (+),
                                                    type (-), type (<=))
@@ -90,6 +108,19 @@ _CoordAxes = iso unCoord (unsafeCoordFromPosition . npToPosition @cs)
 _TransposedCoord :: (IsCoordLifted a, IsCoordLifted b)
                  => Iso' (Coord '[a, b]) (Coord '[b, a])
 _TransposedCoord = iso transposeCoord transposeCoord
+
+_CoordTuple :: (IsProductType t xs, IsCoordList xs) => Iso' (Coord xs) t
+_CoordTuple = iso coordToTuple coordFromTuple
+
+_CoordCons :: (IsCoordLifted c, IsCoordList cs)
+           => Iso' (Coord (c ': cs)) (c, Coord cs)
+_CoordCons = iso coordSplit (uncurry appendCoord)
+
+_SingleCoord :: IsCoordLifted c => Iso' (Coord '[c]) c
+_SingleCoord = iso (fst . coordSplit) singleCoord
+
+_EmptyCoord :: Iso' (Coord '[]) ()
+_EmptyCoord = iso (const ()) (const EmptyCoord)
 
 -- | Lift a bijective coordinate optic to a grid permutation. Each direction
 -- builds its own index vector when applied.
@@ -190,6 +221,12 @@ instance ( IsCoordLifted a, IsCoordLifted b, IsCoordLifted c,
 _WrappedDelta :: Iso' (Delta ds) (NP I ds)
 _WrappedDelta = dimap unDelta (fmap Delta)
 
+_DeltaTuple :: IsProductType t ds => Iso' (Delta ds) t
+_DeltaTuple = iso deltaToTuple deltaFromTuple
+
+_DeltaCons :: Iso' (Delta (d ': ds)) (d, Delta ds)
+_DeltaCons = iso deltaSplit (uncurry appendDelta)
+
 deltaHead :: Lens (Delta (a ': as)) (Delta (a' ': as)) a a'
 deltaHead f (Delta (I a :* as)) = (\a' -> Delta (I a' :* as)) <$> f a
 
@@ -224,6 +261,16 @@ _SplitGrid ::
   forall v c cs a. (Vector v a, AllSizedKnown cs)
   => Iso' (GridOf v (c ': cs) a) (Grid '[ c] (GridOf v cs a))
 _SplitGrid = iso splitGrid combineGrid
+
+_SplitHigherDim :: forall v c as x y a.
+       (VG.Vector v a, KnownNat y, y <= x, AllSizedKnown as)
+    => Iso' (GridOf v (c x ': as) a)
+      (GridOf v (c y ': as) a, GridOf v (c (x - y) ': as) a)
+_SplitHigherDim = requiring @(y <= x) $ iso splitHigherDim (uncurry combineHigherDim)
+
+_CollapsedGrid :: (VG.Vector v a, AllSizedKnown cs)
+         => Prism' (CollapseGrid cs a) (GridOf v cs a)
+_CollapsedGrid = prism' collapseGrid gridFromList
 
 cell :: forall v cs a. (Vector v a, IsCoordList cs) => Coord cs -> Lens' (GridOf v cs a) a
 cell c = requiring @(IsCoordList cs) $ lens getter setter

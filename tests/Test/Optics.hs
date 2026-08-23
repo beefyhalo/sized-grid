@@ -36,6 +36,14 @@ coordOpticTests =
     "Coordinate optics"
     [ isoLaws "_CoordAxes"
       (_CoordAxes :: Iso' Coord2 (NP I '[Ordinal 5, Ordinal 7]))
+    , isoLaws "_CoordTuple"
+      (_CoordTuple :: Iso' Coord2 (Ordinal 5, Ordinal 7))
+    , isoLaws "_CoordCons"
+      (_CoordCons :: Iso' Coord2 (Ordinal 5, Coord '[Ordinal 7]))
+    , isoLaws "_SingleCoord"
+      (_SingleCoord :: Iso' (Coord '[Ordinal 5]) (Ordinal 5))
+    , isoLaws "_EmptyCoord"
+      (_EmptyCoord :: Iso' (Coord '[]) ())
     , prismLaws "_Position" (_Position :: Prism' Int Coord2)
     , prismLaws "_Strengthened"
       (_Strengthened :: Prism' (Ordinal 7) (Ordinal 5))
@@ -53,6 +61,10 @@ deltaOpticTests =
     "Delta optics"
     [ isoLaws "_WrappedDelta"
         (_WrappedDelta :: Iso' (Delta '[Int, Int]) (NP I '[Int, Int]))
+    , isoLaws "_DeltaTuple"
+      (_DeltaTuple :: Iso' (Delta '[Int, Int]) (Int, Int))
+    , isoLaws "_DeltaCons"
+      (_DeltaCons :: Iso' (Delta '[Int, Int]) (Int, Delta '[Int]))
     , lensLaws "deltaHead"
         (deltaHead :: Lens' (Delta '[Int, Int]) Int)
     , lensLaws "deltaTail"
@@ -101,6 +113,11 @@ gridOpticTests =
         (_Transposed :: Iso' Grid2 TransposedGrid2)
     , isoLaws "_SplitGrid"
         (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int)))
+    , isoLaws "_SplitHigherDim"
+      (_SplitHigherDim :: Iso' Grid2
+        (Grid '[Ordinal 3, Ordinal 7] Int, Grid '[Ordinal 2, Ordinal 7] Int))
+    , prismLaws "_CollapsedGrid"
+      (_CollapsedGrid :: Prism' [[Int]] Grid2)
     , testGroup "_GridVector is a prism"
       [ prismLawsFrom (V.replicate 35 <$> chooseInt (-100, 100))
           "_GridVector" (_GridVector :: Prism' (V.Vector Int) Grid2)
