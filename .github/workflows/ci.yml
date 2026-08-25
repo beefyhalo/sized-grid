@@ -80,9 +80,11 @@ jobs:
           purge-prefixes: nix-${{ runner.os }}-
           purge-created: 0
           purge-primary-key: never
-      # Builds the library + tests + haddock on ghc912/ghc914 (see
-      # flake.nix's `checks`). Deliberately does not cover the gloss/GLUT
-      # examples -- see the cabal matrix job below.
+      # Builds grid-sized -- library + its own tests + haddock -- on
+      # ghc912/ghc914 (see flake.nix's `checks`). grid-sized only:
+      # deliberately not the gloss/GLUT examples, and not atlas-topology or
+      # grid-atlas either, neither of which the library depends on. Those two
+      # are built and tested by the cabal matrix job below.
       - run: nix build --print-build-logs .#checks.x86_64-linux.ghc912 .#checks.x86_64-linux.ghc914
       # `nix flake check` also builds `devShells.<system>.default/ghc914`
       # (see flake.nix) to verify they're valid derivations, which pulls the
@@ -135,15 +137,30 @@ jobs:
 
       # `cabal build all` alone does not build test-suites or benchmarks, so
       # the tests, readme and bench targets need these flags to be caught by
-      # this job. This matrix builds only -- it exists to keep the bounds in
-      # grid-sized.cabal honest across the supported GHC range; the tasty
-      # suite itself is exercised by `nix flake check` above on ghc912/ghc914.
+      # this job. Keeps the bounds in every .cabal file honest across the
+      # supported GHC range, and is the only job that compiles the benchmarks
+      # on more than one compiler.
       #
       # -Werror is baked into every package's ghc-options (not passed here),
       # so any file this job actually recompiles fails the build on a new
       # warning -- this doesn't depend on dist-newstyle being cold, since GHC
       # only needs to be compiling the file to enforce it (sized-grid-ior).
       - run: cabal build all --enable-tests --enable-benchmarks
+
+      # sized-grid-svil. This step used to be absent, and the comment above
+      # used to say the suites were "exercised by nix flake check" -- but
+      # flake.nix's `checks` are `callCabal2nix "grid-sized" src`, which is
+      # the root package alone, and grid-sized does not depend on grid-atlas.
+      # So atlas-topology's and grid-atlas's suites were built by this job and
+      # run by neither: 21 tests that had never executed in CI, including the
+      # vertex-cycle law that sized-grid-5gm7 turned out to be a real defect
+      # in. Running them here rather than adding them to the flake covers
+      # every package on all three compilers instead of the flake's two, and
+      # needs no second copy of the plugin overrides.
+      #
+      # `cabal test all` reuses everything the build step just compiled, so
+      # this costs the run time of the suites and nothing else.
+      - run: cabal test all --test-show-details=direct
 
   # sized-grid-adr.11. This library's performance is a property of what GHC
   # does with the source, not of the source itself: the wins recorded in

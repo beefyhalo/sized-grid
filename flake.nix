@@ -91,7 +91,13 @@
           grid-sized-ghc914 = mkPackage ghc914;
         };
 
-        # `nix flake check` builds the library and runs the tasty suite on both.
+        # `nix flake check` builds grid-sized and runs *its* suites (tests,
+        # downstream, readme) on both compilers. Only grid-sized:
+        # callCabal2nix reads the root grid-sized.cabal, and nothing in the
+        # library depends on atlas-topology or grid-atlas, so neither is in
+        # this build graph at all. Their suites are run by ci.yml's cabal
+        # matrix job instead (sized-grid-svil) -- do not read these checks as
+        # covering the whole cabal.project.
         checks = {
           ghc912 = mkPackage ghc912;
           ghc914 = mkPackage ghc914;
