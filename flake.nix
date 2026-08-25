@@ -81,8 +81,23 @@
               } { });
           });
 
+        # GHC 9.14.1 ships template-haskell 2.24, and nixpkgs' snapshot of
+        # constraints-extras 0.4.0.2 -- pulled in by dependent-sum, which
+        # finitary needs -- still caps it at <2.24, so the package cannot even
+        # configure ([Cabal-8010]) and takes grid-sized down with it. The bound
+        # is stale rather than a real incompatibility: 0.4.0.2 compiles against
+        # template-haskell 2.24, which is what the cabal 9.14.1 matrix job does
+        # via a Hackage revision nixpkgs has not picked up. Scoped to 9.14 so
+        # 9.12 keeps hitting the binary cache unchanged, and to this one package
+        # so an unrelated future bound still surfaces as a build error.
+        ghc914Overrides = hsPkgs:
+          hsPkgs.extend (hself: hsuper: {
+            constraints-extras =
+              pkgs.haskell.lib.doJailbreak hsuper.constraints-extras;
+          });
+
         ghc912 = pluginOverrides pkgs.haskell.packages.ghc912;
-        ghc914 = pluginOverrides pkgs.haskell.packages.ghc914;
+        ghc914 = ghc914Overrides (pluginOverrides pkgs.haskell.packages.ghc914);
       in
       {
         packages = {

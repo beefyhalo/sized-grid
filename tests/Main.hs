@@ -117,6 +117,14 @@ semialignZipTests =
            property $ \(left :: Grid '[Periodic 3, Periodic 4] Int)
                           (right :: Grid '[Periodic 3, Periodic 4] Int) ->
              Zip.zipWith (+) left right === zipWithGrid (+) left right
+         , testProperty "unzip inverts zip" $
+           property $ \(left :: Grid '[Periodic 3, Periodic 4] Int)
+                          (right :: Grid '[Periodic 3, Periodic 4] Int) ->
+             Zip.unzip (Zip.zip left right) === (left, right)
+         , testProperty "unzipWith splits each cell in place" $
+           property $ \(grid :: Grid '[Periodic 3, Periodic 4] Int) ->
+             Zip.unzipWith (\value -> (value + 1, value * 2)) grid
+               === (mapGrid (+ 1) grid, mapGrid (* 2) grid)
          ]
   where
     combine (These.This value) = value

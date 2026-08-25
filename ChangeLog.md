@@ -121,6 +121,16 @@ part of this release. The dated 0.1.x sections beneath those are upstream
   `adjunctions` and `lens`, so this costs nothing new to the dependency
   closure — only an explicit direct dependency to import it from.
 
+* New: an `Unzip` instance for `Grid`, from `semialign` (sized-grid-hlp0).
+
+  Splitting a grid of pairs gives two grids of the same shape, so this needs
+  no size evidence: both halves inherit the source's length. semialign-1.4
+  reordered its class hierarchy to put `Unzip` directly above `Functor`,
+  making it a superclass of `Semialign`, so without this instance the library
+  no longer compiles against 1.4 at all — and the bound has been
+  `>=1.3 && <1.5` throughout. The instance is written to satisfy both
+  hierarchies, so 1.3, where `Unzip` sits above `Zip` instead, is unaffected.
+
 * `Grid` gains an unboxed sibling, and the two share one implementation
   (sized-grid-up6).
 

@@ -68,7 +68,7 @@ import           Data.Functor.Rep
 import           Data.Kind                     (Type)
 import           Data.Proxy                    (Proxy (..))
 import           Data.These                    (These (..))
-import           Data.Zip                      (Zip (..))
+import           Data.Zip                      (Unzip (..), Zip (..))
 import qualified Data.Vector                   as V
 import qualified Data.Vector.Generic           as VG
 import qualified Data.Vector.Generic.Mutable   as VGM
@@ -305,6 +305,17 @@ instance IsCoordList cs => Semialign (Grid cs) where
 
 instance IsCoordList cs => Zip (Grid cs) where
   zipWith = zipWithGrid
+
+-- | Splitting a grid of pairs gives two grids of the same shape, so this needs
+-- no size evidence: both halves inherit the source's length, and the length
+-- invariant holds for each.
+--
+-- semialign-1.4 moved `Unzip` to the bottom of the hierarchy, directly above
+-- `Functor`, making it a superclass of `Semialign`; under 1.3 it sat above
+-- `Zip` instead. This instance satisfies either hierarchy, so the
+-- @>=1.3 && <1.5@ bound stays honest.
+instance IsCoordList cs => Unzip (Grid cs) where
+  unzip (Grid v) = let (as, bs) = V.unzip v in (Grid as, Grid bs)
 
 -- | Boxed only, and necessarily so: `pure` must produce a grid of /any/ element
 -- type, which no unboxed vector can hold. 'tabulateGrid' is the unboxed
