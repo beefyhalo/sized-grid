@@ -158,9 +158,14 @@ jobs:
       # every package on all three compilers instead of the flake's two, and
       # needs no second copy of the plugin overrides.
       #
-      # `cabal test all` reuses everything the build step just compiled, so
-      # this costs the run time of the suites and nothing else.
-      - run: cabal test all --test-show-details=direct
+      # The flags are repeated from the build step, and have to be
+      # (sized-grid-r74b): without them `cabal test all` re-solves, and the
+      # solver -- free to drop test suites rather than backtrack for them --
+      # picks a plan that has none, then reports [Cabal-7043] "the solver
+      # picked a plan that does not include the test suites". Passing the same
+      # flags forces the suites in and lands on the plan the step above already
+      # built, so this costs the run time of the suites and nothing else.
+      - run: cabal test all --enable-tests --enable-benchmarks --test-show-details=direct
 
   # sized-grid-adr.11. This library's performance is a property of what GHC
   # does with the source, not of the source itself: the wins recorded in
