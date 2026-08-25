@@ -10,14 +10,26 @@ module Data.Atlas.Topology.Seam
   , vertexCycleViolations
   ) where
 
-import           Data.List (nub)
+import           Data.List  (elemIndex, nub)
+import           Data.Maybe (mapMaybe)
 
 -- | One side of one seam: a chart, and which boundary feature of that chart.
 type HalfEdge chart boundary = (chart, boundary)
 
--- | The two boundary incidences of one chart corner. The order is the local
--- order around the corner; the supplied enumeration also orders the two
--- occurrences of each boundary, from one end of that boundary to the other.
+-- | The two boundary incidences of one chart corner --- the pair of
+-- half-edges that meet there.
+--
+-- The order /within/ the pair is not consulted; a corner is identified by
+-- which two half-edges it joins. What matters is the order of the
+-- enumeration a corner is supplied in, because that is the only thing that
+-- says which end of a boundary a corner sits at. The two corners incident
+-- with one boundary must appear in the list in the direction the seam
+-- table's orientation bit is measured along, so the earlier of the two is
+-- that boundary's first end and the later one its second.
+--
+-- For a rectangular chart glued the way @Data.Grid.Atlas.Rect@ glues one
+-- --- the along-edge coordinate running from @0@ upwards --- listing the
+-- four corners in row-major order satisfies this.
 type Corner chart boundary = (HalfEdge chart boundary, HalfEdge chart boundary)
 
 -- | The gluing: crossing a named boundary of a chart lands on some chart at
@@ -52,35 +64,67 @@ seamViolations table =
     filter (\(c, b) -> not (seamIsInvolution table c b))
 
 -- | Lengths of the vertex cycles induced by a seam table and an enumeration
--- of its corners. Crossing either incident boundary joins a corner to the
--- destination corners incident with the crossed boundary, and the resulting
--- connected components are the vertex cycles.
+-- of its corners.
+--
+-- A crossing carries each end of the boundary it leaves to one end of the
+-- boundary it lands on: to the end in the same position when the two run the
+-- same way, and to the opposite end when the table's orientation bit says
+-- they run opposite ways. Each corner therefore has exactly one landing
+-- corner through each of its two boundaries, so the graph is 2-regular and
+-- its connected components are the vertex cycles.
+--
+-- Which end of a boundary a corner sits at comes from the enumeration order
+-- --- see 'Corner' for the contract that places on the caller. Using the
+-- orientation bit is what separates surfaces that this cannot: a torus and a
+-- Klein bottle both report @[4]@, while a projective plane reports @[2]@,
+-- its two cone points of angle pi.
+--
+-- Distinct lengths only: two vertices of the same cycle length report once.
+--
+-- A half-edge the enumeration does not give exactly two ends for is skipped
+-- rather than reported. Validating the enumeration itself --- that it is
+-- complete, and that every boundary is incident exactly twice --- is
+-- sized-grid-oj6z.
 vertexCycleLengths ::
        (Eq chart, Eq boundary)
     => SeamTable chart boundary
     -> [Corner chart boundary]
     -> [Int]
-vertexCycleLengths table corners =
-    nub [length (componentFrom corner []) | corner <- corners]
+vertexCycleLengths table corners = nub (map (length . component) corners)
   where
-    componentFrom corner seen
-        | corner `elem` seen = seen
-        | otherwise =
-            foldr componentFrom (corner : seen) (neighbors corner)
+    component start = walk [start] [start]
+      where
+        walk seen [] = seen
+        walk seen (corner:queue) =
+            let fresh = [c | c <- neighbours corner, c `notElem` seen]
+             in walk (fresh ++ seen) (fresh ++ queue)
 
-    neighbors (left, right) =
-        nub
-            [ candidate
-            | boundary <- [snd left, snd right]
-            , let (chart, crossedBoundary, _) =
-                    crossSeam table (fst (if boundary == snd left then left else right)) boundary
-            , candidate@(candidateLeft, candidateRight) <- corners
-            , incidenceOf candidateLeft chart crossedBoundary ||
-              incidenceOf candidateRight chart crossedBoundary
-            ]
+    neighbours corner@(left, right) =
+        nub (mapMaybe (landing corner) (nub [left, right]))
 
-    incidenceOf (chart, boundary) expectedChart expectedBoundary =
-        chart == expectedChart && boundary == expectedBoundary
+    -- The single corner reached by crossing one of this corner's two
+    -- boundaries.
+    landing corner (chart, boundary)
+        | Just endIndex <- elemIndex corner sourceEnds
+        , length sourceEnds == 2
+        , length destEnds == 2 =
+            Just (destEnds !! (if reversed then 1 - endIndex else endIndex))
+        | otherwise = Nothing
+      where
+        sourceEnds = endsOf corners (chart, boundary)
+        destEnds = endsOf corners (destChart, destBoundary)
+        (destChart, destBoundary, reversed) = crossSeam table chart boundary
+
+-- | The corners of an enumeration that are incident with one half-edge, in
+-- enumeration order. Well-formed data gives exactly two: that half-edge's
+-- two ends, in the direction the orientation bit is measured along.
+endsOf ::
+       (Eq chart, Eq boundary)
+    => [Corner chart boundary]
+    -> HalfEdge chart boundary
+    -> [Corner chart boundary]
+endsOf corners halfEdge =
+    [corner | corner@(left, right) <- corners, left == halfEdge || right == halfEdge]
 
 
 -- | The vertex cycles that are not the four-corner cycles of a flat square

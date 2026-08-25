@@ -118,42 +118,59 @@ byHandTables =
   where
     units = [((), s) | s <- [minBound .. maxBound] :: [Side]]
 
+-- | One square chart with all four sides glued in pairs. The three closed
+-- surfaces a square can make differ only in which pairs are twisted, so one
+-- table generator covers all of them: @W@/@E@ is the left-right pair and
+-- @S@/@N@ the bottom-top one.
+squareTable :: Bool -> Bool -> SeamTable () Side
+squareTable twistWE twistSN =
+    SeamTable $ \_ s ->
+        case s of
+            W -> ((), E, twistWE)
+            E -> ((), W, twistWE)
+            S -> ((), N, twistSN)
+            N -> ((), S, twistSN)
+
+torusTable, kleinTable, projectiveTable :: SeamTable () Side
+torusTable = squareTable False False
+kleinTable = squareTable False True
+projectiveTable = squareTable True True
+
+-- | The square's four corners in row-major order, which is what lists each
+-- side's two ends in the direction the twist bits above are measured along
+-- (see 'Corner'): bottom-left, bottom-right, top-left, top-right.
+squareCorners :: [Corner () Side]
+squareCorners =
+    [ (((), W), ((), S))
+    , (((), E), ((), S))
+    , (((), W), ((), N))
+    , (((), E), ((), N))
+    ]
+
+-- | A square's four corners are one vertex on a torus and one on a Klein
+-- bottle, but two on a projective plane: @abab@ identifies the corners in
+-- antipodal pairs, leaving two cone points of angle pi. Reading the
+-- orientation bit is the only thing that tells the three apart --- they
+-- differ in nothing else.
 vertexCycles :: TestTree
 vertexCycles =
-        testGroup
-                "vertex cycles"
-                [ testCase "a flat four-corner chart has cycle length four" $
-                    assertEqual "" [4] (vertexCycleLengths flatTable flatCorners)
-                , testCase "a three-corner vertex is a cone point" $
-                    assertEqual "" [3] (vertexCycleLengths coneTable coneCorners)
-                , testCase "flatness violations report non-four cycles" $
-                    assertEqual "" [3] (vertexCycleViolations coneTable coneCorners)
-                ]
-    where
-        flatCorners =
-            [ ((A, N), (A, E))
-            , ((A, E), (A, S))
-            , ((A, S), (A, W))
-            , ((A, W), (A, N))
-                ]
-        flatTable =
-                tableOf
-                        [ ((A, N), ((A, S), False))
-                        , ((A, S), ((A, N), False))
-                        , ((A, E), ((A, W), False))
-                        , ((A, W), ((A, E), False))
-                        ]
-        coneCorners =
-            [ ((A, N), (A, E))
-            , ((A, E), (A, S))
-            , ((A, S), (A, N))
-                ]
-        coneTable =
-                tableOf
-                        [ ((A, N), ((A, S), False))
-                        , ((A, S), ((A, N), False))
-                , ((A, E), ((A, E), False))
-                        ]
+    testGroup
+        "vertex cycles"
+        [ testCase "a torus has one four-corner vertex" $
+          assertEqual "" [4] (vertexCycleLengths torusTable squareCorners)
+        , testCase "a Klein bottle has one four-corner vertex" $
+          assertEqual "" [4] (vertexCycleLengths kleinTable squareCorners)
+        , testCase "a projective plane has two two-corner vertices" $
+          assertEqual "" [2] (vertexCycleLengths projectiveTable squareCorners)
+        , testCase "the flat surfaces report no flatness violations" $
+          assertEqual
+              ""
+              ([], [])
+              ( vertexCycleViolations torusTable squareCorners
+              , vertexCycleViolations kleinTable squareCorners)
+        , testCase "flatness violations report the projective plane's cone points" $
+          assertEqual "" [2] (vertexCycleViolations projectiveTable squareCorners)
+        ]
 
 seamTests :: TestTree
 seamTests =

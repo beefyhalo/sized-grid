@@ -92,6 +92,7 @@ test-suite tests
     Test.Mobius
     Test.Projective
     Test.Tiles
+    Test.VertexCycles
 
   build-depends:
     , adjunctions       >=4.4  && <4.5
