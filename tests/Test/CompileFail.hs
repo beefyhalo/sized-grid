@@ -42,6 +42,20 @@ ghcFlags =
   , "-XViewPatterns"
   ]
 
+-- | @cabal exec@ re-solves rather than reading back the plan that built this
+-- test binary, so it is told to solve for the same one: without
+-- @--enable-tests --enable-benchmarks@ the test-suite and benchmark stanzas
+-- are absent from the solve, and the solver is free to pick a dependency
+-- version the plan that built us did not (sized-grid-1zkr). Whatever it picks
+-- that way is not in the store, so `cabal exec` leaves it out of the
+-- environment file it writes and GHC reports the installed one as a /hidden/
+-- package -- on CI, every snippet failed on @Could not load module
+-- \'Data.Aeson\'. It is a member of the hidden package \'aeson-2.2.5.0\'@
+-- rather than on the diagnostic under test. A machine whose store happens to
+-- hold both versions never sees this, which is why it showed up on CI first.
+cabalFlags :: [String]
+cabalFlags = ["--enable-tests", "--enable-benchmarks"]
+
 -- | Requires @expectedSubstring@ in the diagnostic, not just any failure, so a
 -- typo that breaks the snippet in an unrelated way cannot pass for the
 -- precondition actually firing.
@@ -53,7 +67,9 @@ ghcFlags =
 -- derivation's exact package set, so it sees the same packages either way.
 assertCompileFails :: FilePath -> String -> Assertion
 assertCompileFails file expectedSubstring = do
-  let args = ["exec", "ghc", "--"] ++ ghcFlags ++ ["tests/compile-fail/" ++ file]
+  let args =
+        ["exec"] ++ cabalFlags ++ ["ghc", "--"] ++ ghcFlags
+          ++ ["tests/compile-fail/" ++ file]
   cabalResult <- try (readProcessWithExitCode "cabal" args "")
   (code, _out, err) <- case cabalResult of
     Right result -> pure result
