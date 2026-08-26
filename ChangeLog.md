@@ -9,6 +9,11 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Data.Grid.Sized.Optics` is now a facade over `Optics.Coordinate` (which
+  also owns the `Field1`..`Field5` orphan instances for `Coord` and `Delta`),
+  `Optics.Grid` and `Optics.FocusedGrid`, all newly exposed. Its export list is
+  unchanged.
+
 * `Data.Grid.Sized.Internal.Grid` is now an aggregator. Its 1288 lines are
   split into `Internal.Grid.Core` (the representation, its instances and the
   bulk operations), `Internal.Grid.Shape` (split, join, take, drop, slice,

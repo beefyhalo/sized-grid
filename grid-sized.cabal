@@ -227,6 +227,9 @@ library
     Data.Grid.Sized.Coord.Transform
     Data.Grid.Sized.Focused
     Data.Grid.Sized.Optics
+    Data.Grid.Sized.Optics.Coordinate
+    Data.Grid.Sized.Optics.FocusedGrid
+    Data.Grid.Sized.Optics.Grid
     Data.Grid.Sized.Ordinal
     Data.Grid.Sized.Stencil
     Data.Grid.Sized.Unboxed
