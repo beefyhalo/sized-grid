@@ -9,6 +9,16 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Data.Grid.Sized.Coord` is now a facade. Its 1006 lines are split by domain
+  into `Coord.Neighbourhood` (stepping, Moore, von Neumann), `Coord.Path` (rays
+  and ordered walks), `Coord.Distance`, `Coord.Boundary`, `Coord.Transform`
+  (reflection frames, weaken/strengthen), `Coord.Centre` (centred and punctured
+  coordinates) and `Coord.Torus`, all newly exposed, plus a hidden
+  `Coord.Internal` holding the representation and its instances. Nothing moved
+  out of `Data.Grid.Sized.Coord`'s export list, so an existing import keeps
+  working unchanged; the submodules are there for anyone who wants a narrower
+  one.
+
 * **Breaking.** A `Coord cs` *is* its row-major position: one `Int` in
   `[0, MaxCoordSize cs)` and nothing else, where it was an `NP I cs` — a
   boxed heterogeneous cons list with a `:*` cell, an `I` box and the axis

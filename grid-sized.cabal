@@ -212,12 +212,19 @@ library
     Data.Grid.Sized
     Data.Grid.Sized.Class
     Data.Grid.Sized.Coord
+    Data.Grid.Sized.Coord.Boundary
+    Data.Grid.Sized.Coord.Centre
     Data.Grid.Sized.Coord.Clamped
     Data.Grid.Sized.Coord.Class
     Data.Grid.Sized.Coord.Delta
+    Data.Grid.Sized.Coord.Distance
+    Data.Grid.Sized.Coord.Neighbourhood
+    Data.Grid.Sized.Coord.Path
     Data.Grid.Sized.Coord.Periodic
     Data.Grid.Sized.Coord.Reflect101
     Data.Grid.Sized.Coord.Reflective
+    Data.Grid.Sized.Coord.Torus
+    Data.Grid.Sized.Coord.Transform
     Data.Grid.Sized.Focused
     Data.Grid.Sized.Optics
     Data.Grid.Sized.Ordinal
@@ -229,6 +236,7 @@ library
   -- than exposed so that "Data.Grid.Sized.Unsafe" can be the only public route
   -- to it; see the header of either module.
   other-modules:
+    Data.Grid.Sized.Coord.Internal
     Data.Grid.Sized.Internal.Error
     Data.Grid.Sized.Internal.Grid
     Data.Grid.Sized.Internal.Type
