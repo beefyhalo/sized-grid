@@ -9,6 +9,15 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Data.Grid.Sized.Internal.Grid` is now an aggregator. Its 1288 lines are
+  split into `Internal.Grid.Core` (the representation, its instances and the
+  bulk operations), `Internal.Grid.Shape` (split, join, take, drop, slice,
+  permute, the lower-dimension maps), `Internal.Grid.Axis` (`MapAxis` and the
+  fibre machinery), `Internal.Grid.Windows` (shrink, tile, slide) and
+  `Internal.Grid.Nest` (the axis-list recursion behind `collapseGrid`,
+  `gridFromList` and the JSON instances). All are hidden, as the aggregator
+  already was, and its exported symbols are unchanged.
+
 * `Data.Grid.Sized.Coord` is now a facade. Its 1006 lines are split by domain
   into `Coord.Neighbourhood` (stepping, Moore, von Neumann), `Coord.Path` (rays
   and ordered walks), `Coord.Distance`, `Coord.Boundary`, `Coord.Transform`

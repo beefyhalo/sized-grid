@@ -239,6 +239,11 @@ library
     Data.Grid.Sized.Coord.Internal
     Data.Grid.Sized.Internal.Error
     Data.Grid.Sized.Internal.Grid
+    Data.Grid.Sized.Internal.Grid.Axis
+    Data.Grid.Sized.Internal.Grid.Core
+    Data.Grid.Sized.Internal.Grid.Nest
+    Data.Grid.Sized.Internal.Grid.Shape
+    Data.Grid.Sized.Internal.Grid.Windows
     Data.Grid.Sized.Internal.Type
   build-depends:
     , adjunctions   >=4.4  && <4.5
