@@ -328,6 +328,16 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- half of a @sizeAndPosition@ that also folded a coordinate.
     coordListSize :: Int
 
+    -- | How many axes are in the list, /d/ in @(2r+1)^d@: the dimension a
+    -- caller who knows a radius needs to turn it into an upper bound on a
+    -- Moore or von Neumann neighbourhood's width, which is what
+    -- 'Data.Grid.Sized.Stencil.mooreStencil' and
+    -- 'Data.Grid.Sized.Stencil.vonNeumannStencil' use it for. A method for
+    -- the same unrolling reason as 'coordListSize': at a concrete axis list
+    -- this counts down to a literal at compile time rather than folding a
+    -- list at run time.
+    coordListLength :: Int
+
     -- | The row-major position of a coordinate given axis by axis. The
     -- surviving half of the old @sizeAndPosition@, and now a /constructor/
     -- rather than an accessor: 'Data.Grid.Sized.Coord.coordPosition' is
@@ -404,6 +414,7 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
 
 instance IsCoordList '[] where
     coordListSize = 1
+    coordListLength = 0
     npToPosition Nil = 0
     -- The remainder at the end of a well-formed decode is always zero, so
     -- there is nothing left to represent and nothing to check here.
@@ -422,6 +433,7 @@ instance IsCoordList '[] where
     posMaxDistance _ _ = 0
     posSumDistance _ _ = 0
     {-# INLINE coordListSize #-}
+    {-# INLINE coordListLength #-}
     {-# INLINE npToPosition #-}
     {-# INLINE npFromPosition #-}
     {-# INLINE posOffset #-}
@@ -439,6 +451,8 @@ instance IsCoordList '[] where
 -- what lets GHC turn the 'quotRem' into multiply-shift.
 instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     coordListSize = ordinalSize @(CoordNat x) * coordListSize @xs
+
+    coordListLength = 1 + coordListLength @xs
 
     npToPosition (I c :* cs) =
         toAxisIndex c * coordListSize @xs + npToPosition cs
@@ -521,6 +535,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
         stride = coordListSize @xs
 
     {-# INLINE coordListSize #-}
+    {-# INLINE coordListLength #-}
     {-# INLINE npToPosition #-}
     {-# INLINE npFromPosition #-}
     {-# INLINE posOffset #-}

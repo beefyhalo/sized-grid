@@ -534,6 +534,13 @@ main = do
           -- nothing else --- and what gets measured is the step alone under a
           -- label claiming otherwise. That happened, and these numbers are the
           -- ones after it was caught.
+          --
+          -- sized-grid-fup0 moved the two "building the table" benchmarks:
+          -- @mooreStencil@ used to build through 'stencilFor'\'s two-pass path
+          -- and now goes through the bounded one-pass 'stencilBounded'
+          -- instead. Measured here: 1.46 ms / 16 MB before, 916 μs / 6.9 MB
+          -- after --- 1.6x faster, 2.3x less allocated, matching the module
+          -- Haddock's numbers for this same benchmark.
           bgroup
               "stencil (the same neighbourhood, precomputed)"
               [ bench "imapGrid over neighbours 50x50 (what it replaces)" $

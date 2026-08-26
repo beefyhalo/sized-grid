@@ -54,6 +54,7 @@ module Data.Grid.Sized.Coord
   , coordFromPosition
   , unsafeCoordFromPosition
   , coordSpaceSize
+  , axisCount
     -- * Boundaryless displacement group
   , TorusCoord(..)
   , torusCoordFromDelta
@@ -658,6 +659,14 @@ coordPosition (Coord p) = p
 coordSpaceSize :: forall cs. IsCoordList cs => Int
 coordSpaceSize = coordListSize @cs
 {-# INLINE coordSpaceSize #-}
+
+-- | How many axes @cs@ has: /d/ in @(2r+1)^d@, the exponent
+-- 'Data.Grid.Sized.Stencil.mooreStencil' and
+-- 'Data.Grid.Sized.Stencil.vonNeumannStencil' need to turn a radius into an
+-- upper bound on a row's width.
+axisCount :: forall cs. IsCoordList cs => Int
+axisCount = coordListLength @cs
+{-# INLINE axisCount #-}
 
 -- | The inverse of 'coordPosition': a range check and nothing else.
 coordFromPosition ::

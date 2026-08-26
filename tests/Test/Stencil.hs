@@ -109,6 +109,46 @@ widthIsTheWidestRow name r =
         (maximum (0 : [length (mooreNeighbours r c) | c <- allCoord @cs]))
         (stencilWidth (mooreStencil @cs r))
 
+-- | @mooreStencil@ against @stencilFor (mooreNeighbours r)@ on the same axis
+-- list and radius: not just agreement with the neighbourhood loop --
+-- 'agreesWithNeighbours' above already states that -- but exact equality
+-- with the two-pass table 'mooreStencil' used to be, width and positions
+-- both. That is the property @sized-grid-fup0@ turns on: the bounded builder
+-- has to produce the identical table the discovered-width one does, not
+-- merely one that reads the same through 'stencilGrid'.
+mooreAgreesWithStencilFor ::
+       forall cs. IsCoordList cs
+    => String
+    -> Int
+    -> TestTree
+mooreAgreesWithStencilFor name r =
+    testCase name $ do
+        let bounded = mooreStencil @cs r
+            general = stencilFor @cs (mooreNeighbours r)
+        assertEqual "width" (stencilWidth general) (stencilWidth bounded)
+        assertEqual
+            "positions"
+            (VG.toList (stencilPositions general))
+            (VG.toList (stencilPositions bounded))
+
+-- | The same for 'vonNeumannStencil', whose allocation bound
+-- ('Data.Grid.Sized.Stencil.mooreUpperBound') is the loose one --
+-- @sized-grid-fup0@'s compacting branch is only exercised by this one.
+vonNeumannAgreesWithStencilFor ::
+       forall cs. IsCoordList cs
+    => String
+    -> Int
+    -> TestTree
+vonNeumannAgreesWithStencilFor name r =
+    testCase name $ do
+        let bounded = vonNeumannStencil @cs r
+            general = stencilFor @cs (vonNeumannNeighbours r)
+        assertEqual "width" (stencilWidth general) (stencilWidth bounded)
+        assertEqual
+            "positions"
+            (VG.toList (stencilPositions general))
+            (VG.toList (stencilPositions bounded))
+
 stencilTests :: TestTree
 stencilTests =
     testGroup
@@ -177,6 +217,40 @@ stencilTests =
               [ widthIsTheWidestRow @'[ Clamped 5, Clamped 4] "bounded: the interior sets it" 1
               , widthIsTheWidestRow @'[ Periodic 5, Periodic 4] "torus: every row is full" 1
               , widthIsTheWidestRow @'[ Periodic 3, Periodic 3] "deduplicated torus" 2
+              ]
+        , -- sized-grid-fup0: 'mooreStencil'/'vonNeumannStencil' now build
+          -- through the bounded one-pass path rather than 'stencilFor'
+          -- directly, so this states they still land on the exact table
+          -- 'stencilFor' would have built, not merely one that agrees under
+          -- 'stencilGrid'.
+          testGroup
+              "mooreStencil/vonNeumannStencil agree exactly with stencilFor (sized-grid-fup0)"
+              [ mooreAgreesWithStencilFor @'[ Clamped 5, Periodic 4] "bounded x torus" 1
+              , mooreAgreesWithStencilFor @'[ Reflective 4, Reflect101 5] "reflecting x reflect101" 2
+              , -- A Periodic 3 axis at radius 2 reaches every one of its three
+                -- values, two of them from both directions, so 'axisSteps'
+                -- deduplicates -- the case a table sized (2r+1)^d - 1 would
+                -- get wrong if the width it recorded were the bound instead
+                -- of what the fill observed.
+                mooreAgreesWithStencilFor @'[ Periodic 3, Periodic 3] "torus small enough to dedup" 2
+              , mooreAgreesWithStencilFor @'[ Clamped 4, Clamped 3, Periodic 2] "three mixed axes" 1
+              , vonNeumannAgreesWithStencilFor @'[ Clamped 4, Periodic 4] "mixed, radius 1" 1
+              , -- 'mooreUpperBound' 2 2 is 24 against a von Neumann width of
+                -- 12: the one case in this group where the allocation bound
+                -- is loose and the compacting copy actually runs.
+                vonNeumannAgreesWithStencilFor @'[ Clamped 5, Clamped 4] "bounded, loose bound" 2
+              , vonNeumannAgreesWithStencilFor @'[ Periodic 3, Reflective 3] "torus x reflecting, dedup" 2
+              , -- The empty neighbourhood: a zero radius names no neighbours
+                -- at all, so the bound and the discovered width are both
+                -- zero and the buffer 'stencilBounded' allocates is empty.
+                mooreAgreesWithStencilFor @'[ Clamped 5, Clamped 5] "empty neighbourhood: radius zero" 0
+              , vonNeumannAgreesWithStencilFor @'[ Clamped 5, Clamped 5] "empty neighbourhood: radius zero" 0
+              , -- A grid too small for the bound to ever be tight: every row
+                -- is the same short width regardless of position, so this is
+                -- the compacting copy running on every row rather than the
+                -- boundary rows alone.
+                mooreAgreesWithStencilFor @'[ Clamped 2, Clamped 2] "every row short: tiny bounded grid" 2
+              , vonNeumannAgreesWithStencilFor @'[ Clamped 2, Clamped 2] "every row short: tiny bounded grid" 2
               ]
         , testCase "a torus needs no sentinels at all" $
               assertEqual
