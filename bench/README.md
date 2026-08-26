@@ -69,6 +69,27 @@ rescheduled thread is the entire measurement. Re-run on a quiet machine, or
 look at whether the failures cluster in time rather than by what they exercise
 -- a real regression follows the code, contention follows the clock.
 
+## Measuring anything parallel: pass `--time-mode wall`
+
+Everything measured here so far is single-threaded, and for single-threaded
+code tasty-bench's default clock is the right one: it measures **CPU time**,
+via `getCPUTime`, precisely so that a video playing in another window does not
+land in the numbers.
+
+For a multicore benchmark that default cannot work, and it does not fail
+loudly. tasty-bench's own Haddock says it: for a multithreaded algorithm it
+"reports total elapsed CPU time across all cores". A perfect 4x speedup on
+four cores does the same total work and so measures the *same*, or slightly
+worse once the parallel GC is counted -- which reads exactly like "the
+parallel version is no faster", and is not. This cost `sized-grid-kb38` a
+whole round of measurement before `+RTS -s` gave it away by reporting 3.0s of
+mutator time against 1.25s elapsed on a run tasty-bench had called flat.
+
+So any benchmark of a parallel code path must be run with
+`--time-mode wall` (or scoped with `localOption WallTime`), and read on a
+quiet machine, since a wall clock is exactly what the default was avoiding.
+See `spike/kb38-parstencil/README.md` for a worked example.
+
 ## Regenerating a baseline
 
 **The CI baseline** normally needs no intervention: it is whatever the last

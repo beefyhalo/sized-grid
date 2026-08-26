@@ -1,0 +1,58 @@
+cabal-version:      3.0
+name:               kb38-parstencil
+version:            0
+build-type:         Simple
+synopsis:           Parallel stencil-table build paths, for sized-grid-kb38
+
+-- The candidate build paths, in their own component with the same
+-- ghc-options as grid-sized's 'library' stanza, so they reach the benchmark
+-- through a .hi file exactly as the control does. Compiling them into
+-- bench/Main.hs would let GHC see the whole thing at once and flatter them.
+--
+-- Not -threaded: that is a link-time property of the executable, and the
+-- executable here is the benchmark.
+library
+  default-language:   GHC2024
+  default-extensions:
+    DataKinds
+    FunctionalDependencies
+    RequiredTypeArguments
+    TypeFamilies
+    UndecidableInstances
+
+  hs-source-dirs:     src
+  exposed-modules:    ParStencil
+  ghc-options:        -O2 -fexpose-all-unfoldings -fspecialise-aggressively -Wall
+  build-depends:
+    , base
+    , grid-sized
+    , vector
+
+-- -threaded is what makes the forked workers land on different cores, and
+-- -rtsopts is what lets a run choose how many with +RTS -N. -T is the
+-- allocation counter tasty-bench reports its memory columns from.
+--
+-- Run it with --time-mode wall. tasty-bench measures CPU time by default,
+-- which for a parallel algorithm is the total across every core -- its own
+-- Haddock says so -- and so cannot see a parallel speedup at all: the first
+-- pass at this spike read four cores' worth of summed work as "no faster on
+-- four cores". See the spike README.
+benchmark compare
+  default-language:   GHC2024
+  default-extensions:
+    DataKinds
+    RequiredTypeArguments
+    TypeFamilies
+    UndecidableInstances
+
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     bench
+  main-is:            Main.hs
+  ghc-options:        -O2 -threaded -rtsopts "-with-rtsopts=-T"
+  build-depends:
+    , base
+    , grid-sized
+    , kb38-parstencil
+    , tasty-bench
+    , vector
+
