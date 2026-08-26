@@ -43,9 +43,9 @@
 -- @extend neighbourSum@, so that the comparison is the neighbourhood and not
 -- also a `Data.Grid.Sized.Focused.FocusedGrid` the rule never reads:
 --
--- * the loop, one pass: 662 μs, 2.6 MB
--- * building the table (`mooreStencil`): 916 μs, 6.9 MB
--- * one pass with the table already built: 145 μs, 2.4 MB
+-- * the loop, one pass: 652 μs, 2.6 MB
+-- * building the table (`mooreStencil`): 926 μs, 6.9 MB
+-- * one pass with the table already built: 133 μs, 2.1 MB
 --
 -- (Building used to be 1.46 ms and 16 MB: before @sized-grid-fup0@,
 -- `mooreStencil` built through `stencilFor`'s two-pass path --- once for a
@@ -59,14 +59,14 @@
 -- move, an asymmetric kernel --- that hands it no bound to allocate at. Net:
 -- 1.6x faster and 2.3x less allocated.)
 --
--- So a single pass through a stencil is about 1.4x slower than not bothering,
+-- So a single pass through a stencil is about 1.7x slower than not bothering,
 -- the second pass is where it breaks even, and from there each one is
--- roughly 4.6x cheaper. Which is what an automaton does:
+-- roughly 4.9x cheaper. Which is what an automaton does:
 --
 -- > let s = mooreStencil 1
 -- > in iterate (stencilGrid s rule) g !! 100
 --
--- measured at 32.9 ms and 237 MB against 80.7 ms and 256 MB for the loop it
+-- measured at 31.0 ms and 210 MB against 77.5 ms and 256 MB for the loop it
 -- replaces.
 --
 -- That is why the table is a value rather than an argument to `stencilGrid`.
@@ -75,6 +75,65 @@
 -- dictionary is known statically and, when it does happen, retains the table
 -- for the lifetime of the process. As a value the sharing is visible in the
 -- code that wants it and ends when that code drops it.
+--
+-- == Why both kernels are @INLINE@ and not @INLINABLE@
+--
+-- `stencilGrid` and `stencilFoldGrid` carry `INLINE`, and that is a
+-- performance decision rather than a stylistic one --- @sized-grid-v6ye@,
+-- measured in @spike\/49hi-parexec@ and then again here.
+--
+-- @INLINABLE@ exposes an unfolding for GHC to /specialise on the types/; it
+-- does not oblige GHC to /inline the body/. When GHC declines, the caller's
+-- rule stays a lambda-bound variable inside the fill, so `stencilFoldGrid`'s
+-- accumulator is a boxed @Int@ that @step@ re-boxes once per neighbour, and
+-- the neighbour it folds in is boxed on the way out of an unboxed vector as
+-- well. The tell is in the Core: an inner loop reading
+-- @case acc of acc1 { I# ipv -> ... step acc1 (I# ds) }@ where a specialised
+-- one reads @jump $wgo (+# ww 1#) (+# ww' ds)@. `INLINE` makes the rule known
+-- where the loop is built, and the whole row folds in registers.
+--
+-- On the @50 x 50@ benchmarks below, changing only these two words ---
+-- @bench\/baseline-ghc9.12.3-aarch64-darwin.csv@ before this change against
+-- the same file after it, two full-suite runs on the same idle laptop:
+--
+-- * @stencilFoldStep@, one pass, table built: 48.3 μs \/ 479 KB -> 42.5 μs \/ 215 KB
+-- * @stencilFoldStep@ x100, boxed: 19.3 ms \/ 47 MB -> 17.7 ms \/ 21 MB
+-- * @stencilFoldStep@ x100, unboxed: 10.3 ms \/ 149 MB -> 1.38 ms \/ 1.9 MB
+-- * @stencilStep@, one pass, table built: 148 μs \/ 2.4 MB -> 133 μs \/ 2.1 MB
+-- * @stencilStep@ x100, boxed: 33.2 ms \/ 237 MB -> 31.0 ms \/ 210 MB
+-- * @stencilStep@ x100, unboxed: 12.9 ms \/ 249 MB -> 12.9 ms \/ 221 MB
+--
+-- What licenses reading those as the pragma is the untouched code in the same
+-- two files: @imapGrid over neighbours x100@ moved 77.9 ms -> 77.5 ms, and
+-- the @extend neighbourSum@ and @tabulateGrid@ rows agree to within 3%.
+-- Allocation is firmer still --- it is byte-identical across repeat runs
+-- here, where times drift by tens of percent with the machine's thermal
+-- state, so it is the column to read. (Two rows of the old file are stale for
+-- an unrelated reason and are not this change: @mooreStencil@ and
+-- @stencilStep, table built for this one pass@ both improved at
+-- @sized-grid-fup0@, after that file was last recorded.)
+--
+-- The unboxed fold loop is the extreme case and the one that says what the
+-- pragma buys: 1.9 MB across a hundred generations of 2,500 cells is
+-- @100 * 2500 * 8@ bytes, the result vectors and /nothing else/. Every byte
+-- above that was boxing --- 7.5x faster and 74x less allocated.
+--
+-- The gather kernel gains far less than the fold kernel, for a legible
+-- reason: `stencilGrid` builds a @[a]@ per cell, so a boxed accumulator was a
+-- small part of what it already allocated. `stencilFoldGrid` exists precisely
+-- so as not to build that list, and boxing was most of what it had left. What
+-- the gather kernel does get is 11% less allocation on both representations,
+-- and on the unboxed grid that is all it gets: the time is unmoved, because
+-- what is left there is the neighbour list itself.
+--
+-- The cost @INLINE@ is normally weighed against --- code size at the call
+-- sites --- did not materialise. Measured on the three consumers in tree,
+-- object code got /smaller/: @Data\/Grid\/Sized\/Stencil.o@ 50,112 -> 48,648
+-- bytes, @gameOfLife@'s @Main.o@ 86,824 -> 85,368, @bench\/Main.o@ 432,344 ->
+-- 422,400. @ising-example@ and @sudoko@ are byte-identical, because neither
+-- calls these two. Inlining a kernel this size does grow a call site, but it
+-- also lets the specialised loop drop the boxing, the generic vector
+-- dictionary and the dead sentinel arithmetic, and here that is worth more.
 --
 -- == What it does not change
 --
@@ -313,7 +372,12 @@ stencilGrid (Stencil w tbl) f g =
     -- function go without the 'IsCoordList' constraint that would otherwise be
     -- needed only to recompute a length already in hand.
     n = VG.length v
-{-# INLINABLE stencilGrid #-}
+-- @INLINE@, not @INLINABLE@: the latter only offers GHC an unfolding to
+-- specialise, and where it declines the rule stays a lambda-bound variable
+-- and every neighbour is boxed through it. See the module Haddock's
+-- "Why both kernels are @INLINE@" for what that costs, measured
+-- (@sized-grid-v6ye@). Do not weaken it without re-running @bench\/Main.hs@.
+{-# INLINE stencilGrid #-}
 
 -- | Rebuild a grid from each cell and its neighbours, folded in place rather
 -- than gathered into a list first.
@@ -340,16 +404,23 @@ stencilGrid (Stencil w tbl) f g =
 -- Measured on the same @50 x 50@ neighbour-sum step as `stencilGrid`'s own
 -- Haddock, in @bench\/Main.hs@:
 --
--- * one pass, table already built: 283 μs and 2.4 MB for `stencilGrid`
---   against 92 μs and 479 KB here --- 3x faster and 5x less allocation.
--- * @iterate (stencilFoldGrid s (+) id) g !! 100@: 41 ms and 47 MB against
---   70 ms and 237 MB for the `stencilGrid` loop it replaces.
--- * the same x100 loop on an unboxed grid: 19 ms and 149 MB against 25 ms
---   and 249 MB. Boxed and unboxed allocate almost the same amount for
---   `stencilGrid` --- 237 MB against 249 MB --- which is the answer to the
+-- * one pass, table already built: 133 μs and 2.1 MB for `stencilGrid`
+--   against 42.5 μs and 215 KB here --- 3.1x faster and 10x less allocation.
+-- * @iterate (stencilFoldGrid s (+) id) g !! 100@: 17.7 ms and 21 MB against
+--   31.0 ms and 210 MB for the `stencilGrid` loop it replaces.
+-- * the same x100 loop on an unboxed grid: 1.38 ms and 1.9 MB against 12.9 ms
+--   and 221 MB. Boxed and unboxed allocate almost the same amount for
+--   `stencilGrid` --- 210 MB against 221 MB --- which is the answer to the
 --   question this issue was opened to settle: that allocation is almost
 --   entirely the neighbour lists, not boxed-@Int@ thunk chains, because a
 --   list element is boxed on the way out of an unboxed vector regardless.
+--
+-- The two fold rows are 11x apart on allocation --- 21 MB boxed against
+-- 1.9 MB unboxed --- for the same 2,500 cells and the same hundred
+-- generations, which is the `INLINE` result the module Haddock records seen
+-- from the other end: unboxed, the specialised loop allocates the result
+-- vectors and nothing else; boxed, it still writes a boxed @b@ per cell, and
+-- no pragma can remove that.
 stencilFoldGrid ::
        forall v cs a b. (VG.Vector v a, VG.Vector v b)
     => Stencil cs
@@ -363,7 +434,10 @@ stencilFoldGrid (Stencil w tbl) step seed g =
   where
     v = gridVector g
     n = VG.length v
-{-# INLINABLE stencilFoldGrid #-}
+-- @INLINE@, not @INLINABLE@, and this is the kernel that shows why: on an
+-- unboxed grid the pragma is worth 7.5x in time and 74x in allocation over a
+-- hundred generations. Module Haddock, @sized-grid-v6ye@.
+{-# INLINE stencilFoldGrid #-}
 
 -- | The neighbours of a single cell, read out of the table rather than
 -- enumerated.

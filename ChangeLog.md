@@ -9,6 +9,20 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Data.Grid.Sized.Stencil.stencilGrid` and
+  `Data.Grid.Sized.Stencil.stencilFoldGrid` are `INLINE` rather than
+  `INLINABLE` (sized-grid-v6ye). `INLINABLE` offers GHC an unfolding to
+  specialise but does not oblige it to inline the body, and where GHC declined
+  the caller's rule stayed a lambda-bound variable, so every neighbour and
+  every accumulator was boxed through it. On the `50x50` benchmarks:
+  `stencilFoldGrid` over a hundred generations of an unboxed grid goes from
+  10.3 ms and 149 MB to 1.38 ms and 1.9 MB, and one pass from 48.3 us and
+  479 KB to 42.5 us and 215 KB; `stencilGrid` allocates 11% less on both
+  representations. No API, signature or semantic change. Object code got
+  *smaller* at every call site in tree, so the usual code-size objection to
+  `INLINE` does not apply here. `bench/baseline-ghc9.12.3-aarch64-darwin.csv`
+  is regenerated to match.
+
 * `Data.Grid.Sized.Optics` is now a facade over `Optics.Coordinate` (which
   also owns the `Field1`..`Field5` orphan instances for `Coord` and `Delta`),
   `Optics.Grid` and `Optics.FocusedGrid`, all newly exposed. Its export list is
