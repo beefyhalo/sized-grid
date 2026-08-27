@@ -153,6 +153,27 @@ stencilFoldStep s = stencilFoldGrid s (+) id
 iterateStencilFold :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilFold s n g = iterate (stencilFoldStep s) g !! n
 
+-- | 'stencilStep' against @stencilGrid'@ instead of `Data.Grid.Sized.Stencil.stencilGrid`
+-- (@sized-grid-d6ng@): identical rule, identical table, the strict fill the
+-- only difference.
+stencilStepStrict :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilStepStrict s = stencilGrid' s (\_ ns -> total ns)
+
+-- | 'stencilFoldStep' against @stencilFoldGrid'@, the fold-kernel counterpart.
+stencilFoldStepStrict :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilFoldStepStrict s = stencilFoldGrid' s (+) id
+
+-- | 'iterateStencil' on the strict fill. This is where @sized-grid-d6ng@ lives:
+-- a single pass under 'nf' forces everything either way, so the strict fill can
+-- only show what it is worth across generations, where the lazy fill defers a
+-- hundred passes behind whoever finally looks.
+iterateStencilStrict :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilStrict s n g = iterate (stencilStepStrict s) g !! n
+
+-- | 'iterateStencilFold' on the strict fill.
+iterateStencilFoldStrict :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilFoldStrict s n g = iterate (stencilFoldStepStrict s) g !! n
+
 -- | The same repeated step without the lazy list created by 'iterate'.
 iterateStencilFoldLoop :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilFoldLoop stencil count = go count
@@ -584,6 +605,28 @@ main = do
                 nf (iterateStencilFold stepStencil 100) uPlainStepGrid
               , bench "stencilFoldStep x100, 50x50, unboxed, recursive" $
                 nf (iterateStencilFoldLoop stepStencil 100) uPlainStepGrid
+              , -- sized-grid-d6ng: the primed kernels, same rule and same
+                -- table, differing only in that the fill forces each cell
+                -- where it writes it. Under 'nf' a single pass forces
+                -- everything either way, so the pairs to read are the x100
+                -- ones: that is where the lazy fill defers a hundred
+                -- generations behind whoever finally looks. The unboxed row
+                -- is here to pin the claim that it changes nothing there,
+                -- 'VG.generate' having already forced.
+                bench "stencilStep' 50x50, table already built" $
+                nf (stencilStepStrict stepStencil) plainStepGrid
+              , bench "stencilStep' x100, 50x50" $
+                nf (iterateStencilStrict stepStencil 100) plainStepGrid
+              , bench "stencilStep' x100, 50x50, unboxed" $
+                nf (iterateStencilStrict stepStencil 100) uPlainStepGrid
+              , bench "stencilFoldStep' 50x50, table already built" $
+                nf (stencilFoldStepStrict stepStencil) plainStepGrid
+              , bench "stencilFoldStep' x100, 50x50" $
+                nf (iterateStencilFoldStrict stepStencil 100) plainStepGrid
+              , bench "stencilFoldStep' x100, 50x50, Periodic" $
+                nf (iterateStencilFoldStrict stepStencilPeriodic 100) plainStepGridPeriodic
+              , bench "stencilFoldStep' x100, 50x50, unboxed" $
+                nf (iterateStencilFoldStrict stepStencil 100) uPlainStepGrid
               ]
         , bgroup
               "collapse round trip"

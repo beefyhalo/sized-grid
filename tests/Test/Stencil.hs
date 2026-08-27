@@ -18,6 +18,7 @@ import           Data.Grid.Sized
 import           Data.Grid.Sized.Unboxed (UGrid)
 import           Test.Arbitrary          ()
 
+import           Control.Exception       (ErrorCall, evaluate, try)
 import qualified Data.Vector.Generic     as VG
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -91,6 +92,77 @@ readsOneCellLikeTheLoop name r =
         let s = mooreStencil r
          in map (stencilAt s g) (allCoord @cs) ===
             map (map (indexGrid g) . mooreNeighbours r) (allCoord @cs)
+
+-- | @stencilGrid'@ against `stencilGrid` (@sized-grid-d6ng@): the strict fill
+-- may change /when/ a cell is computed and must not change /what/ it is.
+--
+-- Checked against `stencilGrid` rather than against the neighbourhood loop a
+-- third time, for the reason 'foldGridAgreesWithStencilGrid' gives: the claim
+-- of the primed kernel is exactly "the same as the unprimed one", so that is
+-- what it is stated against.
+strictGridAgreesWithStencilGrid ::
+       forall cs.
+       (IsCoordList cs, AllSizedKnown cs)
+    => String
+    -> Int
+    -> TestTree
+strictGridAgreesWithStencilGrid name r =
+    testProperty name $ \(g :: Grid cs Int) ->
+        gridVector (stencilGrid' (mooreStencil r) (\x ns -> (x, ns)) g) ===
+        gridVector (stencilGrid (mooreStencil r) (\x ns -> (x, ns)) g)
+
+-- | @stencilFoldGrid'@ against `stencilFoldGrid`, the same claim for the fold
+-- kernel.
+strictFoldAgreesWithFoldGrid ::
+       forall cs.
+       (IsCoordList cs, AllSizedKnown cs)
+    => String
+    -> Int
+    -> TestTree
+strictFoldAgreesWithFoldGrid name r =
+    testProperty name $ \(g :: Grid cs Int) ->
+        gridVector (stencilFoldGrid' (mooreStencil r) (+) id g) ===
+        gridVector (stencilFoldGrid (mooreStencil r) (+) id g)
+
+-- | The difference the primed kernels exist for, stated as a test rather than
+-- left to the benchmarks.
+--
+-- Agreement properties cannot see this: a @stencilGrid'@ that quietly went
+-- back to a lazy fill would still agree with `stencilGrid` everywhere and
+-- would only show up as a number moving in @bench\/Main.hs@ one day. So the
+-- strictness is checked directly --- a rule that is bottom at every cell makes
+-- the primed kernel throw when the grid is forced to WHNF, and leaves the
+-- unprimed one perfectly happy to hand back a vector of thunks.
+--
+-- A boxed `Grid` on purpose: on an unboxed one 'Data.Vector.Generic.generate'
+-- already forces and there would be no difference to state.
+throwsOnlyWhenStrict :: TestTree
+throwsOnlyWhenStrict =
+    testGroup
+        "the strict fill forces every cell and the lazy fill does not"
+        [ testCase "stencilGrid leaves a bottom cell unforced" $
+              assertBool "should not have thrown" =<< survives (stencilGrid s bad g)
+        , testCase "stencilGrid' forces it" $
+              assertBool "should have thrown" . not =<< survives (stencilGrid' s bad g)
+        , testCase "stencilFoldGrid leaves a bottom cell unforced" $
+              assertBool "should not have thrown" =<< survives (stencilFoldGrid s badStep id g)
+        , testCase "stencilFoldGrid' forces it" $
+              assertBool "should have thrown" . not =<< survives (stencilFoldGrid' s badStep id g)
+        ]
+  where
+    g :: Grid '[ Clamped 4, Clamped 3] Int
+    g = tabulateGrid coordPosition
+    s = mooreStencil 1
+    bad :: Int -> [Int] -> Int
+    bad _ _ = error "unforced"
+    badStep :: Int -> Int -> Int
+    badStep _ _ = error "unforced"
+    -- Forcing the grid to WHNF is enough: 'GridOf' is a newtype over the
+    -- vector, so this runs whatever fill built it without reading a cell.
+    survives :: Grid '[ Clamped 4, Clamped 3] Int -> IO Bool
+    survives x = either (const False) (const True) <$> tryError (evaluate x)
+    tryError :: IO a -> IO (Either ErrorCall a)
+    tryError = try
 
 -- | The width a stencil discovers, against the widest row @mooreNeighbours@
 -- actually produces. Separate from the agreement properties because those
@@ -205,6 +277,34 @@ stencilTests =
                                      g)))
                       (VG.toList
                            (gridVector (stencilFoldGrid s (+) id g)))
+        , testGroup
+              "the primed kernels agree with the unprimed ones (sized-grid-d6ng)"
+              [ strictGridAgreesWithStencilGrid @'[ Clamped 5, Clamped 4] "bounded" 1
+              , strictGridAgreesWithStencilGrid @'[ Periodic 5, Periodic 4] "torus" 1
+              , strictGridAgreesWithStencilGrid @'[ Reflective 3, Clamped 4] "reflecting, radius 2" 2
+              , strictGridAgreesWithStencilGrid @'[ Clamped 1, Clamped 1] "one-cell grid" 1
+              , strictFoldAgreesWithFoldGrid @'[ Clamped 5, Clamped 4] "bounded, fold" 1
+              , strictFoldAgreesWithFoldGrid @'[ Periodic 5, Clamped 4] "cylinder, fold" 1
+              , strictFoldAgreesWithFoldGrid @'[ Reflect101 4, Periodic 3] "reflect101 x torus, fold" 2
+              , strictFoldAgreesWithFoldGrid @'[ Clamped 5, Clamped 5] "radius zero, fold" 0
+              ]
+        , throwsOnlyWhenStrict
+        , -- Both primed kernels on an unboxed grid, where the strict fill is a
+          -- no-op because 'VG.generate' already forces: nothing in their
+          -- bodies distinguishes 'v', but nothing else here would catch it if
+          -- that drifted.
+          testCase "the primed kernels run on an unboxed grid" $
+              let ug :: UGrid '[ Clamped 4, Periodic 4] Int
+                  ug = tabulateGrid coordPosition
+                  us = mooreStencil 1
+               in do assertEqual
+                         "fold"
+                         (VG.toList (gridVector (stencilFoldGrid us (+) id ug)))
+                         (VG.toList (gridVector (stencilFoldGrid' us (+) id ug)))
+                     assertEqual
+                         "gather"
+                         (VG.toList (gridVector (stencilGrid us (\x ns -> x + sum ns) ug)))
+                         (VG.toList (gridVector (stencilGrid' us (\x ns -> x + sum ns) ug)))
         , testGroup
               "stencilAt reads one cell"
               [ readsOneCellLikeTheLoop @'[ Clamped 5, Clamped 4] "bounded" 1

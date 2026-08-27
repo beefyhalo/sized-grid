@@ -135,6 +135,36 @@
 -- also lets the specialised loop drop the boxing, the generic vector
 -- dictionary and the dead sentinel arithmetic, and here that is worth more.
 --
+-- == The other axis: when the rule runs
+--
+-- @INLINE@ above is about /how well/ the rule compiles. Orthogonal to it is
+-- /when/ the rule runs, and that is the difference between `stencilGrid` and
+-- `stencilGrid'`, `stencilFoldGrid` and `stencilFoldGrid'`
+-- (@sized-grid-d6ng@).
+--
+-- Both unprimed kernels fill the result with
+-- `Data.Vector.Generic.generate`, which on a boxed vector writes a thunk per
+-- cell. The primed ones write into a mutable vector with @$!@, so each cell
+-- is in WHNF by the time the vector is frozen. Nothing else differs --- same
+-- table, same boundary policies, same lazily-produced neighbour list within a
+-- row, so a rule that stops early still stops early --- and `Test.Stencil`
+-- states the agreement as a property in both directions, plus the strictness
+-- itself, which no agreement property can see.
+--
+-- The two axes do not overlap, and that is worth knowing because it is not
+-- obvious. On a hundred-generation boxed loop the @INLINE@ of the previous
+-- section measured level with @INLINABLE@ --- there the thunk chain is the
+-- whole cost and only the fill touches it --- while on an unboxed single pass
+-- the strict fill is worth nothing, @generate@ having already forced. One is
+-- worth having on a pass, the other on a loop.
+--
+-- Which to reach for: `stencilGrid` and `stencilFoldGrid` on an unboxed grid,
+-- where the primed ones can only tie, and wherever a boxed grid is deliberately
+-- not fully demanded. The primed ones for a boxed automaton loop, which is
+-- what they exist for --- see their own Haddock for the numbers, and note that
+-- @stencilFoldGrid'@ is the one entry point here whose win depends on the
+-- /caller's/ optimisation level.
+--
 -- == What it does not change
 --
 -- The boundary policies. The table is built by asking the same
@@ -156,6 +186,9 @@ module Data.Grid.Sized.Stencil
   , stencilGrid
   , stencilFoldGrid
   , stencilAt
+    -- ** Forcing each cell where it is written
+  , stencilGrid'
+  , stencilFoldGrid'
   ) where
 
 import           Data.Grid.Sized.Coord
@@ -166,6 +199,7 @@ import           Control.Monad                 (forM_)
 import           Control.Monad.ST              (ST, runST)
 import           Data.Kind                     (Type)
 import qualified Data.Vector.Generic           as VG
+import qualified Data.Vector.Generic.Mutable   as VGM
 import qualified Data.Vector.Unboxed           as VU
 import qualified Data.Vector.Unboxed.Mutable   as VUM
 
@@ -363,8 +397,7 @@ stencilGrid ::
     -> GridOf v cs a
     -> GridOf v cs b
 stencilGrid (Stencil w tbl) f g =
-    unsafeGridFromVector $
-    VG.generate n $ \i -> f (VG.unsafeIndex v i) (gatherRow tbl w v i)
+    unsafeGridFromVector $ VG.generate n (\i -> gatherAt tbl w v f i)
   where
     v = gridVector g
     -- The grid's own length rather than 'coordSpaceSize', which are the same
@@ -429,8 +462,7 @@ stencilFoldGrid ::
     -> GridOf v cs a
     -> GridOf v cs b
 stencilFoldGrid (Stencil w tbl) step seed g =
-    unsafeGridFromVector $
-    VG.generate n $ \i -> foldRow' tbl w v i step (seed (VG.unsafeIndex v i))
+    unsafeGridFromVector $ VG.generate n (\i -> foldAt tbl w v step seed i)
   where
     v = gridVector g
     n = VG.length v
@@ -438,6 +470,111 @@ stencilFoldGrid (Stencil w tbl) step seed g =
 -- unboxed grid the pragma is worth 7.5x in time and 74x in allocation over a
 -- hundred generations. Module Haddock, @sized-grid-v6ye@.
 {-# INLINE stencilFoldGrid #-}
+
+-- | `stencilGrid` with each cell forced where it is written, rather than left
+-- as a thunk for whoever forces the grid.
+--
+-- Same result, same boundary policies, same laziness /within/ a row --- the
+-- rule still receives the neighbour list `gatherRow` produces lazily, so a
+-- rule that stops early still stops early. What changes is the /fill/: cell
+-- @i@ is evaluated to WHNF at the point it is written into the result vector,
+-- instead of `Data.Vector.Generic.generate` storing @f here neigh@ unevaluated.
+--
+-- On an unboxed grid that is no change at all --- @generate@ already forces.
+-- On a boxed grid it is the difference between a result vector of cells and a
+-- result vector of thunks, and across an @iterate@ loop it is the difference
+-- between a hundred generations of work and a hundred generations of
+-- /deferred/ work chained behind whoever eventually looks. Measured in
+-- @bench\/Main.hs@ on 2,500 boxed cells x 100 generations:
+--
+-- * `stencilGrid`: 30.6 ms, 210 MB allocated, 41 MB copied
+-- * @stencilGrid'@: 17.7 ms, 221 MB allocated, 9.4 MB copied
+--
+-- 1.7x, with no threads in it. Note which column moves: allocation is
+-- slightly /worse/, and the win is in the 4.4x drop in bytes copied. That is
+-- the shape of the whole change --- the lazy fill does not allocate less so
+-- much as allocate thunks that survive minor collections and get copied
+-- between generations, and forcing them where they are written lets them die
+-- in the nursery instead.
+--
+-- On the unboxed grid the same benchmark is 12.5 ms against 12.3 ms and
+-- 221 MB either way: no change, exactly as it should be.
+--
+-- Use `stencilGrid` instead when the point of the grid is that some of it is
+-- never looked at: a boxed grid whose cells are expensive, or bottom, and
+-- which a consumer samples rather than consumes. This forces every one of
+-- them. That is the whole difference between the two, and it is why this is a
+-- second entry point rather than a change to the first.
+stencilGrid' ::
+       forall v cs a b. (VG.Vector v a, VG.Vector v b)
+    => Stencil cs
+    -> (a -> [a] -> b)
+    -> GridOf v cs a
+    -> GridOf v cs b
+stencilGrid' (Stencil w tbl) f g =
+    unsafeGridFromVector $ fillStrict n (\i -> gatherAt tbl w v f i)
+  where
+    v = gridVector g
+    n = VG.length v
+{-# INLINE stencilGrid' #-}
+
+-- | `stencilFoldGrid` with each cell forced where it is written.
+--
+-- `stencilGrid'` says what the strict fill is and when it pays; this is the
+-- same change to the fold kernel, and it is the one an automaton on a boxed
+-- grid wants. `foldRow'` is already strict in the accumulator /along a row/,
+-- so nothing here changes how a row is folded --- what it changes is that the
+-- fold for cell @i@ runs when cell @i@ is written, rather than being a thunk
+-- the result vector holds until someone reads that cell.
+--
+-- Measured in @bench\/Main.hs@ on 2,500 boxed cells x 100 generations, and
+-- the reason there are two rows is the subject of the next paragraph:
+--
+-- * `stencilFoldGrid`: 17.5 ms, 21 MB allocated, 36 MB copied
+-- * @stencilFoldGrid'@, consumer at @-O1@: 6.12 ms, 32 MB, 4.9 MB copied
+-- * @stencilFoldGrid'@, consumer at @-O2@: 3.13 ms, 5.7 MB, 54 KB copied
+--
+-- __The size of this win depends on the optimisation level of the code that
+-- calls it__, which is not true of anything else measured in this module. At
+-- @-O1@ --- what @cabal@ gives an executable by default --- it is 2.9x, and
+-- allocation goes /up/ by half while copying drops 7x. At @-O2@ it is 5.6x
+-- and every column improves: 3.7x less allocated and 670x less copied. The
+-- kernel is @INLINE@, so its body is optimised in the caller's context, and
+-- at @-O1@ GHC does not unbox the accumulator through the @ST@ state of the
+-- fill; at @-O2@ it does. `stencilFoldGrid` is unaffected either way,
+-- measuring 17.5 ms and 21 MB at both. So this is worth reaching for at
+-- either level, and worth compiling the module that uses it at @-O2@.
+--
+-- (@sized-grid-49hi@ reported 5.1x for this without qualification. Its
+-- benchmark component was built at @-O2@ and this library's is not, which is
+-- the entire discrepancy --- and is why the two rows are given separately
+-- here.)
+--
+-- Unboxed, the same benchmark is 1.37 ms against 1.22 ms and 1.9 MB either
+-- way: nothing to gain, `Data.Vector.Generic.generate` having already forced.
+-- On a single boxed pass it is also nothing --- 41.5 μs against 42.3 μs, at
+-- 215 KB against 323 KB --- because within one pass there is no generation
+-- for a thunk to survive into. This kernel earns its place across a loop.
+--
+-- Note what the pragma in @sized-grid-v6ye@ could /not/ do and this does. On
+-- a hundred-generation boxed loop @INLINE@ measured level with @INLINABLE@,
+-- because there the thunk chain is the whole cost and only the fill touches
+-- it. The two sequential wins are disjoint: the pragma is worth having on a
+-- single pass and nothing on a boxed loop, this is worth nothing on an
+-- unboxed single pass and 5x on a boxed loop.
+stencilFoldGrid' ::
+       forall v cs a b. (VG.Vector v a, VG.Vector v b)
+    => Stencil cs
+    -> (b -> a -> b)
+    -> (a -> b)
+    -> GridOf v cs a
+    -> GridOf v cs b
+stencilFoldGrid' (Stencil w tbl) step seed g =
+    unsafeGridFromVector $ fillStrict n (\i -> foldAt tbl w v step seed i)
+  where
+    v = gridVector g
+    n = VG.length v
+{-# INLINE stencilFoldGrid' #-}
 
 -- | The neighbours of a single cell, read out of the table rather than
 -- enumerated.
@@ -463,6 +600,50 @@ stencilAt ::
     -> [a]
 stencilAt (Stencil w tbl) g c = gatherRow tbl w (gridVector g) (coordPosition c)
 {-# INLINABLE stencilAt #-}
+
+-- | Cell @i@ of a `stencilGrid` pass: the rule applied to the cell and its
+-- neighbours.
+--
+-- Lifted out of `stencilGrid` so that `stencilGrid'` can be the same rule
+-- under a different fill rather than a second copy of it. That is what makes
+-- "same result, forced earlier" a fact about the source and not only a
+-- property `Test.Stencil` checks.
+gatherAt ::
+       VG.Vector v a => VU.Vector Int -> Int -> v a -> (a -> [a] -> b) -> Int -> b
+gatherAt tbl w v f i = f (VG.unsafeIndex v i) (gatherRow tbl w v i)
+{-# INLINE gatherAt #-}
+
+-- | Cell @i@ of a `stencilFoldGrid` pass, shared with `stencilFoldGrid'` for
+-- the reason 'gatherAt' gives.
+foldAt ::
+       VG.Vector v a
+    => VU.Vector Int -> Int -> v a -> (b -> a -> b) -> (a -> b) -> Int -> b
+foldAt tbl w v step seed i = foldRow' tbl w v i step (seed (VG.unsafeIndex v i))
+{-# INLINE foldAt #-}
+
+-- | Build an @n@-element vector, forcing each element to WHNF as it is
+-- written, where 'VG.generate' would store it as a thunk.
+--
+-- The one line that separates `stencilGrid'` from `stencilGrid` and
+-- `stencilFoldGrid'` from `stencilFoldGrid`: @$!@ on the write. Both primed
+-- kernels go through here, so the strictness they promise is one definition
+-- rather than two.
+--
+-- Pure, and legitimately so: the mutable vector is allocated inside 'runST',
+-- written only by the loop below, and frozen before it escapes, so nothing
+-- can observe it in a partly-filled state. 'VGM.unsafeNew' and
+-- 'VGM.unsafeWrite' are licensed by @go@ writing exactly @[0, n)@ once each,
+-- and 'VG.unsafeFreeze' by @mv@ being dead after it.
+fillStrict :: VG.Vector v b => Int -> (Int -> b) -> v b
+fillStrict n at =
+    runST $ do
+        mv <- VGM.unsafeNew n
+        let go !i
+                | i >= n = pure ()
+                | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
+        go 0
+        VG.unsafeFreeze mv
+{-# INLINE fillStrict #-}
 
 -- | The half-open span of 'stencilPositions' that holds row @i@ of a stencil
 -- of width @w@: @[i * w, (i + 1) * w)@. The one piece of table-layout

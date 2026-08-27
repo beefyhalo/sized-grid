@@ -9,6 +9,30 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **New.** `Data.Grid.Sized.Stencil.stencilGrid'` and
+  `Data.Grid.Sized.Stencil.stencilFoldGrid'` (sized-grid-d6ng): the two
+  stencil kernels with the result filled through a mutable vector written with
+  `$!`, so each cell is forced where it is computed rather than left as a
+  thunk for whoever forces the grid. Same table, same boundary policies, same
+  lazily-produced neighbour list within a row, so a rule that stops early
+  still stops early.
+
+  New entry points rather than a change to the existing two, which keep their
+  documented promise that a boxed grid may hold cells nothing ever looks at.
+  On an unboxed grid the primed kernels can only tie, `Data.Vector.Generic.generate`
+  having already forced; they are for boxed automaton loops. On 2,500 boxed
+  cells x 100 generations: `stencilGrid` 30.6 ms / 210 MB against
+  `stencilGrid'` 17.7 ms / 221 MB (1.7x, and 4.4x less copied), and
+  `stencilFoldGrid` 17.5 ms / 21 MB against `stencilFoldGrid'` 6.12 ms / 32 MB
+  at `-O1` or 3.13 ms / 5.7 MB at `-O2`.
+
+  Note that last pair: `stencilFoldGrid'` is the one entry point in this
+  library whose win depends on the optimisation level of the code that *calls*
+  it -- 2.9x at `-O1`, 5.6x at `-O2` -- because it is `INLINE` and `-O1` does
+  not unbox the accumulator through the fill's `ST` state. sized-grid-49hi
+  reported 5.1x for this without qualification; its benchmark component was
+  built at `-O2` and this library's is not.
+
 * `Data.Grid.Sized.Stencil.stencilGrid` and
   `Data.Grid.Sized.Stencil.stencilFoldGrid` are `INLINE` rather than
   `INLINABLE` (sized-grid-v6ye). `INLINABLE` offers GHC an unfolding to
