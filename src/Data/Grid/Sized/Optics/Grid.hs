@@ -25,13 +25,12 @@ module Data.Grid.Sized.Optics.Grid
   ) where
 
 import           Data.Grid.Sized.Class             (IsGrid (..))
-import           Data.Grid.Sized.Coord             (AllSizedKnown, Coord,
-                                                    coordPosition)
+import           Data.Grid.Sized.Coord             (AllSizedKnown, Coord)
 import           Data.Grid.Sized.Coord.Class       (IsCoord, IsCoordList)
 import           Data.Grid.Sized.Internal.Grid     (CollapseGrid, Grid,
                                                     GridOf (..), MapAxis (..),
-                                                    axisFibres, collapseGrid,
-                                                    combineGrid,
+                                                    axisFibres, cellLens,
+                                                    collapseGrid, combineGrid,
                                                     combineHigherDim, dropGrid,
                                                     gridFromList,
                                                     gridFromVector, gridVector,
@@ -90,12 +89,16 @@ _CollapsedGrid :: (VG.Vector v a, AllSizedKnown cs)
          => Prism' (CollapseGrid cs a) (GridOf v cs a)
 _CollapsedGrid = prism' collapseGrid gridFromList
 
+-- | The cell at a coordinate. @'Data.Grid.Sized.Internal.Grid.cellLens'@ under
+-- the optics name, which is also what @'ix'@ is; the two used to be the same
+-- body written twice.
+--
+-- The @IsCoordList cs@ is not needed (see @cellLens@) and is kept only because
+-- it is the published signature; `requiring` is what stops it reading as a
+-- redundant constraint. Both arguments are named rather than left implicit
+-- because `requiring` takes a monotype and `Lens'` is not one.
 cell :: forall v cs a. (Vector v a, IsCoordList cs) => Coord cs -> Lens' (GridOf v cs a) a
-cell c = requiring @(IsCoordList cs) $ lens getter setter
-  where
-    position = coordPosition c
-    getter (Grid v) = VG.unsafeIndex v position
-    setter (Grid v) value = Grid (v VG.// [(position, value)])
+cell c f = requiring @(IsCoordList cs) (cellLens c f)
 {-# INLINE cell #-}
 
 slice :: forall v m c x. forall off len ->

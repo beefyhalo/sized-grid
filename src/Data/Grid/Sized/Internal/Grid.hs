@@ -26,6 +26,8 @@ module Data.Grid.Sized.Internal.Grid
   , gridFromVector
   , gridFromList
   , collapseGrid
+    -- * Single-cell access
+  , cellLens
     -- * Bulk operations
   , tabulateGrid
   , indexGrid

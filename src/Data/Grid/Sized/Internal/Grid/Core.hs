@@ -18,6 +18,8 @@ module Data.Grid.Sized.Internal.Grid.Core
   , gridFromVector
   , gridFromList
   , collapseGrid
+    -- * Single-cell access
+  , cellLens
     -- * Bulk operations
     --
     -- $bulk
@@ -64,11 +66,18 @@ newtype GridOf v (cs :: [Type]) a = Grid
 type instance Index (GridOf v cs a) = Coord cs
 type instance IxValue (GridOf v cs a) = a
 
+-- | @ix@ /is/ 'cellLens'. A @'Lens'' s a@ is a @'Traversal'' s a@, so the
+-- method typechecks unchanged -- and saying it with a lens is the honest
+-- reading: the coordinate is in range by construction, so this traversal has
+-- exactly one focus and can never miss.
+--
+-- Eta-expanded to @ix c f@ rather than written point-free: `Lens'` quantifies
+-- its functor under `Functor` and `Traversal'` under `Applicative`, so the
+-- two arguments have to be in scope before the weaker constraint can be
+-- discharged from the stronger one.
 instance (VG.Vector v a, IsCoordList cs) => Ixed (GridOf v cs a) where
-  ix c f (Grid v) =
-    let position = coordPosition c
-        replace value = Grid (v VG.// [(position, value)])
-    in replace <$> f (VG.unsafeIndex v position)
+  ix c f = cellLens c f
+  {-# INLINE ix #-}
 
 -- | Kept nullary so it stays partially applicable, e.g. @'Functor' ('Grid' cs)@.
 type Grid = GridOf V.Vector
@@ -208,6 +217,32 @@ indexGrid ::
     -> a
 indexGrid (Grid v) c = VG.unsafeIndex v (coordPosition c)
 {-# INLINE indexGrid #-}
+
+-- | The one cell at a coordinate, read and written. The single definition
+-- behind @'ix'@, "Data.Grid.Sized.Optics".@cell@ and
+-- @'Data.Grid.Sized.Class.gridIndex'@, which were three copies of it.
+--
+-- Both directions are unchecked, for the reason `indexGrid` gives above:
+-- @coordPosition c@ is in range by the `Ordinal` invariant on every axis and
+-- the vector has exactly that many elements by `GridOf`'s size invariant. A
+-- bounds check on the write could only ever have passed, and paying for one
+-- would also contradict the type -- a `Lens'` promises a focus is there.
+-- Only `unsafeGridFromVector` can falsify that.
+--
+-- No @IsCoordList cs@, for the same reason `indexGrid` dropped it: a
+-- coordinate /is/ its position since sized-grid-adr.16, so there is no fold
+-- here that needs the axis sizes. The call sites that still carry the
+-- constraint keep it as a published signature, not as a need.
+cellLens ::
+       forall v cs a. VG.Vector v a
+    => Coord cs
+    -> Lens' (GridOf v cs a) a
+cellLens c = lens getter setter
+  where
+    position = coordPosition c
+    getter (Grid v) = VG.unsafeIndex v position
+    setter (Grid v) value = Grid (VG.unsafeUpd v [(position, value)])
+{-# INLINE cellLens #-}
 
 mapGrid ::
        (VG.Vector v a, VG.Vector v b)

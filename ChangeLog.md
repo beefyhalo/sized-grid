@@ -9,6 +9,24 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **Fewer constraints.** The `IsGrid cs (Grid cs)` and
+  `IsGrid cs (FocusedGrid cs)` instances no longer require
+  `AllSizedKnown cs` or `IsCoordList cs` (sized-grid-6kor.6). Both were left
+  over from a `gridIndex` that read through `Data.Functor.Rep.index` and from
+  a coordinate that still had to be folded to a position; neither is true any
+  more. Relaxing an instance context can only make a consumer's constraint
+  easier to discharge, so nothing that compiled before stops compiling.
+
+* `Data.Grid.Sized.Internal.Grid.cellLens` is the one lens to a single cell,
+  and `ix`, `Data.Grid.Sized.Optics.cell` and
+  `Data.Grid.Sized.Class.gridIndex` are all now that lens (sized-grid-6kor.6).
+  The first two were byte-identical bodies, and both wrote through
+  `Data.Vector.Generic.//`, whose bounds check the third already documented as
+  unreachable -- the position is in range by the `Ordinal` invariant and the
+  vector has exactly that many elements by the grid's size invariant. The
+  write is `Data.Vector.Generic.unsafeUpd` on all three paths now. No
+  signature and no behaviour change; 74 benchmarks unmoved.
+
 * **New.** `Data.Grid.Sized.Stencil.stencilGrid'` and
   `Data.Grid.Sized.Stencil.stencilFoldGrid'` (sized-grid-d6ng): the two
   stencil kernels with the result filled through a mutable vector written with
