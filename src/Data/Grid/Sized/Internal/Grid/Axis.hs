@@ -70,6 +70,41 @@ instance {-# OVERLAPPABLE #-} MapAxis (n - 1) as c => MapAxis n (c0 ': as) c whe
   axisSizeAndStride = axisSizeAndStride @(n - 1) @as @c
   {-# INLINE axisSizeAndStride #-}
 
+-- | One fibre, gathered: the @axisSize@ elements of @v@ that start at @base@
+-- and sit @stride@ apart, copied out contiguous.
+--
+-- The one definition of the fibre read. 'mapAxisStrided' gathers a fibre to
+-- hand to @f@ and 'axisFibres' gathers the same fibre to hand to its caller,
+-- and they were the same expression written twice.
+--
+-- 'VG.unsafeIndex', on the bounds 'mapAxisStrided' states: every @base@ a
+-- caller here walks satisfies @base + (axisSize - 1) * stride < 'VG.length' v@
+-- by construction, so no read can leave the vector.
+--
+-- Only the read is shared. The two walks that produce the @base@ values are
+-- not: 'mapAxisStrided' sequences them in @ST@ so the loop fuses and nothing
+-- but the result is allocated, and 'axisFibres' produces a lazy list.
+--
+-- Sharing those too was written and measured, so it is not re-tried blind
+-- (sized-grid-6kor.7). A @fibreBases block stride len@ producing
+-- @[0, block .. len - 1] >>= \\b -> [b .. b + stride - 1]@, consumed by
+-- @'mapM_' scatterFrom@ here and by 'map' in 'axisFibres', is the whole
+-- extraction and it costs @mapAxis 0@ over an unboxed 300x300 grid 122%:
+-- 169 us against 375 us, on 2.1 MB either way. The list does not fuse away
+-- inside 'VG.create'\'s @ST@, so the scatter runs off a cons cell per fibre
+-- instead of an unboxed counter -- and this loop is where the @INLINE@ on
+-- 'mapAxisStrided' is worth 2.1x boxed and 8.7x unboxed in the first place.
+fibreAt ::
+     forall v a. VG.Vector v a
+  => Int -- ^ The axis's size: how many elements the fibre has.
+  -> Int -- ^ The axis's stride: how far apart consecutive elements of it are.
+  -> v a -- ^ The whole flat row-major vector.
+  -> Int -- ^ Where the fibre starts.
+  -> v a
+fibreAt axisSize stride v base =
+  VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride))
+{-# INLINE fibreAt #-}
+
 -- | The engine under 'mapAxis': apply @f@ to every fibre of a flat row-major
 -- vector along an axis of the given size and stride.
 --
@@ -111,7 +146,7 @@ mapAxisStrided axisSize stride f v
         out <- VGM.unsafeNew len
         let scatterFrom base =
               VG.imapM_ (\k -> VGM.unsafeWrite out (base + k * stride)) $
-              f (VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride)))
+              f (fibreAt axisSize stride v base)
             fibresOf blockStart base
               | base >= blockStart + stride = pure ()
               | otherwise = scatterFrom base >> fibresOf blockStart (base + 1)
@@ -228,7 +263,7 @@ axisFibres n (Grid v) =
         fibre blockStart base
           | base >= blockStart + stride = []
           | otherwise =
-              Grid (VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride)))
+              Grid (fibreAt axisSize stride v base)
               : fibre blockStart (base + 1)
         blocks blockStart
           | blockStart >= len = []
