@@ -1,7 +1,8 @@
 # Module map
 
-Outcome of `sized-grid-6kor`. Written 2026-08-26, after `6kor.1`, `.2` and `.3`
-landed. Also published as a page:
+Outcome of `sized-grid-6kor`. Written 2026-08-26 after `6kor.1`, `.2` and
+`.3` landed, and completed the same day when `.6` to `.9` closed the epic.
+Also published as a page:
 <https://claude.ai/code/artifact/771a3ec7-1092-4c91-b64f-f77c92db4678>
 
 ## Problem
@@ -95,6 +96,32 @@ instances attach `lens`'s classes to this library's types, so neither package
 can own both sides; the facade re-exports the module, which is what keeps a
 consumer of the optics getting the instances.
 
+### `Coord.Class`
+
+Not one of the three the epic was filed for. It became the largest module in
+the tree once the three were split -- 558 lines the epic had never touched --
+and it held two things that separate cleanly:
+
+| module | holds | exposed |
+|---|---|---|
+| `Coord.Class.Axis` | what one axis's boundary policy means: `IsCoord`, `IsCoordLifted`, `Boundaryless`, `Extremum`, `Even`/`Odd`/`OddC`, the index conversions | yes |
+| `Coord.Class.List` | the row-major fold over the axis list: `IsCoordList` and its two instances, `IsCoordListF`, `MapDiff`, `AllDiffSame` | yes |
+
+```
+Data.Grid.Sized.Coord.Class            558 →   36   (pure re-export)
+```
+
+Every `IsCoordList` method calls `offsetIsCoord`, `axisBoundaryIsCoord`,
+`axisDistanceIsCoord`, `toAxisIndex` or `unsafeFromAxisIndex`, and nothing goes
+the other way, so the split is one edge with no cycle. Both children are
+exposed, as `Optics`'s are, because the facade is exposed and each half is a
+public concept.
+
+Nothing moved but the module boundary: the export list is byte-identical, the
+33 `INLINE` pragmas are the same 33 lines, and the two halves' code text
+matches the original body exactly once blank lines and order are set aside.
+All three were checked against the parent commit rather than assumed.
+
 ## The resulting layering
 
 No cycles, and each layer imports only downward:
@@ -102,7 +129,9 @@ No cycles, and each layer imports only downward:
 ```
   Internal.Error   Internal.Type   Coord.Delta        (no internal imports)
         ↓                ↓
-     Ordinal   →   Coord.Class
+     Ordinal   →   Coord.Class.Axis → Coord.Class.List
+                        ↓
+                  Coord.Class                          ← facade
                         ↓
                   Coord.Internal
                         ↓
@@ -135,7 +164,9 @@ of them has a measurement in the source next to it.
    module that calls it; `transposeGrid` at 300×300 measured 22–29 ms / 85–92 MB
    against 873 µs / 704 KB.
 3. **`INLINE`, not `INLINABLE`, on `mapAxisStrided` and `scanAxisStrided`.**
-   Worth 2.1× boxed and 8.7× unboxed.
+   Worth 2.1× boxed and 8.7× unboxed. Being `INLINE` also means their bodies
+   are optimised in the *caller's* context, which is what the last section of
+   this page is about.
 4. **The library's `-O2 -fexpose-all-unfoldings -fspecialise-aggressively`**, and
    `-fno-ignore-asserts` staying *last* on that line.
 5. **`IsCoordList`'s folds being class methods.** A self-recursive fold over the
@@ -148,8 +179,12 @@ of them has a measurement in the source next to it.
 The split moved none of these: every pragma travelled with its definition, and
 `-fexpose-all-unfoldings` was already on, so a cross-module call site sees what
 an intra-module one saw. Confirmed by running the benchmark suite against a
-same-session baseline recorded from the parent commit in a clean worktree — all
-74 pass for each of the three splits.
+same-session baseline recorded from the parent commit in a clean worktree, once
+for each of `.1`, `.2`, `.3`, `.6`, `.7`, `.8` and `.9`. For `.9`, the one that
+touches `IsCoordList` itself, the decisive figure is allocation rather than
+time: all 70 benchmarks that allocate more than a kilobyte came within 0.5% of
+the control, and it is allocation — 27 MB against 34 bytes — that moves when
+that fold stops unrolling.
 
 **Do not benchmark against `bench/baseline-ghc9.12.3-aarch64-darwin.csv` to
 judge a refactor on a busy machine.** Doing so during `6kor.2` reported five or
@@ -158,23 +193,23 @@ allocation figure at or below baseline. The suite was taking 230 s where it had
 taken 160 s that morning. Record a control from the parent commit and compare
 against that.
 
-## Still open
+## What was found duplicated, and what was done about it
 
-Three true duplications, filed against this epic:
+Three true duplications, all now closed against this epic:
 
-- **`6kor.6`** (P2) — `Ixed.ix` and `Optics.cell` have byte-identical bodies,
-  and both bounds-check a write that `IsGrid.gridIndex` documents cannot fail.
-  One `cellLens` in `Internal.Grid.Core`, reached by all three.
-- **`6kor.7`** (P3) — `axisFibres` duplicates `mapAxisStrided`'s fibre gather.
-- **`6kor.8`** (P3) — twelve repetitions of the pointwise-lift idiom across
-  `Coord`'s instances, plus four `TorusCoord` instances that
-  `deriving newtype` gives.
-
-And one further split, filed as **`6kor.9`** (P3): `Coord.Class` is now the
-largest module in the tree at 558 lines, and it was never touched. It holds two
-things that can separate cleanly — `IsCoord`/`IsCoordLifted`, the per-axis
-boundary policy, and `IsCoordList`, the per-axis-list fold — with the second
-depending on the first and nothing going the other way.
+- **`6kor.6`** — `Ixed.ix` and `Optics.cell` had byte-identical bodies, and
+  both bounds-checked a write that `IsGrid.gridIndex` documented could not
+  fail. One `cellLens` in `Internal.Grid.Core` now, reached by all three, with
+  `unsafeUpd` on every path. `gridIndex` losing its old getter took
+  `AllSizedKnown cs` and `IsCoordList cs` off both `IsGrid` instances with it:
+  neither was needed once a coordinate *was* its position.
+- **`6kor.7`** — `axisFibres` duplicated `mapAxisStrided`'s fibre gather. One
+  `fibreAt`. Only the read: see below.
+- **`6kor.8`** — twelve repetitions of the pointwise-lift idiom across
+  `Coord`'s instances became `pointwise0`/`pointwise1`/`pointwise2`, taking
+  the axis class as a type argument; four `TorusCoord` instances became
+  `deriving newtype`. The other eight `TorusCoord` instances stay
+  hand-written, each for a stated reason.
 
 Seven further near-duplications were examined and found intentional. They are
 catalogued in bd memory `duplication-in-grid-sized-that-is-deliberate-and` so
@@ -183,3 +218,33 @@ they are not re-litigated; the short version is `splitVectorBySize` vs
 recursions vs the two JSON ones, `posAdd` vs `posTransport`, `WeakenCoord` vs
 `StrengthenCoord`, `gridTiles` vs `gridWindows`, and `IsCoordList`'s twelve
 methods sharing a `quotRem stride` skeleton. Each has a measurement behind it.
+
+## The eighth: shared code whose cost depends on the caller's `-O` level
+
+`6kor.7` had an optional second half — sharing the *walk* that produces the
+fibre start positions, not just the read. It was written and benchmarked, and
+the result is the most useful thing this epic turned up:
+
+| | `-O1` | `-O2` |
+|---|---|---|
+| explicit walk | 170 µs | 145 µs |
+| shared `[Int]` producer | 374 µs | 149 µs |
+
+`mapAxisStrided` is `INLINE`, so its body is optimised in the *caller's*
+context, and the benchmark component is built at cabal's default `-O1` while
+the library is `-O2`. The list fuses away at `-O2` and does not at `-O1`. The
+walk stays duplicated, because `-O1` is what a consumer's executable gets by
+default and two saved lines are not worth doubling their inner loop.
+
+Two rules follow, and they apply to any later change to an `INLINE` kernel
+here:
+
+1. **A benchmark judging such a change must say which `-O` level the caller
+   was built at.** The same diff reads as a 120% regression or as free.
+2. **`stencilFoldGrid'` is not the only entry point with an `-O1`/`-O2` gap.**
+   Measured the same way, `scanAxis 1` over an unboxed 300×300 grid is
+   224 µs / 4.41 MB at `-O1` and 75 µs / 1.53 MB at `-O2` — a 3.0× split,
+   sharper than the stencil's. `scanAxis 0` is unmoved, because stride 1 takes
+   the `VG.concat` arm and never enters the `ST` loop, which localises the
+   problem to the strided arm. Recorded on `sized-grid-y99h`, which now has to
+   decide for `scanAxisStrided` as well as for the stencil.
