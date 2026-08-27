@@ -216,6 +216,8 @@ library
     Data.Grid.Sized.Coord.Centre
     Data.Grid.Sized.Coord.Clamped
     Data.Grid.Sized.Coord.Class
+    Data.Grid.Sized.Coord.Class.Axis
+    Data.Grid.Sized.Coord.Class.List
     Data.Grid.Sized.Coord.Delta
     Data.Grid.Sized.Coord.Distance
     Data.Grid.Sized.Coord.Neighbourhood

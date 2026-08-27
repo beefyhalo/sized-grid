@@ -9,6 +9,19 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Data.Grid.Sized.Coord.Class` is now a facade over
+  `Coord.Class.Axis` and `Coord.Class.List`, both newly exposed
+  (sized-grid-6kor.9). Its export list is unchanged. `Axis` holds what one
+  axis's boundary policy means -- `IsCoord`, `IsCoordLifted`, `Boundaryless`,
+  `Extremum`, the `Even`/`Odd` size predicates, the index conversions; `List`
+  holds the row-major fold over the axis list -- `IsCoordList` and its two
+  instances, `IsCoordListF`, `MapDiff`, `AllDiffSame`. The second is built on
+  the first and the first does not mention the second, so the split is one
+  edge with no cycle. Every `INLINE` travelled with its definition, and all 70
+  benchmarks that allocate more than a kilobyte are within 0.5% of a
+  same-session control -- which is the figure that moves if `IsCoordList`'s
+  fold stops unrolling.
+
 * `Data.Grid.Sized.Coord.TorusCoord`'s `Enum`, `Hashable`, `Semigroup` and
   `Monoid` are `deriving newtype` rather than hand-written delegations to
   `Coord`'s (sized-grid-6kor.8), with the same contexts. One visible
