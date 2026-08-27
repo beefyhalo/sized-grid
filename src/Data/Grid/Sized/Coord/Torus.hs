@@ -36,26 +36,38 @@ type role TorusCoord nominal
 instance (IsCoordList cs, All Show cs) => Show (TorusCoord cs) where
   show (TorusCoord c) = "TorusCoord " ++ show c
 
-instance IsCoordList cs => Hashable (TorusCoord cs) where
-  hashWithSalt salt (TorusCoord c) = hashWithSalt salt (coordPosition c)
+-- | The four instances that are exactly 'Coord'\'s, unwrapped and rewrapped.
+-- Each was written out as that delegation, with the same context the instance
+-- it delegated to has, so @deriving newtype@ says it once and cannot drift.
+--
+-- Standalone rather than in the @newtype@\'s own @deriving@ clause so the
+-- contexts stay written down and stay checkable against 'Coord'\'s.
+--
+-- What is /not/ derived is the point of the type, and none of it should be:
+--
+--   * 'Bounded' below deliberately means position @0 .. size - 1@, the
+--     residues, where 'Coord'\'s means each axis's own @minBound@\/@maxBound@.
+--   * 'AdditiveGroup', 'Group' and 'Abelian' deliberately narrow to
+--     @All 'Boundaryless' cs@ -- that narrowing is the whole reason
+--     'TorusCoord' exists.
+--   * 'Show' prints the wrapper, and 'U.Universe', 'U.Finite' and 'Finitary'
+--     are their own.
+deriving newtype instance IsCoordList cs => Hashable (TorusCoord cs)
 
+deriving newtype instance IsCoordList cs => Enum (TorusCoord cs)
+
+deriving newtype instance (IsCoordList cs, All Semigroup cs) =>
+                          Semigroup (TorusCoord cs)
+
+deriving newtype instance (IsCoordList cs, All Semigroup cs, All Monoid cs) =>
+                          Monoid (TorusCoord cs)
+
+-- | The residues @0 .. size - 1@, not 'Coord'\'s per-axis extremes: on a
+-- torus every position is a group element and the bounds are the range of the
+-- flat position.
 instance IsCoordList cs => Bounded (TorusCoord cs) where
   minBound = TorusCoord (Coord 0)
   maxBound = TorusCoord (Coord (coordListSize @cs - 1))
-
-instance IsCoordList cs => Enum (TorusCoord cs) where
-  toEnum p =
-    case coordFromPosition @cs p of
-      Just c -> TorusCoord c
-      Nothing -> error "toEnum: TorusCoord position out of range"
-  fromEnum (TorusCoord c) = coordPosition c
-  succ (TorusCoord c) = TorusCoord (succ c)
-  pred (TorusCoord c) = TorusCoord (pred c)
-  enumFromTo (TorusCoord a) (TorusCoord b) = TorusCoord <$> enumFromTo a b
-  enumFromThenTo (TorusCoord a) (TorusCoord b) (TorusCoord c) =
-    TorusCoord <$> enumFromThenTo a b c
-  enumFrom (TorusCoord a) = TorusCoord <$> enumFrom a
-  enumFromThen (TorusCoord a) (TorusCoord b) = TorusCoord <$> enumFromThen a b
 
 instance IsCoordList cs => U.Universe (TorusCoord cs) where
   universe = allTorusCoords
@@ -98,13 +110,6 @@ instance ( IsCoordList cs
   TorusCoord a ^+^ TorusCoord b = TorusCoord (a ^+^ b)
   negateV (TorusCoord a) = TorusCoord (negateV a)
   TorusCoord a ^-^ TorusCoord b = TorusCoord (a ^-^ b)
-
-instance (IsCoordList cs, All Semigroup cs) => Semigroup (TorusCoord cs) where
-  TorusCoord a <> TorusCoord b = TorusCoord (a <> b)
-
-instance (IsCoordList cs, All Semigroup cs, All Monoid cs) => Monoid (TorusCoord cs) where
-  mappend = (<>)
-  mempty = TorusCoord mempty
 
 instance ( IsCoordList cs
      , All AdditiveGroup cs

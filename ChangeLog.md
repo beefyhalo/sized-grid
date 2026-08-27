@@ -9,6 +9,15 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* `Data.Grid.Sized.Coord.TorusCoord`'s `Enum`, `Hashable`, `Semigroup` and
+  `Monoid` are `deriving newtype` rather than hand-written delegations to
+  `Coord`'s (sized-grid-6kor.8), with the same contexts. One visible
+  consequence: `toEnum` out of range now reports `Coord`'s message, which
+  names the offending position and the axis-space size, in place of a fixed
+  `"toEnum: TorusCoord position out of range"`. `Bounded`, `AdditiveGroup`,
+  `Group`, `Abelian`, `Show`, `Universe`, `Finite` and `Finitary` stay
+  hand-written -- each of them deliberately differs from `Coord`'s.
+
 * **Fewer constraints.** The `IsGrid cs (Grid cs)` and
   `IsGrid cs (FocusedGrid cs)` instances no longer require
   `AllSizedKnown cs` or `IsCoordList cs` (sized-grid-6kor.6). Both were left

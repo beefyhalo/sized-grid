@@ -188,33 +188,62 @@ instance forall cs. (IsCoordList cs, All FromJSON cs) => FromJSON (Coord cs) whe
                         (hcmap (Proxy @FromJSON) (\(K x) -> parseJSON x) a)
                 Nothing -> empty
 
+-- | The three pointwise lifts.
+--
+-- Every instance below that is /the axes' instance, applied axis by axis/ has
+-- the same body: take the coordinate apart with 'unCoord', apply the axis
+-- operation under 'I', and put the position back together with
+-- 'npToPosition'. Written out that was twelve copies of one of three shapes
+-- across 'Semigroup', 'Monoid', 'AdditiveGroup', 'Group' and 'Bounded'.
+--
+-- The class is passed as a type argument -- @'pointwise2' \@Semigroup ('<>')@
+-- -- and reaches @hcpure@\/@hcliftA@\/@hcliftA2@ as the 'Proxy' each of them
+-- wants. All three are @INLINE@ and have no arguments GHC cannot see, so a
+-- call site gets the same Core the hand-written body did.
+
+-- | A coordinate built from a constant the axis class supplies: @mempty@,
+-- @zeroV@, @minBound@, @maxBound@.
+pointwise0 ::
+     forall k cs. (IsCoordList cs, All k cs)
+  => (forall c. k c => c)
+  -> Coord cs
+pointwise0 x = Coord $ npToPosition @cs $ hcpure (Proxy @k) (I x)
+{-# INLINE pointwise0 #-}
+
+-- | One coordinate in, one out: @negateV@, @invert@.
+pointwise1 ::
+     forall k cs. (IsCoordList cs, All k cs)
+  => (forall c. k c => c -> c)
+  -> Coord cs
+  -> Coord cs
+pointwise1 f a = Coord $ npToPosition $ hcliftA (Proxy @k) (fmap f) (unCoord a)
+{-# INLINE pointwise1 #-}
+
+-- | Two coordinates in, one out: @(<>)@, @(^+^)@, @(^-^)@.
+pointwise2 ::
+     forall k cs. (IsCoordList cs, All k cs)
+  => (forall c. k c => c -> c -> c)
+  -> Coord cs
+  -> Coord cs
+  -> Coord cs
+pointwise2 f a b =
+    Coord $ npToPosition $ hcliftA2 (Proxy @k) (liftA2 f) (unCoord a) (unCoord b)
+{-# INLINE pointwise2 #-}
+
 instance (IsCoordList cs, All Semigroup cs) => Semigroup (Coord cs) where
-  a <> b =
-      Coord $
-      npToPosition $
-      hcliftA2 (Proxy :: Proxy Semigroup) (liftA2 (<>)) (unCoord a) (unCoord b)
+  (<>) = pointwise2 @Semigroup (<>)
 
 instance forall cs. (IsCoordList cs, All Semigroup cs, All Monoid cs) =>
          Monoid (Coord cs) where
   mappend = (<>)
-  mempty = Coord $ npToPosition @cs $ hcpure (Proxy :: Proxy Monoid) (pure mempty)
+  mempty = pointwise0 @Monoid mempty
 
 instance forall cs. (IsCoordList cs, All AdditiveGroup cs) =>
          AdditiveGroup (Coord cs) where
-    zeroV =
-        Coord $ npToPosition @cs $ hcpure (Proxy :: Proxy AdditiveGroup) (pure zeroV)
-    a ^+^ b =
-        Coord $
-        npToPosition $
-        hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^+^)) (unCoord a) (unCoord b)
-    negateV a =
-        Coord $
-        npToPosition $
-        hcliftA (Proxy :: Proxy AdditiveGroup) (fmap negateV) (unCoord a)
-    a ^-^ b =
-        Coord $
-        npToPosition $
-        hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^-^)) (unCoord a) (unCoord b)
+    zeroV = pointwise0 @AdditiveGroup zeroV
+    (^+^) = pointwise2 @AdditiveGroup (^+^)
+    negateV = pointwise1 @AdditiveGroup negateV
+    (^-^) = pointwise2 @AdditiveGroup (^-^)
 
 -- | The dense position is a perfect hash within a coordinate shape. Hashing
 -- it directly avoids paying for each axis and preserves the shape in the type.
@@ -222,14 +251,8 @@ instance forall cs. IsCoordList cs => Hashable (Coord cs) where
     hashWithSalt salt = hashWithSalt salt . coordPosition
 
 instance forall cs. (IsCoordList cs, All Bounded cs) => Bounded (Coord cs) where
-    minBound =
-        Coord $
-        npToPosition @cs $
-        hcpure (Proxy :: Proxy Bounded) (pure minBound)
-    maxBound =
-        Coord $
-        npToPosition @cs $
-        hcpure (Proxy :: Proxy Bounded) (pure maxBound)
+    minBound = pointwise0 @Bounded minBound
+    maxBound = pointwise0 @Bounded maxBound
 
 class IxCoordList cs where
     ixRangeNP :: NP I cs -> NP I cs -> [NP I cs]
@@ -338,10 +361,7 @@ instance forall cs. (IsCoordList cs, All Random cs) => Random (Coord cs) where
 -- @All Group cs@ lets it be.
 instance forall cs. (IsCoordList cs, All Semigroup cs, All Monoid cs, All Group cs) =>
          Group (Coord cs) where
-    invert a =
-        Coord $
-        npToPosition $
-        hcliftA (Proxy :: Proxy Group) (fmap invert) (unCoord a)
+    invert = pointwise1 @Group invert
 
 -- | Pointwise again: a product of abelian groups is abelian, since swapping
 -- the order of '<>' on the whole coordinate is swapping it independently on
@@ -494,9 +514,7 @@ transposeCoord ::
 transposeCoord (a :| b :| EmptyCoord) = b :| a :| EmptyCoord
 
 zeroCoord :: forall cs. IsCoordList cs => Coord cs
-zeroCoord =
-    Coord $
-    npToPosition @cs $ hcpure (Proxy :: Proxy IsCoordLifted) (I zeroPosition)
+zeroCoord = pointwise0 @IsCoordLifted zeroPosition
 
 -- | Evidence that every axis of @cs@, and every suffix of it, has a statically known size.
 class GHC.KnownNat (MaxCoordSize cs) => AllSizedKnown (cs :: [Type]) where
