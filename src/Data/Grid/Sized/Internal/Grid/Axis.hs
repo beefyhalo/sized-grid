@@ -89,11 +89,19 @@ instance {-# OVERLAPPABLE #-} MapAxis (n - 1) as c => MapAxis n (c0 ': as) c whe
 -- (sized-grid-6kor.7). A @fibreBases block stride len@ producing
 -- @[0, block .. len - 1] >>= \\b -> [b .. b + stride - 1]@, consumed by
 -- @'mapM_' scatterFrom@ here and by 'map' in 'axisFibres', is the whole
--- extraction and it costs @mapAxis 0@ over an unboxed 300x300 grid 122%:
--- 169 us against 375 us, on 2.1 MB either way. The list does not fuse away
--- inside 'VG.create'\'s @ST@, so the scatter runs off a cons cell per fibre
--- instead of an unboxed counter -- and this loop is where the @INLINE@ on
--- 'mapAxisStrided' is worth 2.1x boxed and 8.7x unboxed in the first place.
+-- extraction, and what it costs depends on the optimisation level of the code
+-- that /calls/ this: 'mapAxisStrided' is @INLINE@, so its body is optimised
+-- in the caller's context. On @mapAxis 0@ over an unboxed 300x300 grid, at
+-- @-O2@ the list fuses away and the benchmark is unmoved -- 145 us against
+-- 149 us -- while at @-O1@ it does not fuse and the same benchmark costs
+-- 120%: 170 us against 374 us, on 2.2 MB either way, the scatter running off
+-- a cons cell per fibre instead of an unboxed counter.
+--
+-- @-O1@ is what cabal gives an executable by default, so that is the arm that
+-- decides it: two saved lines are not worth doubling the consumer's inner
+-- loop. sized-grid-y99h tracks the same @-O1@\/@-O2@ split elsewhere in the
+-- library, and the numbers above were taken the way it says -- by rebuilding
+-- the benchmark component with @--ghc-options=-O2@ and comparing.
 fibreAt ::
      forall v a. VG.Vector v a
   => Int -- ^ The axis's size: how many elements the fibre has.
