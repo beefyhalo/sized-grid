@@ -1,0 +1,44 @@
+cabal-version:       3.0
+name:                automata
+version:             0.1.0.0
+synopsis:            Two automata that are not Conway's Game of Life
+description:
+  Two cellular automata chosen for where they /disagree/ about what the
+  library owes them.
+  .
+  Wireworld is four states with an asymmetric transition, and it still runs
+  through the same @Stencil@ and the same @stencilGrid@ the game-of-life
+  example does --- on @Clamped@ axes rather than @Periodic@ ones, which costs
+  no code at all. The engine is not Life-specific.
+  .
+  Langton's ant is a single walker carrying a heading, which no stencil can
+  express, and it runs on @Walker@ and @stepWalker@ instead. Its topology is
+  a command-line flag: the same ant wraps on @Periodic@, stalls against the
+  wall on @Clamped@, and bounces --- heading reversed by @transportCoord@ ---
+  on @Reflective@.
+license:             MIT
+license-file:        LICENSE
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
+category:            Simulation
+build-type:          Simple
+extra-doc-files:     ChangeLog.md
+
+executable automata
+  main-is:             Main.hs
+  other-modules:
+    Automata.Ant
+    Automata.Wireworld
+  build-depends:
+    , base         >=4.19 && <5
+    , comonad      >=5.0  && <5.1
+    , gloss        >=1.13 && <1.14
+    , lens         >=5.2  && <5.4
+    , grid-sized
+    , vector       >=0.13 && <0.14
+  hs-source-dirs:      src
+  default-language:    GHC2024
+  ghc-options: -O2 -threaded
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints -Werror

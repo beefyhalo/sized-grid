@@ -8,6 +8,7 @@ packages:
   sudoko
   gameOfLife
   ising-example
+  automata
   grid-atlas
 
 -- sized-grid-8hx. GHC 9.14.1 ships containers-0.8, but the gloss stack still
