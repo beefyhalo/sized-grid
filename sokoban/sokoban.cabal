@@ -13,6 +13,11 @@ description:
   accommodation. Crossing the seam mirrors the axis it does not wrap, so a
   crate pushed off one end of the board arrives at the other end in the row on
   the far side of the middle, and levels are built out of exactly that.
+  .
+  Plays in a window or at a terminal, and both draw the strip the same way: the
+  chart as a rectangle, with the far side of each edge drawn past it, dimmed,
+  in the row the seam sends it to. The consequence of a push through the seam
+  is on screen before the push is made.
 license:             MIT
 license-file:        LICENSE
 author:              Kevin Horlick
@@ -52,12 +57,14 @@ library
   exposed-modules:
     Sokoban.Board
     Sokoban.Level
+    Sokoban.Render
     Sokoban.Rules
     Sokoban.Solve
 
   build-depends:
     , base        >=4.20 && <4.23
     , containers  >=0.6  && <0.9
+    , gloss       >=1.13 && <1.14
     , grid-atlas
     , grid-sized
 
@@ -69,6 +76,21 @@ executable sokoban
   build-depends:
     , base
     , containers
+    , sokoban
+
+-- Not part of the game: the harness that photographs the game's own window,
+-- because this machine cannot photograph it from outside. See its header, and
+-- sized-grid-23y3.
+executable sokoban-shot
+  import:          lang
+  main-is:         Main.hs
+  hs-source-dirs:  capture
+  ghc-options:     -threaded
+  build-depends:
+    , base
+    , bytestring  >=0.11 && <0.13
+    , gloss
+    , OpenGL      >=3.0  && <3.1
     , sokoban
 
 test-suite tests

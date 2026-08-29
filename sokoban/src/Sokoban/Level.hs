@@ -256,7 +256,7 @@ assemble pic = do
               Play
               { playPlayer = start
               , playFlipped = False
-              , playFacing = DirRight
+              , playFacing = headingFor ChartFrame False DirRight
               , playCrates = Set.fromList (map spotCoord crateSpots)
               , playMoves = 0
               , playPushes = 0

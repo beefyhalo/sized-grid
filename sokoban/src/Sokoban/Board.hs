@@ -44,15 +44,22 @@ module Sokoban.Board
   , allDirs
   , dirName
   , Frame(..)
+  , Heading(..)
   , headingFor
+  , dirOf
     -- * Stepping
   , stepSpot
+  , stepDir
+  , walkFrom
+  , cellAround
   , crossesSeam
   ) where
 
 import           Data.Grid.Atlas
 import           Data.Grid.Atlas.Mobius
 import           Data.Grid.Sized
+
+import           Control.Monad          (foldM)
 
 import           GHC.TypeLits           (KnownNat, type (<=))
 
@@ -190,6 +197,18 @@ headingFor frame flipped dir = Heading Straight (side (upIsUp == (dir == DirUp))
     side True  = AtMax
     side False = AtMin
 
+-- | The key press that means a heading, in a frame: the inverse of
+-- 'headingFor', for a caller that has a heading in hand and wants to draw or
+-- name it the way the player would.
+dirOf :: Frame -> Bool -> Heading -> Dir
+dirOf _ _ (Heading Wrapped AtMax) = DirRight
+dirOf _ _ (Heading Wrapped AtMin) = DirLeft
+dirOf frame flipped (Heading Straight end)
+    | upIsUp == (end == AtMax) = DirUp
+    | otherwise = DirDown
+  where
+    upIsUp = frame == ChartFrame || not flipped
+
 -- | One cell along a heading: where it lands, and the heading it arrives
 -- with.
 --
@@ -199,6 +218,54 @@ headingFor frame flipped dir = Heading Straight (side (upIsUp == (dir == DirUp))
 -- player who cannot tell them apart cannot tell a mistake from a boundary.
 stepSpot :: KnownStrip w h => Spot w h -> Heading -> Maybe (Spot w h, Heading)
 stepSpot = mobiusStep
+
+-- | One key press: where it lands, and the walker's parity on arrival.
+--
+-- 'Nothing' off the strip's straight edge, as 'stepSpot'. The heading the step
+-- arrives with is dropped, because on this surface it is always the heading it
+-- left with --- see 'crossesSeam' --- and what a walker actually needs to
+-- carry is the parity, which is the thing the step does not hand back.
+stepDir ::
+       KnownStrip w h
+    => Frame
+    -> (Spot w h, Bool)
+    -> Dir
+    -> Maybe (Spot w h, Bool)
+stepDir frame (here, flipped) dir = do
+    (there, _) <- stepSpot here heading
+    pure (there, flipped /= crossesSeam here heading)
+  where
+    heading = headingFor frame flipped dir
+
+-- | A run of key presses, from a cell and a parity. 'Nothing' the moment one
+-- of them leaves the strip.
+walkFrom ::
+       KnownStrip w h
+    => Frame
+    -> (Spot w h, Bool)
+    -> [Dir]
+    -> Maybe (Spot w h, Bool)
+walkFrom frame = foldM (stepDir frame)
+
+-- | The cell @(dx, dy)@ away, as the walker at this cell would count it:
+-- across the strip first, then around it.
+--
+-- The order does not matter, and that it does not is a fact about the surface
+-- rather than a convenience. Going around first mirrors the axis @dy@ counts
+-- along, and the walker's own up is mirrored with it, so the two arrive at the
+-- same cell. It is only in the /chart's/ frame that they come apart --- which
+-- is why a player-centred view has a well defined neighbourhood at all.
+cellAround ::
+       KnownStrip w h
+    => (Spot w h, Bool)
+    -> (Int, Int)
+    -> Maybe (Spot w h, Bool)
+cellAround start (dx, dy) =
+    walkFrom
+        PlayerFrame
+        start
+        (replicate (abs dy) (if dy >= 0 then DirUp else DirDown) ++
+         replicate (abs dx) (if dx >= 0 then DirRight else DirLeft))
 
 -- | Does a step from here along this heading go through the seam?
 --

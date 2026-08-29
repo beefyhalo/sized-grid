@@ -90,12 +90,17 @@ data Play w h = Play
     -- so is upside down with respect to the chart. Only 'PlayerFrame' reads
     -- it, but it is state of the game and not of the view: it is a fact about
     -- where the player has been, and undo has to put it back.
-    , playFacing  :: !Dir
+    , playFacing  :: !Heading
     -- ^ Which way the last move pointed, for drawing. Not consulted by any
     -- rule --- a Sokoban pushes by walking into a crate, so facing is never
     -- an input --- but on this surface the player needs to see which way they
     -- are about to go, because it decides whether the next step is through
     -- the seam.
+    --
+    -- A 'Heading' and not the 'Dir' that was pressed, because a heading names
+    -- an axis of the chart and a key press does not: the same key means
+    -- different headings on the two sides of the seam. A view that wants the
+    -- key back asks 'dirOf' for it, in the frame it is drawing in.
     , playCrates  :: !(Set (Coord (Strip w h)))
     , playMoves   :: !Int
     , playPushes  :: !Int
@@ -218,7 +223,7 @@ move frame dir g =
         g { gamePlay =
                 p { playPlayer = landed
                   , playFlipped = playFlipped p /= crossed
-                  , playFacing = dir
+                  , playFacing = heading
                   , playMoves = playMoves p + 1
                   }
           , gamePast = play : gamePast g

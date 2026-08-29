@@ -1,14 +1,14 @@
--- | The game at a terminal, until sized-grid-lopy.1 settles how to draw a
--- surface that does not lie flat.
+-- | Three ways in: a window, a terminal, and the solver.
 --
--- A text view is not a placeholder for the sake of one: the flat picture is
--- one of the two candidate views, and it is the one that has to be beaten. If
--- a player can plan a seam crossing from this, a window is a nicety; if they
--- cannot, that is the finding.
+-- The terminal view is not a fallback. It is the same layout the window's
+-- flat view uses --- the strip with the far side of each edge drawn past it
+-- --- at the cheapest possible fidelity, and it is where that layout was tried
+-- first. It stays because it is testable in a pipe, which the window is not.
 module Main (main) where
 
 import           Sokoban.Board
 import           Sokoban.Level
+import           Sokoban.Render     (run)
 import           Sokoban.Rules
 import           Sokoban.Solve
 
@@ -25,25 +25,33 @@ main = do
     prog <- getProgName
     case args of
         ["--help"] -> putStr (usage prog)
-        [] -> start builtinLevels
+        [] -> run builtinLevels
         ["--check"] -> checkAll builtinLevels
-        [path] -> do
-            src <- readFile path
-            case parseLevels src of
-                Left err -> die (path ++ ": " ++ err)
-                Right ls -> start ls
+        ["--text"] -> start builtinLevels
+        ["--text", path] -> withFile path start
+        [path] -> withFile path run
         _ -> die (usage prog)
+  where
+    withFile path k = do
+        src <- readFile path
+        case parseLevels src of
+            Left err -> die (path ++ ": " ++ err)
+            Right ls -> k ls
 
 usage :: String -> String
 usage prog =
     unlines
-        [ "usage: " ++ prog ++ " [LEVELS-FILE | --check]"
+        [ "usage: " ++ prog ++ " [--text] [LEVELS-FILE]"
+        , "       " ++ prog ++ " --check"
         , ""
-        , "  with no argument, plays the built-in levels"
+        , "  with no argument, opens a window on the built-in levels"
+        , "  --text    play in the terminal instead"
         , "  --check   solve every built-in level and report, without playing"
         , ""
-        , "keys: h j k l or w a s d to move, u undo, r restart, n next level,"
-        , "      f flip between chart frame and player frame, q quit"
+        , "keys, in the window: arrows or wasd / hjkl move, u undo, r restart,"
+        , "      n / p change level, v change view, f change frame"
+        , "keys, in the terminal: h j k l or w a s d move, u undo, r restart,"
+        , "      n next level, f change frame, q quit"
         ]
 
 die :: String -> IO a
@@ -141,7 +149,8 @@ render frame game =
     [ ""
     , "goals left " ++ show (goalsLeft game) ++ "   moves " ++
       show (playMoves play) ++ "   pushes " ++ show (playPushes play) ++
-      "   facing " ++ dirName (playFacing play) ++ "   frame " ++ frameName ++
+      "   facing " ++ dirName (dirOf frame (playFlipped play) (playFacing play)) ++
+      "   frame " ++ frameName ++
       upright
     ] ++
     (if null (levelNote lvl)
