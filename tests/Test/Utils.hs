@@ -34,6 +34,9 @@ module Test.Utils
   , representableLaws
   , distributiveLaws
   , bindLaws
+  , foldable1Laws
+  , traversable1Laws
+  , traversable1BranchingLaws
   , lawsToTest
   ) where
 
@@ -52,8 +55,10 @@ import           Data.AdditiveGroup
 import           Data.Aeson
 import           Data.AffineSpace
 import           Data.Distributive
-import           Data.Foldable (fold)
+import           Data.Foldable (fold, toList)
+import qualified Data.Foldable1         as F1
 import           Data.Functor.Bind      (Apply (..), Bind (..))
+import qualified Data.List.NonEmpty     as NE
 import           Data.Functor.Classes
 import           Data.Functor.Compose
 import           Data.Group             (Abelian, Group (..))
@@ -411,6 +416,122 @@ bindLaws =
         , ("(<.>) == (>>- (<$>))", property apIsBind)
         ]
 
+-- | 'Data.Foldable1.Foldable1' has no 'quickcheck-classes' bundle, so this
+-- pins it to the value's ordinary 'Foldable': on a structure that is never
+-- empty the non-empty folds must agree element for element with the plain
+-- ones, and the strict variants must agree with the lazy ones. Hand-rolled
+-- the way 'bindLaws' and 'representableLaws' above are.
+foldable1Laws ::
+     forall f.
+     ( F1.Foldable1 f
+     , forall a. Arbitrary a => Arbitrary (f a)
+     , forall a. Show a => Show (f a)
+     )
+  => Laws
+foldable1Laws =
+  let toNonEmptyIsToList :: f Int -> Property
+      toNonEmptyIsToList g = NE.toList (F1.toNonEmpty g) === toList g
+      -- Map into a non-unital use of the list semigroup: '(0 :)' keeps every
+      -- image non-empty, so 'foldMap1' (no 'mempty') and 'foldMap' agree.
+      foldMap1IsFoldMap :: Fun Int [Int] -> f Int -> Property
+      foldMap1IsFoldMap (applyFun -> h) g =
+        F1.foldMap1 (NE.fromList . (0 :) . h) g
+          === NE.fromList (foldMap ((0 :) . h) g)
+      foldMap1'IsFoldMap1 :: Fun Int [Int] -> f Int -> Property
+      foldMap1'IsFoldMap1 (applyFun -> h) g =
+        F1.foldMap1' (NE.fromList . (0 :) . h) g
+          === F1.foldMap1 (NE.fromList . (0 :) . h) g
+      headLastAgree :: f Int -> Property
+      headLastAgree g =
+        let xs = NE.fromList (toList g)
+         in (F1.head g, F1.last g) === (NE.head xs, NE.last xs)
+      maxMinAgree :: f Int -> Property
+      maxMinAgree g =
+        let xs = NE.fromList (toList g)
+         in (F1.maximum g, F1.minimum g) === (maximum xs, minimum xs)
+      foldrMap1RebuildsToList :: f Int -> Property
+      foldrMap1RebuildsToList g = F1.foldrMap1 pure (:) g === toList g
+      foldlMap1'RebuildsToList :: f Int -> Property
+      foldlMap1'RebuildsToList g =
+        F1.foldlMap1' pure (\acc x -> acc ++ [x]) g === toList g
+   in Laws
+        "Foldable1"
+        [ ("toNonEmpty == fromList . toList", property toNonEmptyIsToList)
+        , ("foldMap1 agrees with foldMap", property foldMap1IsFoldMap)
+        , ("foldMap1' agrees with foldMap1", property foldMap1'IsFoldMap1)
+        , ("head/last agree with toList", property headLastAgree)
+        , ("maximum/minimum agree with toList", property maxMinAgree)
+        , ("foldrMap1 (:) rebuilds toList", property foldrMap1RebuildsToList)
+        , ("foldlMap1' rebuilds toList", property foldlMap1'RebuildsToList)
+        ]
+
+-- | 'Traversable1' likewise has no 'quickcheck-classes' bundle. 'traverse1'
+-- must agree with 'traverse' on any 'Applicative' -- checked here against
+-- 'Identity' and 'Maybe' -- and 'traverse1' with 'Identity' is the identity.
+--
+-- Both of these cost one traversal per test, so this bundle can be
+-- instantiated at any size. The branching case, which cannot, is
+-- 'traversable1BranchingLaws'.
+traversable1Laws ::
+     forall f.
+     ( Traversable1 f
+     , forall a. Arbitrary a => Arbitrary (f a)
+     , forall a. Show a => Show (f a)
+     , forall a. Eq a => Eq (f a)
+     )
+  => Laws
+traversable1Laws =
+  let identityLaw :: f Int -> Property
+      identityLaw g = runIdentity (traverse1 Identity g) === g
+      agreesWithMaybe :: Fun Int (Maybe Int) -> f Int -> Property
+      agreesWithMaybe (applyFun -> h) g = traverse1 h g === traverse h g
+   in Laws
+        "Traversable1"
+        [ ("traverse1 Identity == Identity", property identityLaw)
+        , ("traverse1 agrees with traverse (Maybe)", property agreesWithMaybe)
+        ]
+
+-- | The 'Traversable1' law that cannot be stated at an arbitrary size, in its
+-- own bundle so that the size restriction travels with it.
+--
+-- A branching 'Applicative' multiplies. Traversing @n@ cells where each
+-- yields @k@ results builds @k ^ n@ structures, so at the
+-- @Grid '[Periodic 10, Periodic 11]@ the rest of the suite uses -- 110 cells
+-- -- even @k == 2@ is @2 ^ 110@ and the property never returns. It was
+-- written that way, bundled with the two laws above and instantiated at that
+-- grid, and hung the whole suite until it was killed (sized-grid-e7xo). The
+-- same hazard is documented on 'Data.Grid.Sized.mapLowerDim', where
+-- @mapLowerDim gridTiles@ on a 9x9 board is 387,420,489 grids.
+--
+-- So: instantiate this at a deliberately small structure, and read the cost
+-- as @k ^ n@ before choosing one. The generated function branches two ways at
+-- most, rather than into whatever length QuickCheck drew for a @Fun Int
+-- [Int]@, which pins @k@ at 2 and leaves only @n@ to the caller.
+--
+-- It earns its keep despite that. 'Maybe' yields one result per cell, so it
+-- never checks that 'traverse1' puts the @j@th result of each cell into the
+-- @j@th structure; a branching applicative is what pins the rebuilt shape and
+-- the order of the @('<.>')@ chain that builds it. @negate@ rather than a
+-- second copy of @x@ so the two branches are told apart at @x == 0@.
+traversable1BranchingLaws ::
+     forall f.
+     ( Traversable1 f
+     , forall a. Arbitrary a => Arbitrary (f a)
+     , forall a. Show a => Show (f a)
+     , forall a. Eq a => Eq (f a)
+     )
+  => Laws
+traversable1BranchingLaws =
+  let agreesWithList :: Fun Int Bool -> f Int -> Property
+      agreesWithList (applyFun -> branches) g =
+        let h x
+              | branches x = [x, negate x]
+              | otherwise = [x]
+         in traverse1 h g === traverse h g
+   in Laws
+        "Traversable1 (branching applicative)"
+        [("traverse1 agrees with traverse ([])", property agreesWithList)]
+
 -- | The two round trips of an 'Control.Lens.Iso''.
 isoLaws ::
      (Eq s, Show s, Arbitrary s, Eq a, Show a, Arbitrary a)
@@ -432,7 +553,7 @@ prismLaws ::
   => String
   -> Prism' s a
   -> TestTree
-prismLaws name = prismLawsFrom arbitrary name
+prismLaws = prismLawsFrom arbitrary
 
 prismLawsFrom ::
      (Eq s, Show s, Eq a, Show a, Arbitrary a)

@@ -488,6 +488,14 @@ main =
                , monadLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                , foldableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
                , traversableLaws (Proxy @(Grid '[ Periodic 10, Periodic 11]))
+               , foldable1Laws @(Grid '[ Periodic 10, Periodic 11])
+               , traversable1Laws @(Grid '[ Periodic 10, Periodic 11])
+                 -- A branching applicative builds k ^ n structures for n
+                 -- cells, so this one is stated at 6 cells and not at the 110
+                 -- the bundle above uses: 2 ^ 6 traversals rather than
+                 -- 2 ^ 110, which is the difference between 64 and never
+                 -- finishing. See 'traversable1BranchingLaws'.
+               , traversable1BranchingLaws @(Grid '[ Periodic 2, Periodic 3])
                ] ++
              [ aesonLaws @(Grid '[ Periodic 10, Periodic 11] Int)
              , lawsToTest $

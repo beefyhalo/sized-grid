@@ -44,10 +44,12 @@ import           Control.Lens                  hiding (index)
 import           Data.Aeson
 import           Data.Align                    (Semialign (..))
 import           Data.Distributive
-import           Data.Functor.Bind             (Apply (..), Bind (..))
+import           Data.Foldable1               (Foldable1 (..))
+import           Data.Functor.Bind             (Apply (..), Bind (..), liftF2)
 import           Data.Functor.Classes
 import           Data.Functor.Rep
 import           Data.Kind                     (Type)
+import qualified Data.List.NonEmpty            as NE
 import           Data.Proxy                    (Proxy (..))
 import           Data.These                    (These (..))
 import           Data.Zip                      (Unzip (..), Zip (..))
@@ -403,6 +405,53 @@ instance FoldableWithIndex (Coord cs) (Grid cs) where
 instance TraversableWithIndex (Coord cs) (Grid cs) where
   itraverse func (Grid v) =
     Grid <$> sequenceA (V.imap (func . unsafeCoordFromPosition) v)
+
+-- | 'IsCoordList cs' proves the backing vector non-empty -- every axis has
+-- @1 <= 'CoordNat'@, so @'MaxCoordSize' cs@ is a product of positive factors
+-- and is itself @>= 1@ -- which is what makes the partial vector primitives
+-- below total here and is why the instance carries the constraint the
+-- unconditional 'Foldable' cannot (the adr.10 note above is about not putting
+-- it on /that/ head, where it would spread to four classes' every call site;
+-- 'Foldable1' is a fresh leaf class, so it stays contained, exactly as it
+-- does on 'Apply' and 'Bind').
+--
+-- Every fold primitive is given outright: left to the class, each is built
+-- from 'foldMap1' by way of a rebuilt 'NonEmpty', a cons cell per element on
+-- top of the coordinate-free traversal. 'head', 'last', 'maximum' and
+-- 'minimum' come straight from the vector's own O(1) access and fused stream
+-- reductions rather than through a fold.
+instance IsCoordList cs => Foldable1 (Grid cs) where
+  foldMap1 f (Grid v) =
+    V.foldr (\x acc -> f x <> acc) (f (V.unsafeLast v)) (V.unsafeInit v)
+  foldMap1' f (Grid v) =
+    let z = f (V.unsafeHead v)
+     in z `seq` V.foldl' (\acc x -> acc <> f x) z (V.unsafeTail v)
+  foldrMap1 g f (Grid v) = V.foldr  f (g (V.unsafeLast v)) (V.unsafeInit v)
+  foldrMap1' g f (Grid v) = V.foldr' f (g (V.unsafeLast v)) (V.unsafeInit v)
+  foldlMap1 g f (Grid v) = V.foldl  f (g (V.unsafeHead v)) (V.unsafeTail v)
+  foldlMap1' g f (Grid v) =
+    let z = g (V.unsafeHead v) in z `seq` V.foldl' f z (V.unsafeTail v)
+  toNonEmpty (Grid v) = V.unsafeHead v NE.:| V.toList (V.unsafeTail v)
+  head (Grid v) = V.unsafeHead v
+  last (Grid v) = V.unsafeLast v
+  maximum (Grid v) = V.maximum v
+  minimum (Grid v) = V.minimum v
+
+-- | The 'Traversable1' companion to the hand-written 'Traversable': fold the
+-- non-empty vector into an 'Apply' chain with no 'pure', seeded on the last
+-- cell, and repack the collected list with 'V.fromListN' so the length
+-- invariant is carried across. Not a hot path -- clarity over the tighter
+-- mutable-write form 'itraverse' would need.
+--
+-- The class is in scope from @Control.Lens@'s re-export of it, the same route
+-- the 'FoldableWithIndex' \/ 'TraversableWithIndex' instances above take for
+-- theirs; 'Foldable1' has no such re-export and is imported directly.
+instance IsCoordList cs => Traversable1 (Grid cs) where
+  traverse1 f (Grid v) =
+    Grid . V.fromListN (V.length v)
+      <$> V.foldr (liftF2 (:) . f)
+                  ((: []) <$> f (V.unsafeLast v))
+                  (V.unsafeInit v)
 
 
 -- | Convert a vector into a list of `Data.Vector.Generic.Vector`s, where all the

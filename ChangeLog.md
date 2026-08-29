@@ -9,6 +9,42 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **New.** `Foldable1` and `Traversable1` instances for `GridOf`
+  (sized-grid-g4xz), both requiring `IsCoordList cs`. That constraint is what
+  makes them total: every axis has `1 <= CoordNat`, so `MaxCoordSize cs` is a
+  product of positive factors and the backing vector is never empty, which is
+  what licenses `unsafeHead` and `unsafeLast` in the fold primitives. It sits
+  on these two heads only -- the unconditional `Foldable` and `Traversable`
+  are unchanged -- exactly as it already does on `Apply` and `Bind`.
+
+  Every `Foldable1` primitive is given outright rather than left to the class
+  defaults, which would build each one from `foldMap1` through a rebuilt
+  `NonEmpty`, a cons cell per element. `head`, `last`, `maximum` and `minimum`
+  come from the vector's own O(1) access and fused stream reductions.
+
+  The laws are hand-rolled in `Test.Utils`, since `quickcheck-classes` has no
+  bundle for either class: `foldable1Laws` pins the non-empty folds to the
+  ordinary `Foldable` ones, and `traversable1Laws` pins `traverse1` to
+  `traverse` at `Identity` and `Maybe`.
+
+* **A test that did not terminate** (sized-grid-e7xo). The `Traversable1` law
+  checked against the *list* applicative was bundled with the two above and
+  instantiated at `Grid '[Periodic 10, Periodic 11]`. A branching applicative
+  multiplies: traversing `n` cells that each yield `k` results builds `k ^ n`
+  structures, so at 110 cells even `k == 2` is `2 ^ 110`. It hung the suite
+  until killed.
+
+  It is now `traversable1BranchingLaws`, its own bundle so that the size
+  restriction travels with it, stated at `Grid '[Periodic 2, Periodic 3]` --
+  6 cells, so at most 64 traversals -- and its generated function branches two
+  ways at most rather than into whatever length QuickCheck drew, which pins
+  `k` at 2 and leaves only `n` to the caller.
+
+  Worth keeping rather than deleting: `Maybe` yields one result per cell, so
+  it never checks that `traverse1` puts the `j`th result of each cell into the
+  `j`th structure. Reversing the effect order of `traverse1` is caught by the
+  branching law after two tests and by neither of the other two.
+
 * **Breaking, and a bug fix.** A restriction destroys the boundary policy
   (sized-grid-mbh0). `shrinkGrid`, `gridWindows` and `gridTiles` now return
   grids whose narrowed axis is `Ordinal`, whatever the source's axis type was,
