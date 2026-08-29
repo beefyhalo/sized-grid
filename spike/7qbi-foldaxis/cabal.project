@@ -1,0 +1,7 @@
+-- sized-grid-7qbi spike. Two packages: this throwaway one, and the real
+-- library, so the controls (the library's own 'axisFibres', 'splitGrid' and
+-- 'foldlGrid'') and the candidates are the same binary, built by the same
+-- compiler, measured back to back.
+packages:
+  .
+  ../..

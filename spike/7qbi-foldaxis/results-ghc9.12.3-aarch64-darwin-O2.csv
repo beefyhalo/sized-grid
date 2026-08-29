@@ -1,0 +1,51 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+"All.axis 0 (strided, 300 fibres of 300) 300x300.generate  boxed",319300585,26432768,19247,13,10485760
+"All.axis 0 (strided, 300 fibres of 300) 300x300.generate  unboxed",90380468,6643566,2420,4,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.write     boxed",269168261,21906040,7239,9,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.write     unboxed",63353149,3308790,2418,2,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.total     boxed",257379882,17087140,7239,9,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.total     unboxed",63044384,3288154,2418,2,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.nonempty  boxed",274015136,17453994,7239,8,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.nonempty  unboxed",63244873,3711676,2418,2,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.sweep     boxed",546403125,32175794,1442495,2796,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.sweep     unboxed",132923339,6838130,2467,1,11534336
+"All.axis 0 (strided, 300 fibres of 300) 300x300.fibres    boxed",1069658398,37848944,5863377,113030,38797312
+"All.axis 0 (strided, 300 fibres of 300) 300x300.fibres    unboxed",193990039,13681066,818551,1101,38797312
+"All.axis 0 (strided, 300 fibres of 300) 300x300.split     boxed",2590154687,219994150,5123154,2000965,38797312
+"All.axis 0 (strided, 300 fibres of 300) 300x300.split     unboxed",191403808,13824752,798216,5068,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.generate  boxed",295531640,27514990,16871,32,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.generate  unboxed",90844775,6638762,2420,3,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.write     boxed",296765429,27550802,7247,9,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.write     unboxed",91112548,6750784,2420,3,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.total     boxed",264541699,13392824,7239,9,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.total     unboxed",91118359,6650992,2420,3,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.nonempty  boxed",296120703,26737608,7249,8,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.nonempty  unboxed",91039599,6777424,2420,3,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.sweep     boxed",704402734,60710992,1442511,1946,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.sweep     unboxed",287768359,27044194,2479,2,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.fibres    boxed",878065625,58005000,5150551,68467,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.fibres    unboxed",194461621,14037004,825711,1067,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.slices    boxed",294824804,26591738,19247,12,38797312
+"All.axis 1 (contiguous, 300 fibres of 300) 300x300.slices    unboxed",90440087,6612340,2420,3,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.generate  boxed",348297851,27806728,115256,988,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.generate  unboxed",90045751,6594434,14420,6,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.write     boxed",251606250,14979470,43248,102,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.write     unboxed",59659521,4047740,14418,5,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.total     boxed",243025976,14564138,43248,102,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.total     unboxed",58137866,3511980,14418,5,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.nonempty  boxed",260351757,16628134,43248,102,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.nonempty  unboxed",59853979,4006688,14418,4,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.sweep     boxed",558311718,44199900,1454503,5288,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.sweep     unboxed",141353027,13243898,14471,3,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.fibres    boxed",1125760937,68783546,6384631,278872,38797312
+"All.axis 1 of a cube (60x50x30), the middle axis.fibres    unboxed",238261425,15524076,1315784,284,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.generate  boxed",1615350781,53134564,10814487,33973,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.generate  unboxed",1555981250,75526688,12240087,11529,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.write     boxed",1651215234,55112086,10804887,75648,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.write     unboxed",1489593750,138391644,12240118,11486,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.nonempty  boxed",1658741406,116439746,10804918,73554,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.nonempty  unboxed",1572196093,93773352,12240087,11435,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.sweep     boxed",2274417187,215668756,12962604,148668,38797312
+"All.type-changing fold, Int -> (Int, Int), axis 0 300x300.sweep     unboxed",176594824,13332118,4895,4,38797312
+All.for scale: the whole-grid fold the library already has.foldlGrid' 300x300   boxed,293733203,26389094,32,1,38797312
+All.for scale: the whole-grid fold the library already has.foldlGrid' 300x300 unboxed,89120312,7350636,20,0,38797312

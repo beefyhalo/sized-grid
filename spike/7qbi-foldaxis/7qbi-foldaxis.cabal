@@ -1,0 +1,53 @@
+cabal-version:      3.0
+name:               7qbi-foldaxis
+version:            0
+build-type:         Simple
+synopsis:           Axis-removing fold implementations, for sized-grid-7qbi
+
+-- The candidates, in their own component carrying the same ghc-options as
+-- grid-sized's 'library' stanza, so the benchmark reaches them through a .hi
+-- file exactly as it reaches the library. Compiling them into bench/Main.hs
+-- would let GHC see the whole thing at once and flatter them.
+library
+  default-language:   GHC2024
+  default-extensions:
+    DataKinds
+    FunctionalDependencies
+    RequiredTypeArguments
+    TypeFamilies
+    UndecidableInstances
+
+  hs-source-dirs:     src
+  exposed-modules:    FoldAxis
+  ghc-options:
+    -O2 -fexpose-all-unfoldings -fspecialise-aggressively -Wall
+
+  build-depends:
+    , base
+    , grid-sized
+    , vector
+
+-- No -O2 here, deliberately. grid-sized's own 'benchmark' stanza carries none
+-- either, so this component is compiled the way a consumer's is -- at cabal's
+-- default -O1 -- and the candidates are judged on the unfoldings the library
+-- component actually exports. sized-grid-y99h is the standing record that the
+-- two optimisation levels disagree in this library; measuring a candidate at
+-- -O2 on both sides would hide exactly that.
+benchmark compare
+  default-language:   GHC2024
+  default-extensions:
+    DataKinds
+    RequiredTypeArguments
+    TypeFamilies
+    UndecidableInstances
+
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     bench
+  main-is:            Main.hs
+  ghc-options:        -Wall "-with-rtsopts=-T"
+  build-depends:
+    , 7qbi-foldaxis
+    , base
+    , grid-sized
+    , tasty-bench
+    , vector
