@@ -11,6 +11,11 @@
 -- is in pixels. The viewport is what the GLFW backend sets from the real
 -- framebuffer size every frame, so it is the one that is in the units
 -- @glReadPixels@ wants.
+--
+-- Writes a PPM, which is a header and some bytes. @ppm2png.py@ beside this
+-- file turns one into something a person can look at, with nothing but the
+-- Python standard library, and pools by maximum when it downsamples --- see
+-- its header for why that is load bearing rather than a detail.
 module Main (main) where
 
 import           Sokoban.Level

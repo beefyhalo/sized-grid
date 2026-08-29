@@ -32,6 +32,10 @@ category:            Game
 build-type:          Simple
 extra-doc-files:     ChangeLog.md
 
+-- Ships with the sdist because sokoban-shot is useless without it: it writes
+-- PPMs and this is what makes one viewable.
+extra-source-files:  capture/ppm2png.py
+
 -- As in grid-atlas.cabal, and for the same reason: the board's size is two
 -- type-level naturals, and 'Coord' asks for KnownNat evidence about their
 -- product. The plugins discharge that instead of the game proving it by hand.
