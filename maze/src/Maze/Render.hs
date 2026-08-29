@@ -44,6 +44,8 @@ data View = View
     , viewRunning :: Bool
     , viewRate   :: Float
     , viewOwed   :: Float
+    , viewWin    :: (Int, Int)
+    -- ^ The window's real size, from gloss's resize event. See 'fitTo'.
     }
 
 -- | The two phases as one stream. 'carve' hands back the finished maze
@@ -52,8 +54,8 @@ data View = View
 allMoves :: StdGen -> [Move]
 allMoves g = let (evs, maze) = carve g in evs ++ solve maze
 
-startView :: Float -> StdGen -> View
-startView rate g =
+startView :: (Int, Int) -> Float -> StdGen -> View
+startView win rate g =
     View
     { viewPaint = tabulateGrid (const Rock)
     , viewHead = Nothing
@@ -64,6 +66,7 @@ startView rate g =
     , viewRunning = True
     , viewRate = rate
     , viewOwed = 0
+    , viewWin = win
     }
 
 -- | Run the demo at the given events per second. Blocks until the window is
@@ -71,10 +74,10 @@ startView rate g =
 animate :: Float -> StdGen -> IO ()
 animate rate g =
     play
-        (InWindow "Maze -- grid-sized" (760, 900) (1, 1))
+        (InWindow "Maze -- grid-sized" defaultWindow (20, 20))
         (greyN 0.15)
         60
-        (startView rate g)
+        (startView defaultWindow rate g)
         draw
         onGlossEvent
         onTick
@@ -126,6 +129,7 @@ onTick dt v
 -- | gloss's @Event@ is a keypress; this demo's 'Move' is a step of the
 -- algorithm. Renaming the latter is what keeps both spellings honest.
 onGlossEvent :: Event -> View -> View
+onGlossEvent (EventResize wh) v = v {viewWin = wh}
 onGlossEvent (EventKey (Char c) Down _ _) v = onKey c v
 onGlossEvent (EventKey (SpecialKey KeySpace) Down _ _) v =
     v {viewRunning = not (viewRunning v)}
@@ -133,8 +137,8 @@ onGlossEvent _ v = v
 
 onKey :: Char -> View -> View
 onKey 't' v = v {viewRunning = not (viewRunning v)}
-onKey 'r' v = startView (viewRate v) (viewSeed v)
-onKey 'n' v = startView (viewRate v) (snd (split (viewSeed v)))
+onKey 'r' v = startView (viewWin v) (viewRate v) (viewSeed v)
+onKey 'n' v = startView (viewWin v) (viewRate v) (snd (split (viewSeed v)))
 onKey k v
     | k `elem` ("+=" :: String) = v {viewRate = min 20000 (viewRate v * 2)}
     | k `elem` ("-_" :: String) = v {viewRate = max 1 (viewRate v / 2)}
@@ -164,7 +168,9 @@ paintColour (Flooded d) =
 paintColour OnRoute = makeColor 0.35 0.9 0.4 1
 
 draw :: View -> Picture
-draw v = pictures (cells ++ [marker startCell, marker goalCell] ++ carveHead ++ [hud v])
+draw v =
+    fitTo (viewWin v) $
+    pictures (cells ++ [marker startCell, marker goalCell] ++ carveHead ++ [hud v])
   where
     cells =
         [ translate x y (color (paintColour p) (rectangleSolid tileSize tileSize))
@@ -214,3 +220,24 @@ hud v =
             Searching  -> "searching (breadth-first from the top-left cell)"
             Finished n -> "solved: a route of " ++ show n ++ " cells"
             NoRoute    -> "no route"
+
+-- * Fitting the layout to the window
+
+-- | The coordinate space everything above is laid out in, the window this demo
+-- opens at, and the scale between them.
+--
+-- See the note on @Automata.Ant.fitTo@ in the automata example: the layout is
+-- written against a fixed space and the picture is scaled, because a hardcoded
+-- window can be taller than the screen and gloss's @getScreenSize@ throws
+-- rather than saying it does not know. sized-grid-23y3.
+designW, designH :: Float
+designW = 760
+designH = 900
+
+defaultWindow :: (Int, Int)
+defaultWindow = (700, 820)
+
+fitTo :: (Int, Int) -> Picture -> Picture
+fitTo (w, h) = scale k k
+  where
+    k = min (fromIntegral w / designW) (fromIntegral h / designH)

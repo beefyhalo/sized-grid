@@ -20,7 +20,6 @@ import           Data.Grid.Sized
 import           Data.Grid.Sized.Unboxed
 
 import           Control.Lens
-import           Data.AffineSpace
 import           Data.Maybe                         (mapMaybe)
 import qualified Data.Vector.Generic                as VG
 import qualified Data.Vector.Generic.Mutable        as VGM
@@ -276,11 +275,43 @@ data DisplayInfo = DisplayInfo
     , originX      :: Float
     -- ^ Screen position of the centre of the cell at 'zeroCoord'.
     , originY      :: Float
+    , hudLeft      :: Float
+    , hudTop       :: Float
+    -- ^ Where the first HUD line sits. Derived from the window rather than
+    -- written down, because the window is derived from the screen.
     , topologyName :: String
     -- ^ What the board's axis types are, for the HUD. A string rather than
     -- something derived, because the interesting half of it --- @Periodic@ ---
     -- is a type name and not a number.
     }
+
+-- | Height reserved above the board for the HUD: five lines at 26 units and
+-- two at 20, plus margins.
+hudHeight :: Float
+hudHeight = 180
+
+-- | Lay the board out inside a window of the given size.
+--
+-- Nothing here is a constant chosen to look right at one window size, because
+-- there is no one window size: 'main' takes the window from the screen. The
+-- tile is whatever makes 60 of them fit in the smaller of the two directions
+-- once the HUD has taken its strip off the top, and the board is then centred
+-- horizontally and sat on the bottom margin.
+displayFor :: Int -> Int -> String -> DisplayInfo
+displayFor w h name =
+    DisplayInfo
+    { tileSize = ts
+    , originX = -(59 * ts) / 2
+    , originY = -fh / 2 + pad + ts / 2
+    , hudLeft = -fw / 2 + 20
+    , hudTop = fh / 2 - 30
+    , topologyName = name
+    }
+  where
+    fw = fromIntegral w
+    fh = fromIntegral h
+    pad = 12
+    ts = min ((fw - 2 * pad) / 60) ((fh - hudHeight - 2 * pad) / 60)
 
 data WorldState cs = WorldState
     { _grid                     :: UGrid cs TileState
@@ -300,6 +331,9 @@ data WorldState cs = WorldState
     , _boardName                :: String
     , _isTicking                :: Bool
     , _rng                      :: StdGen
+    , _display                  :: DisplayInfo
+    -- ^ Recomputed whenever the window changes size, which is the only way
+    -- this demo learns how big it is. See 'defaultWindow'.
     }
 makeLenses ''WorldState
 
@@ -329,10 +363,8 @@ gridPositionFromScreenCoord DisplayInfo{..} x y =
 
 drawWorld :: forall cs a b.
        ( cs ~ '[ a, b]
-       , All Monoid cs
        , IsCoordList cs
-       , All AffineSpace cs
-       , All Integral (MapDiff cs)
+       , IsCoordLifted b
        )
     => DisplayInfo
     -> WorldState cs
@@ -342,9 +374,20 @@ drawWorld DisplayInfo{..} ws =
         image Dead  = color (greyN 0.85) $ rectangleWire tileSize tileSize
         tile :: Coord cs -> TileState -> Picture
         tile p a =
-            let (x :^ y :^ NoDelta) = p .-. mempty
-            in translate (originX + tileSize * fromIntegral x)
-                         (originY + tileSize * fromIntegral y) $
+            -- The cell's row-major indices, and deliberately NOT
+            -- @p '.-.' mempty@, which is what this drew with until
+            -- sized-grid-23y3.
+            --
+            -- On a 'Periodic' axis @('.-.')@ is the /shortest signed route/
+            -- between two coordinates, so cell 59 of 60 comes back as -1
+            -- rather than 59: the right-hand half of the board is drawn to the
+            -- left of the left-hand half, the picture ends up centred on cell
+            -- zero and spanning -29..+30 tiles, and most of it falls outside
+            -- the window. That is the correct answer for a torus and the wrong
+            -- one for a picture, which wants an index and not a displacement.
+            let (i, j) = coordPosition p `divMod` axisSize @b
+            in translate (originX + tileSize * fromIntegral i)
+                         (originY + tileSize * fromIntegral j) $
                image a
     in pictures $
        zipWith tile (allCoord @cs) (VG.toList (gridVector (ws ^. grid)))
@@ -358,10 +401,10 @@ drawHud ws DisplayInfo{..} =
          zipWith keyLine [0 :: Int ..] legend)
   where
     bodyLine i s =
-        translate (-490) (528 - 25 * fromIntegral i) $
+        translate hudLeft (hudTop - 25 * fromIntegral i) $
         scale 0.13 0.13 $ color (greyN 0.2) $ text s
     keyLine i s =
-        translate (-490) (528 - 25 * 5 - 20 * fromIntegral i) $
+        translate hudLeft (hudTop - 25 * 5 - 20 * fromIntegral i) $
         scale 0.1 0.1 $ color (greyN 0.45) $ text s
     legend =
         [ "keys:  t run/pause   r randomise   c clear   p next preset   \
@@ -397,19 +440,24 @@ updateWorld :: forall x y .
        ( IsCoordLifted x
        , IsCoordLifted y
        )
-    => DisplayInfo
-    -> Event
+    => Event
     -> WorldState '[ x, y]
     -> WorldState '[ x, y]
-updateWorld di (EventKey (MouseButton LeftButton) Up _ (x, y)) world =
-    case gridPositionFromScreenCoord di x y of
+-- The one place the window's real size arrives. gloss reports a resize when
+-- the user drags the frame, and on most backends once when the window opens,
+-- so the layout snaps to the truth without this demo ever having to ask the
+-- screen how big it is --- see 'defaultWindow' for why asking is a bad idea.
+updateWorld (EventResize (w, h)) world =
+    world & display .~ displayFor w h (topologyName (world ^. display))
+updateWorld (EventKey (MouseButton LeftButton) Up _ (x, y)) world =
+    case gridPositionFromScreenCoord (world ^. display) x y of
         Just p ->
             world &
             grid %~ imapGrid (\c a -> if c == p then flipTileState a else a) &
             boardName .~ "hand-edited"
         Nothing -> world
-updateWorld _ (EventKey (Char c) Down _ _) world = onKey c world
-updateWorld _ _ world = world
+updateWorld (EventKey (Char c) Down _ _) world = onKey c world
+updateWorld _ world = world
 
 onKey ::
        forall x y. (IsCoordLifted x, IsCoordLifted y)
@@ -459,7 +507,8 @@ tickWorld dt world
 main :: IO ()
 main = do
     g <- newStdGen
-    let firstPreset = gliderPreset
+    let (winW, winH) = defaultWindow
+        firstPreset = gliderPreset
         startGame :: WorldState '[ Periodic 60, Periodic 60] =
             WorldState
             { _grid = presetBoard firstPreset
@@ -474,21 +523,31 @@ main = do
             , _boardName = presetName firstPreset
             , _isTicking = False
             , _rng = g
-            }
-        -- 60 tiles of 15px is 900px of board, left-aligned in a 1000px window
-        -- with the HUD in the 180px above it.
-        di =
-            DisplayInfo
-            { tileSize = 15
-            , originX = -442.5
-            , originY = -532.5
-            , topologyName = "Periodic 60 x Periodic 60"
+            , _display = displayFor winW winH "Periodic 60 x Periodic 60"
             }
     play
-        (InWindow "Game of Life -- grid-sized" (1000, 1120) (1, 1))
+        (InWindow "Game of Life -- grid-sized" (winW, winH) (20, 20))
         white
         60
         startGame
-        (\ws -> pictures [drawWorld di ws, drawHud ws di])
-        (updateWorld di)
+        (\ws -> pictures [drawWorld (ws ^. display) ws, drawHud ws (ws ^. display)])
+        updateWorld
         tickWorld
+
+-- | The window this demo opens at, before it is told any better.
+--
+-- Deliberately NOT derived from the screen. gloss offers
+-- @Graphics.Gloss.Interface.Environment.getScreenSize@, but under the GLFW
+-- backend that is three 'Data.Maybe.fromJust's deep
+-- (@Backend/GLFW.hs:191-197@) and /throws/ where GLFW cannot name a monitor,
+-- which happens headless, over SSH, and --- observed while fixing
+-- sized-grid-23y3 --- intermittently on a perfectly ordinary desktop. It also
+-- spins up a second backend before 'play' initialises its own. A demo that
+-- dies before opening its window because it could not measure the screen is
+-- strictly worse than one that opens at a reasonable size and then listens.
+--
+-- So: a size that fits any laptop screen made this decade, and 'updateWorld'
+-- adapts the moment gloss reports the window's real size. Drag the frame and
+-- the board and HUD re-lay themselves.
+defaultWindow :: (Int, Int)
+defaultWindow = (780, 820)

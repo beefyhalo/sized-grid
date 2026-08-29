@@ -26,7 +26,6 @@ executable gameOfLife
     , random       >=1.2  && <1.4
     , grid-sized
     , vector       >=0.13 && <0.14
-    , vector-space >=0.16 && <0.20
   hs-source-dirs:      src
   default-language:    GHC2024
   ghc-options: -O2 -threaded -Wall

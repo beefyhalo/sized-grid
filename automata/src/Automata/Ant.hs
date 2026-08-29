@@ -97,10 +97,12 @@ data World cs = World
     -- ^ Steps per second.
     , worldOwed     :: Float
     , worldTopology :: String
+    , worldWin      :: (Int, Int)
+    -- ^ The window's real size, from 'EventResize'. See 'fitTo'.
     }
 
-startWorld :: forall cs. Ant cs => Float -> String -> World cs
-startWorld rate name =
+startWorld :: forall cs. Ant cs => (Int, Int) -> Float -> String -> World cs
+startWorld win rate name =
     World
     { worldAnt =
           Walker
@@ -113,6 +115,7 @@ startWorld rate name =
     , worldRate = rate
     , worldOwed = 0
     , worldTopology = name
+    , worldWin = win
     }
 
 -- | Run the ant on the board the topology names. The three arms differ only in
@@ -127,10 +130,10 @@ run t rate =
     go :: forall cs. Ant cs => IO ()
     go =
         play
-            (InWindow "Langton's ant -- grid-sized" (900, 1000) (1, 1))
+            (InWindow "Langton's ant -- grid-sized" defaultWindow (20, 20))
             (greyN 0.97)
             60
-            (startWorld @cs rate (topologyName t))
+            (startWorld @cs defaultWindow rate (topologyName t))
             draw
             onEvent
             onTick
@@ -146,12 +149,13 @@ onTick dt w
     step1 v = v {worldAnt = stepAnt (worldAnt v), worldSteps = worldSteps v + 1}
 
 onEvent :: Ant cs => Event -> World cs -> World cs
+onEvent (EventResize wh) w = w {worldWin = wh}
 onEvent (EventKey (Char c) Down _ _) w = onKey c w
 onEvent _ w = w
 
 onKey :: Ant cs => Char -> World cs -> World cs
 onKey 't' w = w {worldRunning = not (worldRunning w)}
-onKey 'r' w = startWorld (worldRate w) (worldTopology w)
+onKey 'r' w = startWorld (worldWin w) (worldRate w) (worldTopology w)
 onKey k w
     | k `elem` ("+=" :: String) = w {worldRate = min 8000 (worldRate w * 2)}
     | k `elem` ("-_" :: String) = w {worldRate = max 1 (worldRate w / 2)}
@@ -177,7 +181,7 @@ cellCentre c =
        )
 
 draw :: forall cs. Ant cs => World cs -> Picture
-draw w = pictures (blacks ++ [ant, hud w])
+draw w = fitTo (worldWin w) $ pictures (blacks ++ [ant, hud w])
   where
     fg = walkerGrid (worldAnt w)
     blacks =
@@ -216,3 +220,29 @@ hud w =
                else "paused")
         , show (round (worldRate w) :: Int) ++ " steps/s"
         ]
+
+-- * Fitting the layout to the window
+
+-- | The coordinate space everything above is laid out in.
+designW, designH :: Float
+designW = 900
+designH = 1000
+
+-- | The window this demo opens at, and the scale that keeps the layout inside
+-- whatever size the window actually is.
+--
+-- The positions above are written against 'designW' by 'designH' and left
+-- alone; the whole picture is scaled instead. Hardcoding the window is what
+-- this used to do, and it does not work --- it asked for 900x1000 and was run
+-- on a 1470x956 desktop, where a window taller than the screen cannot be seen.
+-- Asking the screen how big it is does not work either: gloss's
+-- @getScreenSize@ throws where GLFW cannot name a monitor. So: open small
+-- enough for any laptop, then listen for 'EventResize' and fit. Drag the frame
+-- and the whole thing rescales. See sized-grid-23y3.
+defaultWindow :: (Int, Int)
+defaultWindow = (740, 820)
+
+fitTo :: (Int, Int) -> Picture -> Picture
+fitTo (w, h) = scale k k
+  where
+    k = min (fromIntegral w / designW) (fromIntegral h / designH)

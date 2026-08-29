@@ -50,10 +50,12 @@ data View = View
     , viewOwed    :: Float
     -- ^ Steps earned by elapsed time but not yet taken, so a rate below one
     -- frame per step is still honoured exactly.
+    , viewWin     :: (Int, Int)
+    -- ^ The window's real size, from 'EventResize'. See 'fitTo'.
     }
 
-startView :: Float -> Board -> View
-startView rate board =
+startView :: (Int, Int) -> Float -> Board -> View
+startView win rate board =
     View
     { viewGivens = board
     , viewBoard = board
@@ -66,16 +68,17 @@ startView rate board =
     , viewRunning = True
     , viewRate = rate
     , viewOwed = 0
+    , viewWin = win
     }
 
 -- | Replay a board's search in a window. Blocks until the window is closed.
 animate :: Float -> Board -> IO ()
 animate rate board =
     play
-        (InWindow "Sudoku -- grid-sized" (640, 780) (1, 1))
+        (InWindow "Sudoku -- grid-sized" defaultWindow (20, 20))
         white
         60
-        (startView rate board)
+        (startView defaultWindow rate board)
         draw
         onEvent
         onTick
@@ -123,6 +126,7 @@ onTick dt v
 -- * Input
 
 onEvent :: Event -> View -> View
+onEvent (EventResize wh) v = v {viewWin = wh}
 onEvent (EventKey (Char c) Down _ _) v = onKey c v
 onEvent (EventKey (SpecialKey KeySpace) Down _ _) v = toggleRunning v
 onEvent _ v = v
@@ -131,12 +135,13 @@ toggleRunning :: View -> View
 toggleRunning v
     -- Once the search is over there is nothing to resume, so space restarts
     -- rather than silently doing nothing.
-    | viewStatus v /= Searching = startView (viewRate v) (viewGivens v)
+    | viewStatus v /= Searching =
+        startView (viewWin v) (viewRate v) (viewGivens v)
     | otherwise = v {viewRunning = not (viewRunning v)}
 
 onKey :: Char -> View -> View
 onKey 'p' v = toggleRunning v
-onKey 'r' v = startView (viewRate v) (viewGivens v)
+onKey 'r' v = startView (viewWin v) (viewRate v) (viewGivens v)
 onKey 's' v
     | viewStatus v == Searching = (step1 v) {viewRunning = False}
     | otherwise = v
@@ -172,7 +177,9 @@ givenInk = black
 writtenInk = makeColor 0.1 0.25 0.7 1
 
 draw :: View -> Picture
-draw v = pictures [pictures (map cellPicture allCoord), boardLines, hud v]
+draw v =
+    fitTo (viewWin v) $
+    pictures [pictures (map cellPicture allCoord), boardLines, hud v]
   where
     cellPicture p =
         let (r, c) = coordRowCol p
@@ -282,3 +289,24 @@ showRate :: Float -> String
 showRate x
     | x >= 1 = show (round x :: Int)
     | otherwise = show x
+
+-- * Fitting the layout to the window
+
+-- | The coordinate space everything above is laid out in, the window this demo
+-- opens at, and the scale between them.
+--
+-- See the note on @Automata.Ant.fitTo@ in the automata example: the layout is
+-- written against a fixed space and the picture is scaled, because a hardcoded
+-- window can be taller than the screen and gloss's @getScreenSize@ throws
+-- rather than saying it does not know. sized-grid-23y3.
+designW, designH :: Float
+designW = 640
+designH = 780
+
+defaultWindow :: (Int, Int)
+defaultWindow = (640, 780)
+
+fitTo :: (Int, Int) -> Picture -> Picture
+fitTo (w, h) = scale k k
+  where
+    k = min (fromIntegral w / designW) (fromIntegral h / designH)

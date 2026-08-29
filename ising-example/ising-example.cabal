@@ -27,7 +27,6 @@ executable ising-example
     , pipes        >=4.3  && <4.4
     , random       >=1.2  && <1.4
     , grid-sized
-    , vector-space >=0.16 && <0.20
   hs-source-dirs:      src
   default-language:    GHC2024
   ghc-options: -O2 -threaded

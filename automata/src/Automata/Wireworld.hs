@@ -65,7 +65,11 @@ deriving via (Cell `VU.As` Word8) instance VG.Vector   VU.Vector  Cell
 instance VU.Unbox Cell
 
 -- | The board. 'Clamped', not 'Periodic': see the module header.
-type Cs = '[ Clamped 46, Clamped 46]
+--
+-- Only just big enough for the largest circuit below, which is 20 by 16. A
+-- roomier board is not neutral: nothing draws an empty cell, so a circuit on a
+-- large board is a small bright thing adrift in a lot of background.
+type Cs = '[ Clamped 28, Clamped 28]
 
 -- | The whole of Wireworld.
 --
@@ -175,8 +179,8 @@ circuitBoard circuit =
     rows = circuitRows circuit
     height = length rows
     width = maximum (0 : map length rows)
-    baseX = (axisSize @(Clamped 46) - width) `div` 2
-    baseY = (axisSize @(Clamped 46) - height) `div` 2
+    baseX = (axisSize @(Clamped 28) - width) `div` 2
+    baseY = (axisSize @(Clamped 28) - height) `div` 2
     cellOf 'C' = Just Conductor
     cellOf 'H' = Just ElectronHead
     cellOf 't' = Just ElectronTail
@@ -198,10 +202,12 @@ data World = World
     , worldRunning    :: Bool
     , worldInterval   :: Float
     , worldElapsed    :: Float
+    , worldWin        :: (Int, Int)
+    -- ^ The window's real size, from 'EventResize'. See 'fitTo'.
     }
 
-startWorld :: Float -> Circuit -> Int -> World
-startWorld interval c ix =
+startWorld :: (Int, Int) -> Float -> Circuit -> Int -> World
+startWorld win interval c ix =
     World
     { worldGrid = circuitBoard c
     , worldCircuitIx = ix
@@ -210,16 +216,17 @@ startWorld interval c ix =
     , worldRunning = True
     , worldInterval = interval
     , worldElapsed = 0
+    , worldWin = win
     }
 
 -- | Run the Wireworld demo at the given generations per second.
 run :: Float -> IO ()
 run rate =
     play
-        (InWindow "Wireworld -- grid-sized" (900, 1080) (1, 1))
+        (InWindow "Wireworld -- grid-sized" defaultWindow (20, 20))
         (greyN 0.12)
         60
-        (startWorld (1 / rate) clockCircuit 0)
+        (startWorld defaultWindow (1 / rate) clockCircuit 0)
         draw
         onEvent
         onTick
@@ -235,16 +242,21 @@ onTick dt w
     | otherwise = w {worldElapsed = worldElapsed w + dt}
 
 onEvent :: Event -> World -> World
+onEvent (EventResize wh) w = w {worldWin = wh}
 onEvent (EventKey (Char c) Down _ _) w = onKey c w
 onEvent _ w = w
 
 onKey :: Char -> World -> World
 onKey 't' w = w {worldRunning = not (worldRunning w)}
 onKey 'r' w =
-    startWorld (worldInterval w) (circuits !! worldCircuitIx w) (worldCircuitIx w)
+    startWorld
+        (worldWin w)
+        (worldInterval w)
+        (circuits !! worldCircuitIx w)
+        (worldCircuitIx w)
 onKey 'p' w =
     let ix = (worldCircuitIx w + 1) `mod` length circuits
-    in startWorld (worldInterval w) (circuits !! ix) ix
+    in startWorld (worldWin w) (worldInterval w) (circuits !! ix) ix
 onKey k w
     | k `elem` ("+=" :: String) =
         w {worldInterval = clampInterval (worldInterval w / 1.5)}
@@ -258,16 +270,16 @@ clampInterval = max 0.01 . min 2
 -- * Drawing
 
 tileSize :: Float
-tileSize = 18
+tileSize = 30
 
 -- | Screen position of the centre of a cell. Row-major, so the flat position
 -- divides into the two axis indices; taking them that way rather than
 -- through @('.-.')@ keeps this working whatever the axis types are.
 cellCentre :: Coord Cs -> (Float, Float)
 cellCentre c =
-    let (i, j) = coordPosition c `divMod` axisSize @(Clamped 46)
-    in ( tileSize * (fromIntegral i - 22.5)
-       , tileSize * (fromIntegral j - 22.5) - 100
+    let (i, j) = coordPosition c `divMod` axisSize @(Clamped 28)
+    in ( tileSize * (fromIntegral i - 13.5)
+       , tileSize * (fromIntegral j - 13.5) - 100
        )
 
 cellColour :: Cell -> Maybe Color
@@ -277,7 +289,7 @@ cellColour ElectronHead = Just (makeColor 0.45 0.75 1.0 1)
 cellColour ElectronTail = Just (makeColor 0.85 0.35 0.95 1)
 
 draw :: World -> Picture
-draw w = pictures (cells ++ [hud w])
+draw w = fitTo (worldWin w) $ pictures (cells ++ [hud w])
   where
     cells =
         [ translate x y (color col (rectangleSolid (tileSize - 2) (tileSize - 2)))
@@ -303,7 +315,7 @@ hud w =
         , "       conductor is amber, an electron head blue and its tail violet"
         ]
     body =
-        [ "Wireworld on Clamped 46 x Clamped 46"
+        [ "Wireworld on Clamped 28 x Clamped 28"
         , "circuit " ++ worldName w
         , "generation " ++ show (worldGeneration w) ++ "    " ++
           (if worldRunning w
@@ -314,3 +326,24 @@ hud w =
 
 showF :: Float -> String
 showF x = show (fromIntegral (round (x * 10) :: Int) / 10 :: Float)
+
+-- * Fitting the layout to the window
+
+-- | The coordinate space everything above is laid out in, the window this
+-- demo opens at, and the scale between them.
+--
+-- See the note on @Automata.Ant.fitTo@: the layout is written against a fixed
+-- space and the picture is scaled, because a hardcoded window can be taller
+-- than the screen and gloss's @getScreenSize@ throws rather than saying it
+-- does not know. sized-grid-23y3.
+designW, designH :: Float
+designW = 900
+designH = 1080
+
+defaultWindow :: (Int, Int)
+defaultWindow = (690, 820)
+
+fitTo :: (Int, Int) -> Picture -> Picture
+fitTo (w, h) = scale k k
+  where
+    k = min (fromIntegral w / designW) (fromIntegral h / designH)

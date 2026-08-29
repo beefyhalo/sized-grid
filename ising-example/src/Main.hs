@@ -13,7 +13,6 @@ import           Data.Grid.Sized
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Random
-import           Data.AffineSpace
 import           Data.Maybe            (fromMaybe)
 import           Data.Proxy
 import qualified GHC.TypeLits          as GHC
@@ -65,6 +64,11 @@ neighbourhood = vonNeumannStencil 1
 
 gridSize :: Integer
 gridSize = GHC.natVal (Proxy :: Proxy (MaxCoordSize GridType))
+
+-- | The length of one axis, for turning a site's row-major position back into
+-- the pair of indices a picture needs.
+gridWidth :: Integer
+gridWidth = GHC.natVal (Proxy :: Proxy (CoordNat (Periodic 60)))
 
 randomGrid ::
      (MonadRandom m, AllSizedKnown cs)
@@ -155,7 +159,15 @@ displaySimulation po startSimulationState =
                     if a == Up
                         then red
                         else blue
-                (x :^ y :^ NoDelta) = p .-. mempty
+                -- Row-major indices, and deliberately not @p '.-.' mempty@,
+                -- which is what this was until sized-grid-23y3. On a
+                -- 'Periodic' axis @('.-.')@ is the /shortest signed route/, so
+                -- site 59 of 60 comes back as -1 rather than 59: half the
+                -- lattice is drawn to the left of and below the other half,
+                -- the picture ends up centred on site zero, and most of it
+                -- lands outside the window. Correct for a torus, wrong for a
+                -- picture, which wants an index and not a displacement.
+                (x, y) = coordPosition p `divMod` fromIntegral gridWidth
             in translate
                    (8 * fromIntegral x)
                    (8 * fromIntegral y)
