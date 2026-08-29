@@ -172,7 +172,7 @@ displaySimulation po startSimulationState =
                    (gen .~ g')
             | otherwise = old & elapsedSinceLastStep +~ dt
     in simulate
-           (InWindow "floatMe" (800, 800) (1, 1))
+           (InWindow "Ising model -- grid-sized" (800, 800) (1, 1))
            white
            60
            startSimulationState
