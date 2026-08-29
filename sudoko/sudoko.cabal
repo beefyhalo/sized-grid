@@ -6,6 +6,11 @@ description:
   Uses gridWindows/mapLowerDim to slice a 9x9 board into its rows, columns and
   3x3 squares, then searches for a solution. This is the driver example for the
   grid-slicing API.
+  .
+  The backtracking search is emitted as a stream of the boards it passes
+  through, so it can be watched a step at a time: in a window (@--gloss@, the
+  default), in a terminal (@--ansi@), or not at all (@--text@). Boards are read
+  from a file or stdin, or the built-in example is used.
 license:             MIT
 license-file:        LICENSE
 author:              Kevin Horlick
@@ -16,9 +21,17 @@ extra-doc-files:     ChangeLog.md
 
 executable sudoko
   main-is:             Main.hs
+  other-modules:
+    Sudoku.Board
+    Sudoku.Render.Ansi
+    Sudoku.Render.Gloss
+    Sudoku.Solve
   -- The solver is a direct backtracking search and needs no extra packages.
+  -- The terminal front end needs none either: see Sudoku.Render.Ansi. gloss is
+  -- the one dependency here, and it buys the window front end alone.
   build-depends:
     , base       >=4.19 && <5
+    , gloss      >=1.13 && <1.14
     , grid-sized
   hs-source-dirs:      src
   default-language:    GHC2024
