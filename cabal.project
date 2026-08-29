@@ -30,3 +30,33 @@ allow-newer:
   OpenGL:containers,
   GLUT:containers,
   OpenGLRaw:containers
+
+-- sized-grid-23y3. Which gloss backend the examples get, and why it is not the
+-- default one.
+--
+-- gloss sets the GL viewport in exactly one place for the GLUT backend --
+-- Interface/ViewState/Reshape.hs, from the size GLUT's reshape callback
+-- reports -- and on macOS that size is in POINTS. The framebuffer behind a
+-- Retina window is twice that in PIXELS, which is the unit glViewport takes,
+-- so every example rendered into the bottom-left quarter of its window with
+-- the rest left as background. GLUT's own display callback never touches the
+-- viewport again, so there is nothing a demo can do about it from the Picture
+-- side: the viewport clips, so no amount of scaling escapes the quarter.
+--
+-- The GLFW backend does not have the bug. Its display callback re-reads
+-- GLFW.getFramebufferSize every frame and sets the viewport from that, under a
+-- comment naming the HiDPI discrepancy directly. gloss ships both behind
+-- flags, defaulting to GLUT, and picks with `#ifdef WITHGLUT / #elif
+-- WITHGLFW` -- so GLUT wins unless its flag is off, and both halves below are
+-- load-bearing.
+--
+-- This does NOT drop the GLUT dependency and must not be read as trying to.
+-- gloss draws text with GLUT.renderString, so the GLUT package stays (gloss
+-- depends on it unconditionally) and the GLFW backend calls
+-- GLUT.getArgsAndInitialize itself so that keeps working. The flag only
+-- selects which windowing backend is compiled in. The cost is four more
+-- packages: GLFW-b, bindings-GLFW (which bundles the GLFW C source and links
+-- the Cocoa frameworks, so there is no system library to install),
+-- bindings-DSL and hsc2hs.
+package gloss
+  flags: -GLUT +GLFW
