@@ -16,7 +16,7 @@ import           Maze.Model
 
 import           Data.Grid.Sized
 
-import           Control.Lens    ((&), (.~))
+import           Control.Lens    ((&), (?~))
 import           Data.Maybe      (isNothing)
 
 -- | How a cell was first reached, which is what turns the search into a route.
@@ -35,7 +35,7 @@ solve maze
     | otherwise = go seen0 [startCell] 0
   where
     seen0 :: Grid Cs (Maybe Prev)
-    seen0 = tabulateGrid (const Nothing) & gridIndex startCell .~ Just Root
+    seen0 = tabulateGrid (const Nothing) & gridIndex startCell ?~ Root
     go :: Grid Cs (Maybe Prev) -> [Coord Cs] -> Int -> [Move]
     go seen level depth
         | null level = [Unreachable]
@@ -45,7 +45,7 @@ solve maze
             let (seen', next) = expand seen level
             in map (`Reached` depth) level ++ go seen' next (depth + 1)
     expand :: Grid Cs (Maybe Prev) -> [Coord Cs] -> (Grid Cs (Maybe Prev), [Coord Cs])
-    expand seen level = foldl step (seen, []) level
+    expand seen = foldl step (seen, [])
       where
         step (s, acc) c =
             let fresh =
@@ -59,7 +59,7 @@ solve maze
             -- cell two cells of this level both border is claimed by the
             -- first of them and not queued twice.
             in foldl
-                   (\(s', acc') n -> (s' & gridIndex n .~ Just (From c), n : acc'))
+                   (\(s', acc') n -> (s' & gridIndex n ?~ From c, n : acc'))
                    (s, acc)
                    fresh
     routeTo :: Grid Cs (Maybe Prev) -> Coord Cs -> [Coord Cs]

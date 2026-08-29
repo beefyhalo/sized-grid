@@ -74,12 +74,7 @@ goalCell = fromMaybe (error "goalCell is off the board") (coordAt (side - 2) (si
 -- this table is written once for Z^2 and is not specific to @Cs@ --- the same
 -- four values would drive a walk on a @Periodic@ or @Reflective@ board.
 directions :: [Delta '[ Int, Int]]
-directions =
-    [ deltaFromTuple (1, 0)
-    , deltaFromTuple (-1, 0)
-    , deltaFromTuple (0, 1)
-    , deltaFromTuple (0, -1)
-    ]
+directions = deltaFromTuple <$> [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
 -- | The same step twice: cell to wall to the next cell.
 --
