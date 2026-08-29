@@ -38,6 +38,7 @@ import           Data.Grid.Sized.Internal.Grid     (CollapseGrid, Grid,
                                                     sliceGrid, splitGrid,
                                                     splitHigherDim)
 import           Data.Grid.Sized.Internal.Type     (requiring)
+import           Data.Grid.Sized.Ordinal           (Ordinal)
 import           Data.Grid.Sized.Optics.Coordinate (_TransposedCoord)
 
 import           Control.Lens
@@ -79,10 +80,25 @@ _SplitGrid ::
   => Iso' (GridOf v (c ': cs) a) (Grid '[ c] (GridOf v cs a))
 _SplitGrid = iso splitGrid combineGrid
 
-_SplitHigherDim :: forall v c as x y a.
+-- | The outermost axis is 'Ordinal' on all three sides, and that is the only
+-- place this is an isomorphism at all.
+--
+-- 'splitHigherDim' is a restriction, so it destroys the boundary policy: its
+-- two halves come back 'Ordinal'-axed whatever the source's axis was
+-- (sized-grid-pnws). 'combineHigherDim' is a construction, and takes the
+-- result's policy from the halves it is given, so gluing two 'Ordinal' runs
+-- yields an 'Ordinal' axis and not the @Periodic 9@ they may have been cut
+-- from. The round trip therefore returns to its starting /type/ exactly when
+-- that type had no policy to lose.
+--
+-- Stated at a general @c x@ this would be an @'Iso'' @ claiming a round trip
+-- the library does not have: the cells return, the wrap does not. A caller
+-- windowing a grid with a real boundary policy uses 'splitHigherDim' itself,
+-- which says in its result type what was lost.
+_SplitHigherDim :: forall v as x y a.
        (VG.Vector v a, KnownNat y, y <= x, AllSizedKnown as)
-    => Iso' (GridOf v (c x ': as) a)
-      (GridOf v (c y ': as) a, GridOf v (c (x - y) ': as) a)
+    => Iso' (GridOf v (Ordinal x ': as) a)
+      (GridOf v (Ordinal y ': as) a, GridOf v (Ordinal (x - y) ': as) a)
 _SplitHigherDim = requiring @(y <= x) $ iso splitHigherDim (uncurry combineHigherDim)
 
 _CollapsedGrid :: (VG.Vector v a, AllSizedKnown cs)
@@ -101,9 +117,18 @@ cell :: forall v cs a. (Vector v a, IsCoordList cs) => Coord cs -> Lens' (GridOf
 cell c f = requiring @(IsCoordList cs) (cellLens c f)
 {-# INLINE cell #-}
 
+-- | The window at @off@, read or replaced.
+--
+-- The focus is 'Ordinal'-axed whatever the source's axis was, per
+-- 'Data.Grid.Sized.Internal.Grid.Shape.sliceGrid'. That is right in both
+-- directions, which is what made it worth checking rather than assuming:
+-- reading gives a run of cells whose ends are cuts and not edges, and writing
+-- takes @len@ cells to splice in, whose own policy the splice never consults
+-- --- so demanding the replacement carry the source's policy would be
+-- demanding the caller invent one.
 slice :: forall v m c x. forall off len ->
   ( Vector v x, KnownNat off, KnownNat len, off + len <= m )
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c len] x)
+     => Lens' (GridOf v '[ c m] x) (GridOf v '[ Ordinal len] x)
 slice off len = lens (sliceGrid @v @m @c @x off len)
   (\(Grid source) (Grid replacement) ->
      Grid $ VG.take (fromIntegral $ natVal (Proxy @off)) source
@@ -114,13 +139,13 @@ slice off len = lens (sliceGrid @v @m @c @x off len)
 
 prefix :: forall v m c x. forall n ->
        (Vector v x, KnownNat n, n <= m)
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c n] x)
+     => Lens' (GridOf v '[ c m] x) (GridOf v '[ Ordinal n] x)
 prefix n = slice @v @m @c @x 0 n
 {-# INLINE prefix #-}
 
 suffix :: forall v m c x. forall n ->
        (Vector v x, KnownNat n, n <= m)
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ c (m - n)] x)
+     => Lens' (GridOf v '[ c m] x) (GridOf v '[ Ordinal (m - n)] x)
 suffix n = lens (dropGrid n)
   (\(Grid source) (Grid replacement) ->
      Grid $ VG.take (fromIntegral (natVal (Proxy @n))) source VG.++ replacement)

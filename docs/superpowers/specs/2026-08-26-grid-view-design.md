@@ -10,8 +10,11 @@ Design for `sized-grid-d9o9`. Written 2026-08-26.
 `Ordinal` offsets. The tables below describe the state *before* that, and
 are kept as the record of what was found. Piece 3 is `sized-grid-xmxm` and
 piece 4 is `sized-grid-3ybi`; the rest of the shape algebra, which this
-document's table lists as "same as source" without flagging it, is
-`sized-grid-pnws`.
+document's table lists as "same as source" without flagging it, landed as
+`sized-grid-pnws` on 2026-08-29 -- `takeGrid`, `dropGrid`, `sliceGrid`,
+`splitHigherDim` and the `slice`/`prefix`/`suffix` lenses are
+`Ordinal`-axed too, and `combineHigherDim` was left alone as a
+*construction*, where the policy is the caller's to declare.
 
 ## Question
 

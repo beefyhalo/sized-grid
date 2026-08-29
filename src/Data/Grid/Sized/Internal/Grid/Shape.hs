@@ -8,6 +8,31 @@
 -- contiguous run of blocks whatever the element type is. The one place a
 -- coordinate appears is 'permuteGrid', where it is the caller's way of naming
 -- the permutation.
+--
+-- == Which of these destroy the boundary policy
+--
+-- The rule is stated in full in "Data.Grid.Sized.Internal.Grid.Windows"'s
+-- module header and on 'permuteGrid': __a restriction destroys the boundary
+-- policy, a pointing preserves it.__ The operations here divide three ways.
+--
+-- /Restrictions/, which narrow an axis and so return
+-- 'Data.Grid.Sized.Ordinal.Ordinal' along it whatever the source's policy
+-- was: 'takeGrid', 'dropGrid', 'sliceGrid' and 'splitHigherDim'. Each is a
+-- proper sub-window of the source axis wherever the size actually shrinks,
+-- and a proper sub-window of a periodic axis is not periodic.
+--
+-- /Rearrangements/, which keep every axis at full width and so keep every
+-- policy: 'transposeGrid', 'splitGrid', 'combineGrid', 'mapLowerDim' and
+-- 'zipLowerDim'. 'splitGrid' is worth spelling out because it looks like a
+-- restriction and is not: the outer @'Grid' \'[c]@ indexes the source's own
+-- outermost axis at its own size, and each inner grid is full width in every
+-- remaining axis, so nothing has been narrowed and both halves keep what they
+-- had.
+--
+-- /Constructions/, where the policy is the caller's to declare because they
+-- are asserting a topology rather than reading one off: 'combineHigherDim'
+-- and 'permuteGrid'. See 'combineHigherDim' for why gluing two runs of cells
+-- back together does not recover the axis they were cut from.
 module Data.Grid.Sized.Internal.Grid.Shape
   ( -- * Rearranging
     permuteGrid
@@ -29,6 +54,7 @@ import           Data.Grid.Sized.Coord
 import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Internal.Grid.Core
 import           Data.Grid.Sized.Internal.Type      (requiring)
+import           Data.Grid.Sized.Ordinal            (Ordinal)
 
 import           Control.Applicative                (ZipList (..))
 import           Data.Proxy                         (Proxy (..))
@@ -148,7 +174,30 @@ combineGrid ::
 combineGrid (Grid v) = Grid $ VG.concat $ map unGrid $ V.toList v
 {-# INLINE combineGrid #-}
 
--- | @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
+-- | Glue two grids along the outermost axis. The result's policy is whatever
+-- the two halves already carry, and that is deliberate: this is a
+-- construction, and a construction is where the caller declares a topology
+-- rather than reading one off.
+--
+-- The consequence, once 'splitHigherDim' returns
+-- 'Data.Grid.Sized.Ordinal.Ordinal' halves (sized-grid-pnws), is that
+-- split-then-recombine does not give back the axis it started from: a
+-- @Periodic 9@ splits into two runs of cells and gluing them yields
+-- @Ordinal 9@, not @Periodic 9@. That is the honest answer. Whether cell 8 is
+-- adjacent to cell 0 is not a fact about either run; it is a fact about the
+-- space they were cut from, and it does not survive the cut. A caller who
+-- wants it back is asserting it, and asserts it with 'permuteGrid' at
+-- @'unsafeCoordFromPosition' . \'coordPosition\'@ or by rebuilding through
+-- 'Data.Grid.Sized.gridFromVector'.
+--
+-- So this is /not/ generalised to a free result axis with
+-- @CoordNat c ~ CoordNat a + CoordNat b@. That would let the assertion be
+-- made here, in the glue, which reads as though the policy were recovered
+-- rather than restated -- and it would leave @c@ undetermined at every call
+-- site whose result type is not already pinned, turning an inference failure
+-- into the common case for no correctness gain.
+--
+-- @IsCoord c@ used to be demanded here. It buys nothing: the size of a coord
 -- comes from @CoordNat@ on the `Data.Grid.Sized.Coord.Class.IsCoordLifted` instance,
 -- not from `IsCoord`, so the class could not have justified the @n + m@ in the
 -- result even in principle.
@@ -164,12 +213,19 @@ combineHigherDim (Grid v1) (Grid v2) = Grid (v1 VG.++ v2)
 --
 -- > dropGrid 2 g   -- rather than dropGrid (Proxy @2) g
 --
+-- The remainder is 'Data.Grid.Sized.Ordinal.Ordinal'-axed whatever @c@ was,
+-- per the module header. Its low end is a cut, not an edge of the source, so
+-- a @Clamped@ remainder would stand still at a wall that is not there and a
+-- @Periodic@ one would wrap round a fraction of its own cycle. Nothing is
+-- asked of @c@ at all now, which is the statement that a restriction does not
+-- care what policy it is restricting.
+--
 -- @n <= m@ is required: without it @dropGrid 9@ of a 3-grid typechecked and
 -- produced a grid whose vector was empty while its type claimed @3 - 9@.
 dropGrid ::
        forall v m c x. forall n -> (VG.Vector v x, KnownNat n, n <= m)
     => GridOf v '[ c m] x
-    -> GridOf v '[ c (m - n)] x
+    -> GridOf v '[ Ordinal (m - n)] x
 dropGrid n (Grid v) =
     requiring @(n <= m) $ Grid $ VG.drop (fromIntegral $ natVal (Proxy @n)) v
 {-# INLINABLE dropGrid #-}
@@ -178,13 +234,18 @@ dropGrid n (Grid v) =
 --
 -- > takeGrid 2 g   -- rather than takeGrid (Proxy @2) g
 --
+-- 'Data.Grid.Sized.Ordinal.Ordinal'-axed for the reason given on 'dropGrid':
+-- the prefix keeps the source's low end but its high end is a cut, so
+-- @takeGrid 3@ of a @Grid \'[Periodic 9]@ used to hand back a
+-- @Grid \'[Periodic 3]@ that wrapped round its own three cells.
+--
 -- @n <= m@ is required: 'VG.take' cannot conjure elements, so without the
 -- constraint @takeGrid 9@ of a 3-grid returned 3 elements under a type that
 -- promised 9.
 takeGrid ::
        forall v m c x. forall n -> (VG.Vector v x, KnownNat n, n <= m)
     => GridOf v '[ c m] x
-    -> GridOf v '[ c n] x
+    -> GridOf v '[ Ordinal n] x
 takeGrid n (Grid v) =
     requiring @(n <= m) $ Grid $ VG.take (fromIntegral $ natVal (Proxy @n)) v
 {-# INLINABLE takeGrid #-}
@@ -202,13 +263,20 @@ takeGrid n (Grid v) =
 --
 -- @off + len <= m@ is also precisely 'VG.slice'\'s own precondition, so the
 -- bounds check it performs can never fire here.
+--
+-- The window is 'Data.Grid.Sized.Ordinal.Ordinal'-axed whatever @c@ was, per
+-- the module header; this is the general case that 'takeGrid' and 'dropGrid'
+-- are the two ends of, and neither of its ends need be an end of the source.
+-- @shrinkGrid@ used to restate this by hand, through a @forgetAxisPolicy@ in
+-- "Data.Grid.Sized.Internal.Grid.Windows" that existed only because this
+-- function preserved the constructor; that helper is gone.
 sliceGrid ::
        forall v m c x. forall off len -> ( VG.Vector v x
                                          , KnownNat off
                                          , KnownNat len
                                          , off + len <= m)
     => GridOf v '[ c m] x
-    -> GridOf v '[ c len] x
+    -> GridOf v '[ Ordinal len] x
 sliceGrid off len (Grid v) =
     requiring @(off + len <= m) $
     Grid $
@@ -218,7 +286,18 @@ sliceGrid off len (Grid v) =
         v
 {-# INLINABLE sliceGrid #-}
 
--- | The second component is @x - y@, not a free type variable. It used to be
+-- | Cut a grid in two along its outermost axis.
+--
+-- Both halves are 'Data.Grid.Sized.Ordinal.Ordinal'-axed whatever @c@ was:
+-- the cut is an edge of neither piece's source, so each piece would otherwise
+-- claim a wall or a wrap there that the grid it came from does not have. The
+-- remaining axes @as@ are untouched at full width and keep their policies,
+-- because they have not been restricted.
+--
+-- This does not round-trip through 'combineHigherDim' back to @c@, and that
+-- is the point rather than a gap; see that function.
+--
+-- The second component is @x - y@, not a free type variable. It used to be
 -- free, which let the caller annotate the remainder with any size at all and
 -- get a grid whose vector did not match.
 splitHigherDim ::
@@ -229,7 +308,7 @@ splitHigherDim ::
        , AllSizedKnown as
        )
     => GridOf v (c x ': as) a
-    -> (GridOf v (c y ': as) a, GridOf v (c (x - y) ': as) a)
+    -> (GridOf v (Ordinal y ': as) a, GridOf v (Ordinal (x - y) ': as) a)
 splitHigherDim (Grid v) =
     requiring @(y <= x) $
     let (a, b) =

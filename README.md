@@ -40,11 +40,20 @@ Periodicity is a property of a whole axis, so a proper sub-window of a periodic
 axis is not periodic; and "clamped" means stepping off the edge stays at the
 edge, so clamping at a window's edge is a claim about a wall the source does not
 have there. Either way the sub-grid invents a seam that is not in the space it
-is a view of, and does it silently. So `shrinkGrid`, `gridWindows` and
-`gridTiles` return grids whose narrowed axis is `Ordinal` — no walls, no wrap,
-and an off-grid step that returns `Nothing` rather than an invented answer —
-whatever the source's policy was. Axes they leave at full width keep theirs,
-because those have not been restricted.
+is a view of, and does it silently. So every operation that narrows an axis —
+`shrinkGrid`, `gridWindows`, `gridTiles`, `takeGrid`, `dropGrid`, `sliceGrid`,
+`splitHigherDim` and the `slice`/`prefix`/`suffix` lenses — returns a grid whose
+narrowed axis is `Ordinal`: no walls, no wrap, and an off-grid step that returns
+`Nothing` rather than an invented answer, whatever the source's policy was. Axes
+they leave at full width keep theirs, because those have not been restricted.
+
+The rule sorts the rest of the shape algebra too. Operations that keep every
+axis at its own size keep every policy — `transposeGrid`, `splitGrid`,
+`combineGrid`, `mapLowerDim`. And *construction* is where a policy is declared
+rather than derived, so `combineHigherDim` takes its result's policy from the
+halves it is given: gluing two runs of cells does not recover the axis they were
+cut from, because whether the last cell is adjacent to the first was never a
+fact about either run.
 
 Offsets are `Ordinal` for the same reason read from the other side. An offset is
 an index into a list of positions, not a position in a space, so `shrinkGrid`'s

@@ -9,6 +9,54 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **Breaking.** The rest of the restriction family destroys the boundary
+  policy too (sized-grid-pnws), completing sized-grid-mbh0. `takeGrid`,
+  `dropGrid`, `sliceGrid` and `splitHigherDim` return `Ordinal` along the axis
+  they narrow, whatever the source's was, and so do the
+  `slice` / `prefix` / `suffix` lenses. Each of them was a proper sub-window
+  wherever the size actually shrank, so each reproduced mbh0's bug exactly:
+  `takeGrid 3` of a `Grid '[Periodic 9]` handed back a `Grid '[Periodic 3]`
+  that wrapped round its own three cells, and `dropGrid`'s remainder clamped
+  at a wall the source does not have. Axes left at full width keep their
+  policies.
+
+  The lenses are right in both directions, which is why they were held back
+  from mbh0 rather than assumed: reading gives a run whose ends are cuts and
+  not edges, and writing takes `len` cells to splice in, whose own policy the
+  splice never consults --- so requiring the replacement to carry the source's
+  policy would be requiring the caller to invent one.
+
+  **`combineHigherDim` is unchanged**, and that answers the other question
+  mbh0 left open. It is a *construction*: its result's policy comes from the
+  halves it is given, so gluing two `Ordinal` runs yields an `Ordinal` axis.
+  Split-then-recombine therefore does not give back the axis it started from
+  --- a `Periodic 9` splits into two runs of cells and recombines to
+  `Ordinal 9`. That is the honest answer rather than a gap: whether cell 8 is
+  adjacent to cell 0 is a fact about the space the runs were cut from, not
+  about either run, and it does not survive the cut. A caller who wants it
+  back is asserting it, and asserts it explicitly --- with `permuteGrid`, or
+  by rebuilding through `gridFromVector`.
+
+  Generalising it instead to a free result axis with
+  `CoordNat c ~ CoordNat a + CoordNat b` was considered and rejected twice
+  over: it would let the assertion be made inside the glue, reading as though
+  the policy were recovered rather than restated, and it would leave `c`
+  undetermined at every call site whose result type is not already pinned.
+
+  `_SplitHigherDim` is now stated at `Ordinal` on all three sides, because
+  that is the only place it is an isomorphism. At any other policy the cells
+  round-trip and the wrap does not, so an `Iso'` there would claim a round
+  trip the library does not have; callers windowing a grid with a real policy
+  use `splitHigherDim`, whose result type says what was lost.
+
+  `forgetAxisPolicy` is gone from `Internal.Grid.Windows`. It existed only
+  because `sliceGrid` preserved the constructor, and `shrinkGrid` now calls
+  `sliceGrid` directly.
+
+  In-repo call sites needed no changes at all: every one of them was already
+  working in `Ordinal`, which is some evidence that the policies these
+  functions used to hand back were never the ones anybody wanted.
+
 * **New.** `Foldable1` and `Traversable1` instances for `GridOf`
   (sized-grid-g4xz), both requiring `IsCoordList cs`. That constraint is what
   makes them total: every axis has `1 <= CoordNat`, so `MaxCoordSize cs` is a

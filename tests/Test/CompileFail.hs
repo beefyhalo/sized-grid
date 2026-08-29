@@ -104,6 +104,13 @@ compileFailTests =
       assertCompileFails
         "WindowKeepsSourcePolicy.hs"
         "Couldn't match type: Ordinal 3"
+      -- sized-grid-pnws: the same rule over the narrowing half of the shape
+      -- algebra. takeGrid stands in for dropGrid, sliceGrid and
+      -- splitHigherDim, which share its result type by construction.
+    , testCase "takeGrid annotated with the source's boundary policy" $
+      assertCompileFails
+        "RestrictionKeepsSourcePolicy.hs"
+        "Couldn't match type: Ordinal 3"
     , testCase "walkPathTotal on a coord with a walled axis" $
       assertCompileFails
         "WalkPathTotalNotBoundaryless.hs"

@@ -22,6 +22,8 @@ module Data.Grid.Sized
       -- * Type-level machinery
     , CollapseGrid
       -- * Rearranging
+      --
+      -- $rearranging
     , permuteGrid
     , transposeGrid
     , splitGrid
@@ -78,6 +80,26 @@ import           Data.Grid.Sized.Internal.Grid
 
 import           Generics.SOP
 
+-- $rearranging
+--
+-- Sorted by the rule in the \"Windows and tiles\" section below, which governs
+-- this group too.
+--
+-- 'takeGrid', 'dropGrid' and 'splitHigherDim' /restrict/: each narrows the
+-- outermost axis, so each returns 'Ordinal' along it whatever the source\'s
+-- policy was. 'transposeGrid', 'splitGrid', 'combineGrid', 'mapLowerDim' and
+-- 'zipLowerDim' keep every axis at its own size and so keep every policy;
+-- 'splitGrid' is worth naming because it looks like a restriction and is not.
+--
+-- 'combineHigherDim' and 'permuteGrid' are /constructions/, where the policy
+-- is the caller\'s to declare: they are asserting a topology rather than
+-- reading one off. So split-then-recombine does not give back the axis it
+-- started from --- a @Periodic 9@ splits into two runs of cells and gluing
+-- them yields @Ordinal 9@ --- and that is the honest answer, because whether
+-- cell 8 is adjacent to cell 0 is a fact about the space they were cut from
+-- and not about either run. A caller who wants it back asserts it, with
+-- 'permuteGrid' or by rebuilding through 'gridFromVector'.
+
 -- $windows
 --
 -- These /restrict/: each narrows a grid's extent and keeps no position in the
@@ -96,3 +118,7 @@ import           Generics.SOP
 -- @Data.Grid.Sized.Internal.Grid.Windows@ for the worked example. The
 -- counterpart rule --- /a pointing preserves the boundary policy/ --- is what
 -- 'Data.Grid.Sized.Focused.FocusedGrid' does instead.
+--
+-- The same rule governs the narrowing half of the \"Rearranging\" group above
+-- and the 'Data.Grid.Sized.Optics.slice' \/
+-- 'Data.Grid.Sized.Optics.prefix' \/ 'Data.Grid.Sized.Optics.suffix' lenses.

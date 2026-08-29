@@ -52,6 +52,11 @@
 -- \"restriction\" is
 -- 'Data.Grid.Sized.Internal.Grid.Shape.permuteGrid'; the operations here
 -- exist because each is one 'VG.slice' where that is a whole index table.
+--
+-- The same rule governs the narrowing half of the shape algebra ---
+-- @takeGrid@, @dropGrid@, @sliceGrid@ and @splitHigherDim@ --- which is
+-- sorted operation by operation in
+-- "Data.Grid.Sized.Internal.Grid.Shape"\'s own header.
 module Data.Grid.Sized.Internal.Grid.Windows
   ( ShrinkableGrid(..)
   , gridTiles
@@ -154,26 +159,7 @@ instance ( KnownNat x
           -> Grid '[ Ordinal z] (GridOf v as a)
         helper g =
             reifyCoord c $ \n ->
-                withDict (windowFits @n @x @y @z) $
-                    forgetAxisPolicy (sliceGrid n z g)
-
--- | Restate a one-axis grid on the policy-free axis of the same size.
---
--- 'sliceGrid' preserves its source's axis constructor, because it is also the
--- engine behind the 'Data.Grid.Sized.Optics.slice' \/
--- 'Data.Grid.Sized.Optics.prefix' \/ 'Data.Grid.Sized.Optics.suffix' lenses,
--- which are not part of this correction (sized-grid-pnws). So the window
--- 'shrinkGrid' gets back arrives as @c z@ and has to be restated as the
--- @'Data.Grid.Sized.Ordinal.Ordinal' z@ the rule requires.
---
--- Nothing is reinterpreted: @'MaxCoordSize' '[c z]@ and
--- @'MaxCoordSize' '[Ordinal z]@ are both @z@, so the 'GridOf' length
--- invariant carries across unchanged, and the row-major order of a single
--- axis does not depend on the axis's policy. What changes is only what the
--- type promises about stepping off the end.
-forgetAxisPolicy :: GridOf v '[ c z] a -> GridOf v '[ Ordinal z] a
-forgetAxisPolicy = Grid . unGrid
-{-# INLINE forgetAxisPolicy #-}
+                withDict (windowFits @n @x @y @z) $ sliceGrid n z g
 
 
 -- | Cut a grid into disjoint tiles along its outermost axis: a source axis of
