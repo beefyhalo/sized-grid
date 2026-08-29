@@ -33,8 +33,8 @@ walk :: Int -> Spot W H -> Heading -> (Spot W H, Heading)
 walk 0 s hd = (s, hd)
 walk n s hd =
     case stepSpot s hd of
-        Nothing        -> error ("walk: off the strip at " ++ show (spotXY s))
-        Just (s', hd') -> walk (n - 1) s' hd'
+        Nothing -> error ("walk: off the strip at " ++ show (spotXY s))
+        Just (s', hd', _) -> walk (n - 1) s' hd'
 
 oneLapMirrors :: TestTree
 oneLapMirrors =
@@ -61,7 +61,7 @@ headingSurvivesTheSeam =
     assertEqual
         "still heading the way it was"
         (Just (Heading Wrapped AtMax))
-        (snd <$> stepSpot (spot 5 1) (Heading Wrapped AtMax))
+        ((\(_, hd, _) -> hd) <$> stepSpot (spot 5 1) (Heading Wrapped AtMax))
 
 straightAxisHasARealEdge :: TestTree
 straightAxisHasARealEdge =
@@ -75,39 +75,64 @@ straightAxisHasARealEdge =
           isNothing (stepSpot (spot 2 0) (Heading Straight AtMin))
         ]
 
-crossesSeamAgrees :: TestTree
-crossesSeamAgrees =
-    testProperty "crossesSeam agrees with what the step actually did" $
-    forAll ((,) <$> choose (0, 5) <*> choose (0, 4)) $ \(x, y) ->
-        conjoin
-            [ counterexample (show (x, y, side)) $
-            let here = spot x y
-                hd = Heading Wrapped side
-                -- A crossing is the step whose landing row is not the row it
-                -- left, or, on the row the mirror fixes, the step whose column
-                -- did not move by one.
-                reallyCrossed there =
-                    snd (spotXY there) /= y ||
-                    abs (fst (spotXY there) - x) /= 1
-            in case stepSpot here hd of
-                   Nothing -> counterexample "a sideways step is never off the strip" False
-                   Just (there, _) -> crossesSeam here hd === reallyCrossed there
-            | side <- [AtMin, AtMax]
-            ]
-
--- | A step along the straight axis never touches the seam, which is why the
--- player's parity only ever changes on a sideways move.
-straightNeverCrosses :: TestTree
-straightNeverCrosses =
-    testCase "a step across the strip never crosses the seam" $
-    assertEqual
-        "cells reporting a crossing"
-        []
-        [ (x, y, side)
-        | x <- [0 .. 5]
-        , y <- [0 .. 4]
-        , side <- [AtMin, AtMax]
-        , crossesSeam (spot x y) (Heading Straight side)
+-- | The bit the surface hands back, and what it means.
+--
+-- Every sideways step off an end of the strip is a crossing that reverses the
+-- walker's frame; every step that stays inside the chart is 'Interior'; and a
+-- step across the strip never reaches the seam at all, which is why only
+-- sideways moves change the player's parity.
+--
+-- Before sized-grid-lopy.5 this module reconstructed all of that from a bounds
+-- test against the strip's width. It agreed with the surface, which was the
+-- trouble: it agreed by accident, because on a Mobius strip every crossing
+-- happens to mirror, and the same reconstruction on a cube map would have been
+-- wrong in every case.
+crossingsSayWhatTheyDid :: TestTree
+crossingsSayWhatTheyDid =
+    testGroup
+        "what a step reports"
+        [ testCase "a sideways step off either end mirrors the walker" $
+          assertEqual
+              "sideways edge steps that did not mirror"
+              []
+              [ (x, y, side)
+              | y <- [0 .. 4]
+              , side <- [AtMin, AtMax]
+              , let x =
+                        case side of
+                            AtMin -> 0
+                            AtMax -> 5
+              , Just (_, _, crossing) <- [stepSpot (spot x y) (Heading Wrapped side)]
+              , not (reversedFrame crossing)
+              ]
+        , testCase "a step that stays on the chart is Interior" $
+          assertEqual
+              "interior steps that claimed a crossing"
+              []
+              [ (x, y, ax, side)
+              | x <- [1 .. 4]
+              , y <- [1 .. 3]
+              , ax <- [Wrapped, Straight]
+              , side <- [AtMin, AtMax]
+              , Just (_, _, crossing) <- [stepSpot (spot x y) (Heading ax side)]
+              , crossing /= Interior
+              ]
+        , testProperty "only a sideways step can reach the seam" $
+          forAll ((,) <$> choose (0, 5) <*> choose (0, 4)) $ \(x, y) ->
+              conjoin
+                  [ counterexample (show (x, y, side)) $
+                  case stepSpot (spot x y) (Heading Straight side) of
+                      -- Off the top or the bottom: the strip's real edge.
+                      Nothing -> property True
+                      Just (_, _, crossing) -> crossing === Interior
+                  | side <- [AtMin, AtMax]
+                  ]
+        , testCase "a mirrored crossing is still a crossing" $
+          assertBool "crossedSeam should hold wherever reversedFrame does" $
+          and [ crossedSeam c
+              | c <- [minBound .. maxBound]
+              , reversedFrame c
+              ]
         ]
 
 seamTests :: TestTree
@@ -118,6 +143,5 @@ seamTests =
         , middleRowClosesInOne
         , headingSurvivesTheSeam
         , straightAxisHasARealEdge
-        , crossesSeamAgrees
-        , straightNeverCrosses
+        , crossingsSayWhatTheyDid
         ]

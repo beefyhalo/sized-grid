@@ -9,6 +9,9 @@ module Data.Grid.Atlas.CubeMap
   , cubeAtlas
   , Axis(..)
   , Heading(..)
+  , Crossing(..)
+  , crossedSeam
+  , reversedFrame
   , cubeSeam
   , cubeStep
   ) where
@@ -99,13 +102,17 @@ crossCubeEdge NegZ (V, AtMax) = (PosX, (V, AtMin), False)
 -- face. Total: a cube has no edge of its own, only seams, so every step
 -- lands somewhere -- which is why this runs in 'Identity' where
 -- "Data.Grid.Atlas.Mobius" runs the same 'rectStep' in 'Maybe'.
+-- A cube is orientable, so no crossing here is ever a 'MirroredSeam': every
+-- step is 'Interior' or a plain 'Seam', and 'reversedFrame' is 'False' for all
+-- of them. That is a fact about the surface rather than about the type, and it
+-- is asserted in the tests over all 24 half-edges.
 cubeStep ::
        forall n. (KnownNat n, 1 <= n)
     => AtlasCoord '[ Ordinal n, Ordinal n] 6
     -> Heading
-    -> (AtlasCoord '[ Ordinal n, Ordinal n] 6, Heading)
+    -> (AtlasCoord '[ Ordinal n, Ordinal n] 6, Heading, Crossing)
 cubeStep (chart, u :| v :| EmptyCoord) heading =
-    let (destFace, (u', v'), heading') =
+    let Landing destFace (u', v') heading' crossing =
             runIdentity $
             rectStep
                 (const (ordinalSize @n))
@@ -115,4 +122,5 @@ cubeStep (chart, u :| v :| EmptyCoord) heading =
                 heading
     in ( ( faceIndex destFace
          , unsafeOrdinal u' :| unsafeOrdinal v' :| EmptyCoord)
-       , heading')
+       , heading'
+       , crossing)

@@ -23,6 +23,14 @@
 --     crossings, the direction the player thinks of as up is the strip's
 --     down. 'PlayerFrame' says so; 'ChartFrame' does not, and the difference
 --     between them is the whole of what 'Frame' is for.
+--
+-- The second of those is a bit the game has to carry, and it comes out of the
+-- step: 'stepSpot' returns a 'Crossing', and 'reversedFrame' is 'True' for
+-- exactly the crossings that turn the walker over. It did not always. This
+-- module used to reconstruct it with a bounds test against the strip's width,
+-- which was wrong-headed twice over --- it is arithmetic the library exists to
+-- remove, and it only worked because on this one surface every seam crossing
+-- happens to mirror. sized-grid-lopy.5.
 module Sokoban.Board
   ( -- * The surface
     Strip
@@ -48,11 +56,13 @@ module Sokoban.Board
   , headingFor
   , dirOf
     -- * Stepping
+  , Crossing(..)
+  , crossedSeam
+  , reversedFrame
   , stepSpot
   , stepDir
   , walkFrom
   , cellAround
-  , crossesSeam
   ) where
 
 import           Data.Grid.Atlas
@@ -209,22 +219,26 @@ dirOf frame flipped (Heading Straight end)
   where
     upIsUp = frame == ChartFrame || not flipped
 
--- | One cell along a heading: where it lands, and the heading it arrives
--- with.
+-- | One cell along a heading: where it lands, the heading it arrives with, and
+-- what it did on the way.
 --
 -- 'Nothing' is the strip's one genuine edge, the 'Straight' axis, which is
 -- glued to nothing. It is not a wall --- a wall is terrain, and this is the
 -- surface running out --- and "Sokoban.Rules" keeps the two apart because a
 -- player who cannot tell them apart cannot tell a mistake from a boundary.
-stepSpot :: KnownStrip w h => Spot w h -> Heading -> Maybe (Spot w h, Heading)
+stepSpot ::
+       KnownStrip w h
+    => Spot w h
+    -> Heading
+    -> Maybe (Spot w h, Heading, Crossing)
 stepSpot = mobiusStep
 
 -- | One key press: where it lands, and the walker's parity on arrival.
 --
 -- 'Nothing' off the strip's straight edge, as 'stepSpot'. The heading the step
 -- arrives with is dropped, because on this surface it is always the heading it
--- left with --- see 'crossesSeam' --- and what a walker actually needs to
--- carry is the parity, which is the thing the step does not hand back.
+-- left with; what a walker actually needs to carry is the parity, and that is
+-- what the 'Crossing' says.
 stepDir ::
        KnownStrip w h
     => Frame
@@ -232,10 +246,8 @@ stepDir ::
     -> Dir
     -> Maybe (Spot w h, Bool)
 stepDir frame (here, flipped) dir = do
-    (there, _) <- stepSpot here heading
-    pure (there, flipped /= crossesSeam here heading)
-  where
-    heading = headingFor frame flipped dir
+    (there, _, crossing) <- stepSpot here (headingFor frame flipped dir)
+    pure (there, flipped /= reversedFrame crossing)
 
 -- | A run of key presses, from a cell and a parity. 'Nothing' the moment one
 -- of them leaves the strip.
@@ -266,26 +278,3 @@ cellAround start (dx, dy) =
         start
         (replicate (abs dy) (if dy >= 0 then DirUp else DirDown) ++
          replicate (abs dx) (if dx >= 0 then DirRight else DirLeft))
-
--- | Does a step from here along this heading go through the seam?
---
--- __This is index arithmetic against a bound, and it should not have to be.__
--- 'Data.Atlas.Topology.Seam.SeamTable' answers exactly this question --- its
--- crossing returns a 'Bool' saying whether the frame is reversed, and
--- @Data.Grid.Atlas.Mobius.crossMobiusEdge@ returns 'True' for precisely the
--- two wrapped half-edges --- but 'mobiusStep' consumes that bit and returns
--- only a position and a heading. A caller carrying a frame of its own, which
--- is any caller on a non-orientable surface, has to reconstruct it. Filed as
--- sized-grid-lopy.5.
---
--- Reconstructed from the /source/ cell rather than by comparing the two
--- positions, because on a strip one cell around @u@ does not change across
--- the seam and a comparison would report no crossing where there was one.
-crossesSeam :: forall w h. KnownStrip w h => Spot w h -> Heading -> Bool
-crossesSeam spot (Heading along end) =
-    case (along, end) of
-        (Wrapped, AtMax) -> x == ordinalSize @w - 1
-        (Wrapped, AtMin) -> x == 0
-        (Straight, _)    -> False
-  where
-    (x, _) = spotXY spot

@@ -47,10 +47,15 @@ at u v =
 allCells :: [(Int, Int)]
 allCells = [(u, v) | u <- [0 .. w - 1], v <- [0 .. h - 1]]
 
+-- | 'kleinStep' with its 'Crossing' dropped, for the tests that are about
+-- where a walker lands rather than about its frame. Test.Frames is where the
+-- crossings themselves are asserted.
 step ::
        (AtlasCoord '[ Clamped W, Clamped H] 1, Heading)
     -> (AtlasCoord '[ Clamped W, Clamped H] 1, Heading)
-step = uncurry kleinStep
+step (c, heading) =
+    let (c', heading', _) = kleinStep c heading
+    in (c', heading')
 
 lap :: Int -> Heading -> (Int, Int) -> (AtlasCoord '[ Clamped W, Clamped H] 1, Heading)
 lap n heading (u, v) = iterate step (at u v, heading) !! n
@@ -59,7 +64,9 @@ stepWith ::
        Heading
     -> AtlasCoord '[ Clamped W, Clamped H] 1
     -> AtlasCoord '[ Clamped W, Clamped H] 1
-stepWith heading c = fst (kleinStep c heading)
+stepWith heading c =
+    let (c', _, _) = kleinStep c heading
+    in c'
 
 kleinTwistedLapMirrors :: TestTree
 kleinTwistedLapMirrors =

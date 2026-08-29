@@ -39,9 +39,9 @@ mobiusStepBeltCloses =
         (\(u, v) ->
              let w = ordinalSize @W
                  start = ((minBound, Clamped u :| Clamped v :| EmptyCoord), Heading Wrapped AtMax)
-                 step s =
-                     case uncurry mobiusStep s of
-                         Just s' -> s'
+                 step s@(c, hd) =
+                     case mobiusStep c hd of
+                         Just (c', hd', _) -> (c', hd')
                          Nothing ->
                              error
                                  ("mobiusStepBeltCloses: unexpected Straight-axis edge at " ++

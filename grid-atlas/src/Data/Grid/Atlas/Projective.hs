@@ -51,13 +51,16 @@ crossProjectiveEdge () (Vertical, AtMax) = ((), (Vertical, AtMin), True)
 
 -- | Total: the projective plane has no boundary, so every step crosses into
 -- the same chart when it leaves the rectangle.
+-- Every crossing is a 'MirroredSeam': both of this surface's seams glue with a
+-- reflection, which is what separates it from the Klein bottle, where one does
+-- and one does not.
 projectiveStep ::
        forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
     => AtlasCoord '[ Clamped w, Clamped h] 1
     -> Heading
-    -> (AtlasCoord '[ Clamped w, Clamped h] 1, Heading)
+    -> (AtlasCoord '[ Clamped w, Clamped h] 1, Heading, Crossing)
 projectiveStep (chart, u :| v :| EmptyCoord) heading =
-    let ((), (ui, vi), heading') =
+    let Landing () (ui, vi) heading' crossing =
             runIdentity $
             rectStep
                 axisSize
@@ -68,7 +71,8 @@ projectiveStep (chart, u :| v :| EmptyCoord) heading =
     in ( ( chart
          , Clamped (unsafeOrdinal ui) :| Clamped (unsafeOrdinal vi) :|
            EmptyCoord)
-       , heading')
+       , heading'
+       , crossing)
   where
     axisSize Horizontal = ordinalSize @w
     axisSize Vertical = ordinalSize @h

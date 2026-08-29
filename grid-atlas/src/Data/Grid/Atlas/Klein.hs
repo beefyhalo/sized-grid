@@ -10,6 +10,9 @@ module Data.Grid.Atlas.Klein
   , pattern Twisted
   , pattern Rolled
   , Heading(..)
+  , Crossing(..)
+  , crossedSeam
+  , reversedFrame
   , kleinAtlas
   , kleinSeam
   , kleinStep
@@ -60,13 +63,18 @@ crossKleinEdge () (Rolled, AtMax)  = ((), (Rolled, AtMin), False)
 -- is glued to another, so no step can leave the surface --- which is why the
 -- gluing handed to 'rectStep' answers in 'Identity' where a Mobius strip's
 -- answers in 'Maybe'.
+-- The 'Crossing' distinguishes the bottle's two seams for a walker in a way
+-- the position and heading do not: crossing 'Twisted' is a 'MirroredSeam' and
+-- reverses the walker's frame, crossing 'Rolled' is a plain 'Seam' and does
+-- not. That difference is the whole of what makes this a bottle rather than a
+-- torus, and 'reversedFrame' is where a caller reads it.
 kleinStep ::
        forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
     => AtlasCoord '[ Clamped w, Clamped h] 1
     -> Heading
-    -> (AtlasCoord '[ Clamped w, Clamped h] 1, Heading)
+    -> (AtlasCoord '[ Clamped w, Clamped h] 1, Heading, Crossing)
 kleinStep (chart, u :| v :| EmptyCoord) heading =
-    let ((), (ui, vi), heading') =
+    let Landing () (ui, vi) heading' crossing =
             runIdentity $
             rectStep
                 axisSize
@@ -77,7 +85,8 @@ kleinStep (chart, u :| v :| EmptyCoord) heading =
     in ( ( chart
          , Clamped (unsafeOrdinal ui) :| Clamped (unsafeOrdinal vi) :|
            EmptyCoord)
-       , heading')
+       , heading'
+       , crossing)
   where
     axisSize Twisted = ordinalSize @w
     axisSize Rolled  = ordinalSize @h

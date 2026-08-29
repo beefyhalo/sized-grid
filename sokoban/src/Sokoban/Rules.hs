@@ -192,15 +192,16 @@ move :: KnownStrip w h => Frame -> Dir -> Game w h -> (Game w h, Outcome)
 move frame dir g =
     case stepSpot here heading of
         Nothing -> (g, OffTheStrip)
-        Just (ahead, ahead')
+        Just (ahead, ahead', crossing)
             | not (walkable (tileAt g ahead)) -> (g, BlockedByWall)
             | crateAt play ahead ->
                 case stepSpot ahead ahead' of
                     Nothing -> (g, BlockedByCrate)
-                    Just (beyond, _)
+                    Just (beyond, _, _)
                         | occupied g play beyond -> (g, BlockedByCrate)
                         | otherwise ->
                             ( commit
+                                  crossing
                                   play
                                   { playCrates =
                                         Set.insert (spotCoord beyond)
@@ -209,20 +210,19 @@ move frame dir g =
                                   }
                                   ahead
                             , Pushed)
-            | otherwise -> (commit play ahead, Walked)
+            | otherwise -> (commit crossing play ahead, Walked)
   where
     play = gamePlay g
     here = playPlayer play
     heading = headingFor frame (playFlipped play) dir
-    -- The parity is flipped from the step that was about to be taken, not
-    -- from the one that was: 'crossesSeam' asks about a heading leaving a
-    -- cell. See its note --- this bit is one 'mobiusStep' already computed
-    -- and did not hand back.
-    crossed = crossesSeam here heading
-    commit p landed =
+    -- The crate's own crossing is not consulted. A crate has no frame to
+    -- reverse --- it is a box, and a box looks the same either way round ---
+    -- so the only parity in the game is the player's, and it comes from the
+    -- player's own step.
+    commit crossing p landed =
         g { gamePlay =
                 p { playPlayer = landed
-                  , playFlipped = playFlipped p /= crossed
+                  , playFlipped = playFlipped p /= reversedFrame crossing
                   , playFacing = heading
                   , playMoves = playMoves p + 1
                   }

@@ -55,6 +55,10 @@
 module Data.Grid.Atlas.Rect
   ( Axis(..)
   , Heading(..)
+  , Crossing(..)
+  , crossedSeam
+  , reversedFrame
+  , Landing(..)
   , rectStep
   ) where
 
@@ -82,6 +86,65 @@ data Heading = Heading
     { headingAxis :: Axis
     , headingSide :: Extremum
     } deriving (Eq, Show)
+
+-- | What a step did on the way, which is the part that neither the landing
+-- coordinate nor the new heading says.
+--
+-- A walker on a surface carries more than a position and a direction. It
+-- carries a /frame/ --- which way its left hand points --- and a seam can hand
+-- that frame back mirrored. Nothing in the landing coordinate shows it: a step
+-- along a Mobius strip's wrapped axis arrives at the mirrored row with the
+-- heading it left with, and the only thing that has changed is which side the
+-- walker's left is on. A caller reading direction keys in the walker's own
+-- frame --- which is any caller drawing a player-centred view --- has to know.
+--
+-- 'Seam' is kept apart from 'Interior' as well as from 'MirroredSeam', because
+-- a caller that draws or reports a crossing wants to know one happened even
+-- where the frame survived it. On a cube map every crossing is a real crossing
+-- and none of them mirrors anything.
+data Crossing
+    = Interior
+    -- ^ The step stayed inside its chart. No seam was consulted.
+    | Seam
+    -- ^ The step crossed a seam that carried the walker's frame across as it
+    -- was.
+    | MirroredSeam
+    -- ^ The step crossed a seam that handed the walker's frame back reversed.
+    deriving (Eq, Show, Enum, Bounded)
+
+-- | Did this step leave the chart it started in?
+crossedSeam :: Crossing -> Bool
+crossedSeam Interior = False
+crossedSeam _        = True
+
+-- | Is the walker's left hand now on its other side?
+--
+-- The one bit a walker on a non-orientable surface must carry and cannot work
+-- out from where it is or which way it faces. Accumulate it with @xor@ along a
+-- walk: an even number of mirrorings and the walker is as it started, an odd
+-- number and it is not. A walk that closes --- same chart, same cell, same
+-- heading --- with an odd count is a proof that the surface is not orientable,
+-- and there is no such walk on a cube map.
+reversedFrame :: Crossing -> Bool
+reversedFrame MirroredSeam = True
+reversedFrame _            = False
+
+-- | Where a step ended up, and what it did on the way.
+data Landing chart = Landing
+    { landedChart    :: chart
+    , landedAt       :: (Int, Int)
+    , landedHeading  :: Heading
+    , landedCrossing :: Crossing
+    } deriving (Eq, Show)
+
+-- | Which way a walker's left hand points along the axis it is /not/ moving
+-- along: 'True' when it points the way that axis's coordinate increases.
+--
+-- A quarter turn anticlockwise from the heading, in the frame where @U@ is
+-- drawn rightwards and @V@ upwards. Heading @U@ 'AtMax' has its left along
+-- @+V@; heading @V@ 'AtMax' has its left along @-U@.
+leftHandIncreases :: Heading -> Bool
+leftHandIncreases (Heading a s) = (a == U) == (s == AtMax)
 
 sideSign :: Extremum -> Int
 sideSign AtMin = -1
@@ -114,7 +177,7 @@ rectStep ::
     -> chart
     -> (Int, Int)
     -> Heading
-    -> f (chart, (Int, Int), Heading)
+    -> f (Landing chart)
 rectStep sizeOf cross chart (u, v) heading@(Heading axis side) =
     let d = sideSign side
         (u', v') =
@@ -126,7 +189,7 @@ rectStep sizeOf cross chart (u, v) heading@(Heading axis side) =
                 U -> u'
                 V -> v'
     in if moved >= 0 && moved < sizeOf axis
-           then pure (chart, (u', v'), heading)
+           then pure (Landing chart (u', v') heading Interior)
            else land <$> cross chart (axis, side)
   where
     -- The along-the-edge coordinate is the one on the axis the step is not
@@ -154,4 +217,24 @@ rectStep sizeOf cross chart (u, v) heading@(Heading axis side) =
             -- independently of which side of the source it left from, since
             -- a genuine crossing's approach direction is already fixed by
             -- 'side'.
-         in (destChart, landed, Heading destAxis (oppositeSide destSide))
+            heading' = Heading destAxis (oppositeSide destSide)
+            -- The seam's own bit says whether the two edges run the same way
+            -- along the coordinate they share. That is not yet the walker's
+            -- answer, because the walker's left lies on the increasing side
+            -- of that coordinate for some headings and the decreasing side
+            -- for others, and a crossing can change which. The frame survives
+            -- exactly when those two disagreements cancel.
+            --
+            -- This is why the bit cannot be recovered by the caller from the
+            -- table alone: it depends on the heading as well as the seam. A
+            -- cube map's table says 'not reversed' everywhere and no cube
+            -- crossing mirrors a walker; a projective plane's says 'reversed'
+            -- everywhere and every crossing does; a Klein bottle's says one
+            -- of each and the answers follow.
+            mirrored =
+                reversed /=
+                (leftHandIncreases heading /= leftHandIncreases heading')
+            crossing
+                | mirrored = MirroredSeam
+                | otherwise = Seam
+         in Landing destChart landed heading' crossing

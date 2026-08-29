@@ -46,10 +46,14 @@ at horizontal vertical =
     , Clamped (unsafeOrdinal horizontal) :| Clamped (unsafeOrdinal vertical) :|
       EmptyCoord)
 
+-- | 'projectiveStep' with its 'Crossing' dropped; see Test.Frames for the
+-- tests that are about the crossing.
 step ::
        (AtlasCoord '[ Clamped W, Clamped H] 1, Heading)
     -> (AtlasCoord '[ Clamped W, Clamped H] 1, Heading)
-step = uncurry projectiveStep
+step (c, heading) =
+    let (c', heading', _) = projectiveStep c heading
+    in (c', heading')
 
 lap :: Int -> Heading -> (Int, Int) -> (AtlasCoord '[ Clamped W, Clamped H] 1, Heading)
 lap count heading (horizontal, vertical) =

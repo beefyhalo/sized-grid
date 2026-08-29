@@ -8,6 +8,9 @@ module Data.Grid.Atlas.Mobius
   , pattern Wrapped
   , pattern Straight
   , Heading(..)
+  , Crossing(..)
+  , crossedSeam
+  , reversedFrame
   , mobiusAtlas
   , mobiusSeam
   , mobiusStep
@@ -59,13 +62,19 @@ crossMobiusEdge () (Straight, side) = ((), (Straight, side), False)
 -- gluing it hands over answers in 'Maybe', and a step is exactly as partial
 -- as its gluing, where "Data.Grid.Atlas.CubeMap" hands over a total one and
 -- gets a total step.
+--
+-- The 'Crossing' is the third answer and it is not decoration. This surface is
+-- not orientable, so a walker carries a frame that a crossing can hand back
+-- mirrored, and nothing in the position or the heading says so: a step through
+-- the seam arrives at the mirrored row facing the way it already faced. Every
+-- 'Wrapped' crossing here is a 'MirroredSeam'. See 'reversedFrame'.
 mobiusStep ::
        forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
     => AtlasCoord '[ Clamped w, Clamped h] 1
     -> Heading
-    -> Maybe (AtlasCoord '[ Clamped w, Clamped h] 1, Heading)
+    -> Maybe (AtlasCoord '[ Clamped w, Clamped h] 1, Heading, Crossing)
 mobiusStep (chart, u :| v :| EmptyCoord) heading = do
-    ((), (ui, vi), heading') <-
+    Landing () (ui, vi) heading' crossing <-
         rectStep
             axisSize
             glued
@@ -76,7 +85,8 @@ mobiusStep (chart, u :| v :| EmptyCoord) heading = do
         ( ( chart
           , Clamped (unsafeOrdinal ui) :| Clamped (unsafeOrdinal vi) :|
             EmptyCoord)
-        , heading')
+        , heading'
+        , crossing)
   where
     axisSize Wrapped  = ordinalSize @w
     axisSize Straight = ordinalSize @h

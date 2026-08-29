@@ -6,6 +6,7 @@ module Test.CubeMap
   ) where
 
 import           Data.Atlas.Topology.Seam (HalfEdge, seamViolations)
+import           Data.Grid.Atlas          (AtlasCoord)
 import           Data.Grid.Atlas.CubeMap
 import           Data.Grid.Sized
 
@@ -38,6 +39,15 @@ cubeSeamPairsUp =
 -- | Smallest size with an interior cell on every axis.
 type N = 5
 
+-- | 'cubeStep' with its 'Crossing' dropped; see Test.Frames for the tests that
+-- are about the crossing.
+step ::
+       (AtlasCoord '[ Ordinal N, Ordinal N] 6, Heading)
+    -> (AtlasCoord '[ Ordinal N, Ordinal N] 6, Heading)
+step (c, heading) =
+    let (c', heading', _) = cubeStep c heading
+    in (c', heading')
+
 cubeStepBeltCloses :: TestTree
 cubeStepBeltCloses =
     testCase
@@ -48,7 +58,7 @@ cubeStepBeltCloses =
         (\(face, ax, side, u, v) ->
              let start = ((faceIndex face, u :| v :| EmptyCoord), Heading ax side)
                  n = ordinalSize @N
-                 got = iterate (uncurry (cubeStep @N)) start !! (4 * n)
+                 got = iterate step start !! (4 * n)
              in assertEqual (show (face, ax, side, u, v)) start got)
         [ (face, ax, side, u, v)
         | face <- allFaces
