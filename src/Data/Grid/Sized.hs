@@ -39,6 +39,8 @@ module Data.Grid.Sized
     , axis
     , scanAxis
       -- * Windows and tiles
+      --
+      -- $windows
     , ShrinkableGrid(..)
     , gridTiles
     , tiles
@@ -75,3 +77,22 @@ import           Data.Grid.Sized.Stencil          as X
 import           Data.Grid.Sized.Internal.Grid
 
 import           Generics.SOP
+
+-- $windows
+--
+-- These /restrict/: each narrows a grid's extent and keeps no position in the
+-- source. The rule they obey is that the narrowed axis comes back as
+-- 'Ordinal' whatever the source's axis type was --- the policy-free axis,
+-- with no walls and no wrap, whose off-grid step is 'Nothing' rather than an
+-- invented answer. Axes left at full width keep their policies, because they
+-- have not been restricted, and the offsets are 'Ordinal' too, an offset
+-- being an index rather than a position in a space.
+--
+-- A window that kept its source\'s policy would describe a seam that is not in
+-- the space it is a view of: periodicity is a property of a whole axis, so a
+-- proper sub-window of a periodic axis is not periodic, and \"clamped\" means
+-- stepping off the edge stays at the edge, which is a claim about a wall the
+-- window\'s edge does not have. See the header of
+-- @Data.Grid.Sized.Internal.Grid.Windows@ for the worked example. The
+-- counterpart rule --- /a pointing preserves the boundary policy/ --- is what
+-- 'Data.Grid.Sized.Focused.FocusedGrid' does instead.

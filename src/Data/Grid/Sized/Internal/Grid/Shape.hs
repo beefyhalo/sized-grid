@@ -37,7 +37,34 @@ import qualified Data.Vector.Generic                as VG
 import           GHC.TypeLits
 import qualified GHC.TypeLits                       as GHC
 
--- | @tabulate (index g . f)@ for a coordinate endomorphism-or-relabelling @f@
+-- | The general "view a grid by reindexing it", and --- despite the name ---
+-- not restricted to permutations.
+--
+-- Nothing requires @f@ to be bijective, injective, or even non-constant. It is
+-- 'GridOf' being contravariant in its index, and every restriction in
+-- "Data.Grid.Sized.Internal.Grid.Windows" is an instance of it: a window of 3
+-- at offset 1 is @permuteGrid (\\c -> unsafeOrdinal (ordinalToInt (headOf c) + 1)
+-- :| EmptyCoord)@. The specialised ones exist because each is one 'VG.slice'
+-- where this builds a @'coordSpaceSize' \@cs@-long index table and a 'Coord'
+-- per cell; the concept has its home here.
+--
+-- Being the general form, it is where the boundary-policy rule is stated in
+-- full: __a restriction destroys the boundary policy, a pointing preserves
+-- it.__ @cs@ and @ds@ are independent, so @f@ may relabel a @Periodic 9@ axis
+-- as a @Clamped 3@ one and this will do it --- which is right, because @f@ is
+-- the caller writing down exactly what the new space is and how it maps into
+-- the old one. It is also the whole of the obligation: whatever @cs@ says about
+-- walls and wrapping is what callers of the result will get, and a proper
+-- sub-window of a periodic axis is not periodic. Where the extent narrows and
+-- @f@ is not onto, @'Data.Grid.Sized.Ordinal.Ordinal'@ is the axis that tells
+-- the truth about it. @permuteGrid@ cannot check this and does not try; the
+-- named restrictions in "Data.Grid.Sized.Internal.Grid.Windows" have it in
+-- their types instead, which is the reason to prefer one when it fits.
+--
+-- The name is kept because it is published. @reindexGrid@ would describe it
+-- better.
+--
+-- @tabulate (index g . f)@ for a coordinate endomorphism-or-relabelling @f@
 -- is a permutation of the underlying vector: which source position feeds
 -- which target position depends only on @cs@, @ds@ and @f@, never on @g@'s
 -- elements. So it can be computed once as a table of positions and applied

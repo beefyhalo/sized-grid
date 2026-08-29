@@ -45,20 +45,20 @@ nineColumns = zipLowerDim gridTiles nineByNine
 
 -- | 'tiles' as a getter agrees with 'gridTiles'.
 tilesIsGridTiles :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
-tilesIsGridTiles g = toListOf (tiles @(Ordinal 1)) g === rows g
+tilesIsGridTiles g = toListOf (tiles @1) g === rows g
 
 -- | 'over' at the identity function is the identity -- the first half of the
 -- Traversal laws.
 overTilesId :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
-overTilesId g = over (tiles @(Ordinal 1)) id g === g
+overTilesId g = over (tiles @1) id g === g
 
 -- | @'over' l f . 'over' l g == 'over' l (f . g)@ -- the composition law that
 -- fails for 'gridWindows' (overlapping foci) but holds here because the tiles
 -- are disjoint and covering.
 overTilesComposes :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
 overTilesComposes g =
-  over (tiles @(Ordinal 1)) negate' (over (tiles @(Ordinal 1)) double g) ===
-  over (tiles @(Ordinal 1)) (negate' . double) g
+  over (tiles @1) negate' (over (tiles @1) double g) ===
+  over (tiles @1) (negate' . double) g
   where
     double = mapGrid (* 2)
     negate' = mapGrid negate
@@ -67,7 +67,7 @@ overTilesComposes g =
 -- since every tile is transformed the same way.
 overTilesMatchesMapGrid :: Grid '[ Ordinal 4, Ordinal 4] Int -> Property
 overTilesMatchesMapGrid g =
-  over (tiles @(Ordinal 1)) (mapGrid (+ 100)) g === mapGrid (+ 100) g
+  over (tiles @1) (mapGrid (+ 100)) g === mapGrid (+ 100) g
 
 tilingTests :: TestTree
 tilingTests =

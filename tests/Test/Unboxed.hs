@@ -92,9 +92,9 @@ unboxedTests =
                 assertEqual
                     "windows"
                     (map (V.toList . gridVector)
-                         (gridWindows @(Ordinal 2) boxed))
+                         (gridWindows @2 boxed))
                     (map (U.toList . gridVector)
-                         (gridWindows @(Ordinal 2) unboxed))
+                         (gridWindows @2 unboxed))
               , testCase "zipLowerDim gridTiles cuts the same columns" $
                 assertEqual
                     "columns"

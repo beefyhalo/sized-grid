@@ -28,6 +28,36 @@ Read that as the rule for judging any proposed addition. If a new function has
 to clamp, wrap, or truncate to stay total, it either takes the coordinate type
 that licenses it or it returns `Maybe`. There is no third option.
 
+**A restriction destroys the boundary policy. A pointing preserves it.**
+
+That is the corollary, and it decides the type of every sub-grid. Taking a
+window, a tile or a sub-matrix out of a grid *restricts* it: the result has a
+smaller extent and no position in the source. Adding a focus — `FocusedGrid`,
+`Walker` — *points* at it: the extent is unchanged and a distinguished position
+is added. The two do opposite things to the policy.
+
+Periodicity is a property of a whole axis, so a proper sub-window of a periodic
+axis is not periodic; and "clamped" means stepping off the edge stays at the
+edge, so clamping at a window's edge is a claim about a wall the source does not
+have there. Either way the sub-grid invents a seam that is not in the space it
+is a view of, and does it silently. So `shrinkGrid`, `gridWindows` and
+`gridTiles` return grids whose narrowed axis is `Ordinal` — no walls, no wrap,
+and an off-grid step that returns `Nothing` rather than an invented answer —
+whatever the source's policy was. Axes they leave at full width keep theirs,
+because those have not been restricted.
+
+Offsets are `Ordinal` for the same reason read from the other side. An offset is
+an index into a list of positions, not a position in a space, so `shrinkGrid`'s
+offset into a `Periodic 9` windowed to 3 is a `Coord '[Ordinal 7]`; as a
+`Coord '[Periodic 7]` its `<>` wrapped offset 6 plus offset 3 round to offset 2,
+which is arithmetic in no space the caller has.
+
+`FocusedGrid` is the other side of the rule: it keeps the whole grid, so it
+keeps the policy, which is exactly what makes its `Comonad` worth having —
+`extend f` runs `f` at every cell of the *source*. A caller who genuinely wants
+a policy back on a sub-grid restates it, which is a place where they have to
+think, which is the point.
+
 Provenance and name
 ===================
 

@@ -95,6 +95,15 @@ compileFailTests =
       assertCompileFails "SplitHigherDimWrongRemainder.hs" "Couldn't match"
     , testCase "shrinkGrid with a window that does not fit" $
       assertCompileFails "ShrinkGridWindowTooBig.hs" "Cannot satisfy: 6 <= 4"
+      -- sized-grid-mbh0: a restriction destroys the boundary policy, so a
+      -- window is Ordinal-axed whatever the source's axis type was. The
+      -- substring names both halves of the mismatch, because a regression
+      -- that made the window's axis free again would let the snippet compile
+      -- rather than fail differently.
+    , testCase "a window annotated with the source's boundary policy" $
+      assertCompileFails
+        "WindowKeepsSourcePolicy.hs"
+        "Couldn't match type: Ordinal 3"
     , testCase "walkPathTotal on a coord with a walled axis" $
       assertCompileFails
         "WalkPathTotalNotBoundaryless.hs"

@@ -23,7 +23,7 @@ board = tabulate coordPosition
 
 -- | 4 charts of 3x4, tiling 'board' along its outermost axis.
 atlas :: Atlas '[ Ordinal 3, Ordinal 4] 4 Int
-atlas = atlasFromTiles @(Ordinal 3) board
+atlas = atlasFromTiles @3 board
 
 -- | The same split 'atlasFromTiles' makes, computed independently.
 splitChart :: Coord '[ Ordinal 12, Ordinal 4] -> AtlasCoord '[ Ordinal 3, Ordinal 4] 4

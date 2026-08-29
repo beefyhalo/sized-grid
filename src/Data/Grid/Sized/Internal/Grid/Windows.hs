@@ -6,6 +6,52 @@
 -- The three differ in what they promise about their results, and the optics
 -- follow: 'tiles' is a 'Traversal' because tiles are disjoint and cover the
 -- source, while 'windows' is only a 'Fold' because windows overlap.
+--
+-- == A restriction destroys the boundary policy
+--
+-- Everything in this module /restricts/: it narrows a grid's extent and keeps
+-- no position in the source. The rule every such operation obeys is that the
+-- result is 'Data.Grid.Sized.Ordinal.Ordinal'-axed along the axis it narrowed
+-- --- the policy-free axis, with no walls and no wrap, whose off-grid offsets
+-- return 'Nothing' rather than an answer.
+--
+-- The alternative, keeping the source's axis type, is a silent wrong answer.
+-- Source @[1..9]@, a window of 3 at offset 1, one step left of the window's
+-- first cell:
+--
+-- >                            Periodic 9 -> Periodic 3   Clamped 9 -> Clamped 3
+-- > source                     [1,2,3,4,5,6,7,8,9]        [1,2,3,4,5,6,7,8,9]
+-- > window at offset 1         [2,3,4]                    [2,3,4]
+-- > window cell 0, step left   4                          2
+-- > the same step in source    1                          1
+--
+-- The window invents a seam that does not exist in the space it is a view of.
+-- Periodicity is a property of a whole axis, and a proper sub-window of a
+-- periodic axis is not periodic; \"clamped\" means stepping off the edge stays
+-- at the edge, and the window's edge is not the source's edge. Both answers
+-- are wrong for the same reason, and both are wrong silently, which is the
+-- one failure mode this library organises its types against.
+--
+-- The offsets are 'Data.Grid.Sized.Ordinal.Ordinal' for the same reason read
+-- from the other side. 'shrinkGrid'\'s offset into a @Periodic 9@ source
+-- windowed to 3 used to have type @'Coord' \'[Periodic 7]@: the 7 is the
+-- number of valid offsets, @Periodic@ is meaningless there, and @'<>'@ on
+-- that coordinate wrapped offset 6 plus offset 3 round to offset 2 ---
+-- arithmetic on a position in no space the caller has. An offset is an index,
+-- so it is an 'Data.Grid.Sized.Ordinal.Ordinal' too.
+--
+-- The rule costs the full-width case a little honesty for a lot of
+-- simplicity: a window whose extent equals its source\'s /does/ preserve the
+-- policy, but saying so in the type needs a type-level conditional on every
+-- axis. A caller who wants the policy back restates it, which is a place
+-- where they have to think, which is the point.
+--
+-- The counterpart rule --- /a pointing preserves the boundary policy/ ---
+-- belongs to "Data.Grid.Sized.Focused", which keeps the whole extent and adds
+-- a position rather than the other way round. The general form of
+-- \"restriction\" is
+-- 'Data.Grid.Sized.Internal.Grid.Shape.permuteGrid'; the operations here
+-- exist because each is one 'VG.slice' where that is a whole index table.
 module Data.Grid.Sized.Internal.Grid.Windows
   ( ShrinkableGrid(..)
   , gridTiles
@@ -19,6 +65,7 @@ import           Data.Grid.Sized.Coord.Class
 import           Data.Grid.Sized.Internal.Grid.Core
 import           Data.Grid.Sized.Internal.Grid.Shape
 import           Data.Grid.Sized.Internal.Type       (requiring, windowFits)
+import           Data.Grid.Sized.Ordinal             (Ordinal)
 
 import           Control.Lens                        hiding (index)
 import           Data.Constraint
@@ -28,6 +75,14 @@ import qualified Data.Vector.Generic                 as VG
 import           GHC.TypeLits
 
 -- | Taking a window out of a grid, one axis at a time.
+--
+-- @cs@ is the offsets, @as@ the source's axes and @bs@ the window's. Per the
+-- module header, @cs@ and @bs@ are 'Data.Grid.Sized.Ordinal.Ordinal' whatever
+-- @as@ is:
+--
+-- > shrinkGrid :: Coord '[Ordinal 3]        -- ^ which of the 3 offsets
+-- >            -> Grid '[Periodic 5] a      -- ^ any source policy
+-- >            -> Grid '[Ordinal 3] a       -- ^ the window has none
 --
 -- The /window arithmetic/ here is element-agnostic: it slices whole sub-grids
 -- and never looks inside one. The constraint is nevertheless @'VG.Vector' v x@,
@@ -47,7 +102,15 @@ class ShrinkableGrid (cs :: [Type]) (as :: [Type]) (bs :: [Type]) where
 instance ShrinkableGrid '[] '[] '[] where
   shrinkGrid _ (Grid v) = Grid v
 
--- | @x + z <= y + 1@ says: a window of @z@ taken at any of the @x@ offsets
+-- | The instance head says the module's rule twice over. The source axis is
+-- any @c y@ --- a window can be taken out of a grid with any boundary policy
+-- --- while both the /offset/ and the /window/ are
+-- 'Data.Grid.Sized.Ordinal.Ordinal'. The head used to be
+-- @ShrinkableGrid (c x ': cs) (c y ': as) (c z ': bs)@, which forced the
+-- window's policy to equal the source's and so made a window of a
+-- @Periodic 9@ wrap round its own three cells. See the module header.
+--
+-- @x + z <= y + 1@ says: a window of @z@ taken at any of the @x@ offsets
 -- still fits inside the source of size @y@.
 --
 -- This was previously written @z <= x - y + 1@, which has @x@ and @y@ the wrong
@@ -68,56 +131,90 @@ instance ShrinkableGrid '[] '[] '[] where
 -- stride, so the tail's sizes have to be in scope, and the head axis has to
 -- be one 'Data.Grid.Sized.Coord.Class.IsCoordLifted' can speak for. Neither
 -- narrows what this instance covers --- an axis of size zero has no
--- coordinates to shrink.
+-- coordinates to shrink. @IsCoord c@ is gone with the old head: the only
+-- thing the instance ever asked of the head axis was 'reifyCoord' on the
+-- /offset/, and the offset is now concretely an
+-- 'Data.Grid.Sized.Ordinal.Ordinal'. Nothing is asked of the source axis at
+-- all, which is exactly the statement that a restriction does not care what
+-- policy it is restricting.
 instance ( KnownNat x
          , KnownNat z
          , AllSizedKnown as
-         , IsCoord c
          , IsCoordList cs
          , ShrinkableGrid cs as bs
          , 1 <= x
          , x + z <= y + 1
          ) =>
-         ShrinkableGrid (c x ': cs) (c y ': as) (c z ': bs) where
+         ShrinkableGrid (Ordinal x ': cs) (c y ': as) (Ordinal z ': bs) where
     shrinkGrid (c :| cs) =
         combineGrid . fmap (shrinkGrid cs) . helper . splitGrid
       where
         helper ::
              Grid '[ c y] (GridOf v as a)
-          -> Grid '[ c z] (GridOf v as a)
+          -> Grid '[ Ordinal z] (GridOf v as a)
         helper g =
             reifyCoord c $ \n ->
-                withDict (windowFits @n @x @y @z) $ sliceGrid n z g
+                withDict (windowFits @n @x @y @z) $
+                    forgetAxisPolicy (sliceGrid n z g)
+
+-- | Restate a one-axis grid on the policy-free axis of the same size.
+--
+-- 'sliceGrid' preserves its source's axis constructor, because it is also the
+-- engine behind the 'Data.Grid.Sized.Optics.slice' \/
+-- 'Data.Grid.Sized.Optics.prefix' \/ 'Data.Grid.Sized.Optics.suffix' lenses,
+-- which are not part of this correction (sized-grid-pnws). So the window
+-- 'shrinkGrid' gets back arrives as @c z@ and has to be restated as the
+-- @'Data.Grid.Sized.Ordinal.Ordinal' z@ the rule requires.
+--
+-- Nothing is reinterpreted: @'MaxCoordSize' '[c z]@ and
+-- @'MaxCoordSize' '[Ordinal z]@ are both @z@, so the 'GridOf' length
+-- invariant carries across unchanged, and the row-major order of a single
+-- axis does not depend on the axis's policy. What changes is only what the
+-- type promises about stepping off the end.
+forgetAxisPolicy :: GridOf v '[ c z] a -> GridOf v '[ Ordinal z] a
+forgetAxisPolicy = Grid . unGrid
+{-# INLINE forgetAxisPolicy #-}
 
 
--- | Cut a grid into disjoint tiles along its outermost axis: an @Ordinal 9@
--- axis tiled by @Ordinal 3@ gives three tiles, not seven overlapping windows.
--- The tiles partition the source, so concatenating them reproduces it.
+-- | Cut a grid into disjoint tiles along its outermost axis: a source axis of
+-- 9 tiled by @n ~ 3@ gives three tiles, not seven overlapping windows. The
+-- tiles partition the source, so concatenating them reproduces it.
 --
 -- This was called @gridWindows@, which said the opposite of what it does. A
 -- sliding window and a disjoint tiling are different operations; this is the
 -- tiling. Sliding windows are 'gridWindows'.
 --
--- @CoordNat big \`Mod\` CoordNat small ~ 0@ makes a tiling that does not divide
--- evenly a type error, so the result is always exactly
--- @CoordNat big \`Div\` CoordNat small@ tiles with no short remainder.
+-- @CoordNat big \`Mod\` n ~ 0@ makes a tiling that does not divide evenly a
+-- type error, so the result is always exactly @CoordNat big \`Div\` n@ tiles
+-- with no short remainder.
+--
+-- The tiled axis comes back as @'Data.Grid.Sized.Ordinal.Ordinal' n@ whatever
+-- the source's was, per the module header: a tile is a proper sub-window, and
+-- a proper sub-window of a periodic axis is not periodic. The remaining axes
+-- are untouched at full width, so they keep their policies, which is honest
+-- --- they have not been restricted. To recover a topology /across/ the tiles,
+-- see the @grid-atlas@ package, which is what an atlas of charts is for.
 --
 -- To tile along the /second/ axis, reach for 'zipLowerDim' and not
 -- 'mapLowerDim':
 --
 -- > rows    = gridTiles                :: Board -> [Grid '[Ordinal 1, Ordinal 9] a]
 -- > columns = zipLowerDim gridTiles    :: Board -> [Grid '[Ordinal 9, Ordinal 1] a]
--- @small@ before @v@, for the reason given on 'gridWindows'.
-gridTiles :: forall small v big rest a.
+--
+-- @n@ before @v@, for the reason given on 'gridWindows'. It is a 'Nat' rather
+-- than a whole axis type because there is no longer a choice to make: the
+-- result axis is 'Data.Grid.Sized.Ordinal.Ordinal', so all the caller can
+-- supply is its size. @gridTiles \@(Ordinal 3)@ becomes @gridTiles \@3@.
+gridTiles :: forall n v big rest a.
                ( VG.Vector v a,
-                 KnownNat (MaxCoordSize (small ': rest)),
-                 CoordNat big `Mod` CoordNat small ~ 0
+                 KnownNat (MaxCoordSize (Ordinal n ': rest)),
+                 CoordNat big `Mod` n ~ 0
                )
             => GridOf v (big ': rest) a
-            -> [GridOf v (small ': rest) a]
+            -> [GridOf v (Ordinal n ': rest) a]
 gridTiles (Grid v) =
-    requiring @(CoordNat big `Mod` CoordNat small ~ 0) $
-    let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))
+    requiring @(CoordNat big `Mod` n ~ 0) $
+    let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))
     in map Grid $ splitVectorBySize size v
 {-# INLINABLE gridTiles #-}
 
@@ -131,22 +228,27 @@ gridTiles (Grid v) =
 -- reproduces the source whenever the traversal is used as a getter -- the
 -- same fact 'gridTiles'\'s own Haddock states for the read-only direction.
 -- It shares its engine with 'mapLowerDim' via 'traverseChunks'.
-tiles :: forall small v big rest a.
+--
+-- Writing /back/ through it is where the policy rule earns its keep in the
+-- other direction: the tile handed to the function is
+-- 'Data.Grid.Sized.Ordinal.Ordinal'-axed, so nothing the function does to it
+-- can consult a wrap or a wall the source has and the tile does not.
+tiles :: forall n v big rest a.
           ( VG.Vector v a
-          , KnownNat (MaxCoordSize (small ': rest))
-          , CoordNat big `Mod` CoordNat small ~ 0
+          , KnownNat (MaxCoordSize (Ordinal n ': rest))
+          , CoordNat big `Mod` n ~ 0
           )
-       => Traversal' (GridOf v (big ': rest) a) (GridOf v (small ': rest) a)
+       => Traversal' (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
 tiles f (Grid v) =
-    requiring @(CoordNat big `Mod` CoordNat small ~ 0) $
+    requiring @(CoordNat big `Mod` n ~ 0) $
     Grid <$>
-    traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (small ': rest)))) f v
+    traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))) f v
 {-# INLINABLE tiles #-}
 
--- | Every overlapping window of size @CoordNat small@ along a grid's outermost
--- axis, stride 1: an @Ordinal 9@ axis windowed by @Ordinal 3@ gives seven
--- overlapping windows -- @0..2@, @1..3@, ..., @6..8@ -- not the three disjoint
--- tiles 'gridTiles' would.
+-- | Every overlapping window of size @n@ along a grid's outermost axis,
+-- stride 1: a source axis of 9 windowed by @n ~ 3@ gives seven overlapping
+-- windows -- @0..2@, @1..3@, ..., @6..8@ -- not the three disjoint tiles
+-- 'gridTiles' would.
 --
 -- This is 'shrinkGrid' at every valid offset along the outermost axis, with the
 -- other axes left untouched at each one, stated at the vector level for the
@@ -158,30 +260,43 @@ tiles f (Grid v) =
 -- 'VG.slice', and 'gridTiles'\'s own trick of reading the block size off the
 -- vector rather than the type carries over unchanged. The property that ties
 -- the two readings together -- this agrees with 'shrinkGrid' at every offset --
--- is checked in "Test.Windows" rather than assumed here.
+-- is checked in "Test.Windows" rather than assumed here. That property is now
+-- statable at /every/ source policy rather than only where the source is
+-- already 'Data.Grid.Sized.Ordinal.Ordinal'-axed, because both sides return
+-- the same 'Data.Grid.Sized.Ordinal.Ordinal'-axed window.
 --
--- @CoordNat small <= CoordNat big@ makes a window larger than its source a type
--- error, mirroring 'gridTiles'\'s own @Mod ~ 0@: both are preconditions the
+-- @n <= CoordNat big@ makes a window larger than its source a type error,
+-- mirroring 'gridTiles'\'s own @Mod ~ 0@: both are preconditions the
 -- vector-level implementation cannot check for itself, so the type states them
 -- instead.
--- @small@ is quantified before @v@, and both of these deliberately break the
--- \"vector first\" order the rest of the module uses. Nothing determines @small@
+--
+-- The windowed axis comes back as @'Data.Grid.Sized.Ordinal.Ordinal' n@
+-- whatever the source's was; @rest@ is untouched at full width and keeps its
+-- policies. See the module header for why. Before this, @small@ was a free
+-- axis type related to @big@ only through 'CoordNat', so
+-- @gridWindows \@(Clamped 3)@ over a @Grid \'[Periodic 9]@ compiled and gave
+-- a window that clamped at a wall that is not there.
+--
+-- @n@ is quantified before @v@, and both of these deliberately break the
+-- \"vector first\" order the rest of the module uses. Nothing determines @n@
 -- -- it appears only in the element type of the result list -- so the caller
 -- always supplies it by type application, whereas @v@ is read off the argument.
--- The parameter that must be written comes first, so @gridWindows \@(Ordinal 3)@
--- keeps working rather than becoming @gridWindows \@_ \@(Ordinal 3)@.
-gridWindows :: forall small v big rest a.
+-- The parameter that must be written comes first, so @gridWindows \@3@ works
+-- rather than becoming @gridWindows \@_ \@3@. It is a 'Nat' and not a whole
+-- axis type for the reason given on 'gridTiles': there is no longer a policy
+-- to choose, only a size.
+gridWindows :: forall n v big rest a.
                ( VG.Vector v a
                , AllSizedKnown rest
-               , KnownNat (CoordNat small)
-               , CoordNat small <= CoordNat big
+               , KnownNat n
+               , n <= CoordNat big
                )
             => GridOf v (big ': rest) a
-            -> [GridOf v (small ': rest) a]
+            -> [GridOf v (Ordinal n ': rest) a]
 gridWindows (Grid v) =
-    requiring @(CoordNat small <= CoordNat big) $
+    requiring @(n <= CoordNat big) $
     let restSize = fromIntegral $ natVal (Proxy @(MaxCoordSize rest))
-        smallSize = fromIntegral $ natVal (Proxy @(CoordNat small))
+        smallSize = fromIntegral $ natVal (Proxy @n)
         windowSize = smallSize * restSize
         bigSize = VG.length v `div` restSize
     in [ Grid (VG.slice (off * restSize) windowSize v)
@@ -191,8 +306,8 @@ gridWindows (Grid v) =
 
 -- | 'gridWindows' as an optic -- and, on purpose, no more than a 'Fold'.
 --
--- A window of @Ordinal 3@ over an @Ordinal 9@ axis puts cell 2 in three
--- overlapping windows (see 'gridWindows'). A 'Traversal'\'s foci must be
+-- A window of size 3 over an axis of 9 puts cell 2 in three overlapping
+-- windows (see 'gridWindows'). A 'Traversal'\'s foci must be
 -- disjoint for @'over' l f@ to have a single meaning; here it would not --
 -- @over windows f@ would have to pick which of three writes to cell 2 wins,
 -- and whichever it picked, the 'Traversal' law
@@ -203,12 +318,12 @@ gridWindows (Grid v) =
 -- caller can be trusted to use it read-only: the failure of the law is
 -- silent, wrong values rather than a type error, which is the one failure
 -- mode this library organises its types against.
-windows :: forall small v big rest a.
+windows :: forall n v big rest a.
            ( VG.Vector v a
            , AllSizedKnown rest
-           , KnownNat (CoordNat small)
-           , CoordNat small <= CoordNat big
+           , KnownNat n
+           , n <= CoordNat big
            )
-        => Fold (GridOf v (big ': rest) a) (GridOf v (small ': rest) a)
-windows = folding (gridWindows @small)
+        => Fold (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
+windows = folding (gridWindows @n)
 {-# INLINABLE windows #-}

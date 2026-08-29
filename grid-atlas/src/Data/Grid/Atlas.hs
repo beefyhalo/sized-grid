@@ -24,14 +24,24 @@ newtype Atlas (cs :: [Type]) (k :: Nat) a = Atlas (V.Vector (Grid cs a))
 -- | Which chart, and a position local to it.
 type AtlasCoord cs k = (Ordinal k, Coord cs)
 
+-- | The charts come back 'Ordinal'-axed, because 'gridTiles' does: a tile is
+-- a proper sub-window of the source axis, and a sub-window of a periodic axis
+-- is not periodic. That is what this module is for: the topology the tiling
+-- destroys is restored /across/ the charts by 'atlasOffsetHead', which knows
+-- which chart is next, rather than left inside each chart to make claims
+-- about its own edges that the source does not support.
+--
+-- The chart size is given as the 'Nat' @n@ rather than as a whole axis type,
+-- following 'gridTiles': there is no policy left to choose. @atlasFromTiles
+-- \@(Ordinal 3)@ becomes @atlasFromTiles \@3@.
 atlasFromTiles ::
-       forall small big rest a.
-       ( KnownNat (MaxCoordSize (small ': rest))
-       , CoordNat big `Mod` CoordNat small ~ 0
+       forall n big rest a.
+       ( KnownNat (MaxCoordSize (Ordinal n ': rest))
+       , CoordNat big `Mod` n ~ 0
        )
     => Grid (big ': rest) a
-    -> Atlas (small ': rest) (Div (CoordNat big) (CoordNat small)) a
-atlasFromTiles = Atlas . V.fromList . gridTiles @small
+    -> Atlas (Ordinal n ': rest) (Div (CoordNat big) n) a
+atlasFromTiles = Atlas . V.fromList . gridTiles @n
 
 -- | 'Nothing' if the vector's length does not match @k@.
 atlasFromVector ::

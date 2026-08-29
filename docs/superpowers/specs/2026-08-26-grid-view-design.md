@@ -2,6 +2,17 @@
 
 Design for `sized-grid-d9o9`. Written 2026-08-26.
 
+**Status, 2026-08-27.** Pieces 1 and 2 of the recommendation landed as
+`sized-grid-mbh0`: the rule is stated in the README's design thesis, in
+`Internal.Grid.Windows`'s module header, on `permuteGrid` and on the
+"Windows and tiles" export section of `Data.Grid.Sized`, and `shrinkGrid`,
+`gridWindows` and `gridTiles` now return `Ordinal`-axed grids with
+`Ordinal` offsets. The tables below describe the state *before* that, and
+are kept as the record of what was found. Piece 3 is `sized-grid-xmxm` and
+piece 4 is `sized-grid-3ybi`; the rest of the shape algebra, which this
+document's table lists as "same as source" without flagging it, is
+`sized-grid-pnws`.
+
 ## Question
 
 The issue asks whether the library is missing a general "view over a grid" —

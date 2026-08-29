@@ -9,6 +9,65 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **Breaking, and a bug fix.** A restriction destroys the boundary policy
+  (sized-grid-mbh0). `shrinkGrid`, `gridWindows` and `gridTiles` now return
+  grids whose narrowed axis is `Ordinal`, whatever the source's axis type was,
+  and `shrinkGrid`'s offset is an `Ordinal` coordinate.
+
+  A sub-grid used to keep the source's coordinate constructor, so its boundary
+  policy described walls and seams that do not exist in the space it is a view
+  of. Source `[1..9]`, a window of 3 at offset 1, one step left of the
+  window's first cell:
+
+  ```
+                             Periodic 9 -> Periodic 3   Clamped 9 -> Clamped 3
+  source                     [1,2,3,4,5,6,7,8,9]        [1,2,3,4,5,6,7,8,9]
+  window at offset 1         [2,3,4]                    [2,3,4]
+  window cell 0, step left   4                          2
+  the same step in source    1                          1
+  ```
+
+  Periodicity is a property of a whole axis, so a proper sub-window of a
+  periodic axis is not periodic; and "clamped" means stepping off the edge
+  stays at the edge, and the window's edge is not the source's edge. Both
+  answers were wrong, and both were wrong silently, which is the one failure
+  mode this library organises its types against. The `Ordinal` window steps
+  off its own edge into `Nothing`.
+
+  The API disagreed with itself about this, which is what made it findable.
+  `ShrinkableGrid`'s instance head was
+  `ShrinkableGrid (c x ': cs) (c y ': as) (c z ': bs)`, forcing the window's
+  policy to equal the source's; `gridWindows` and `gridTiles` related their
+  two sizes only through `CoordNat` and left it entirely free, so
+  `gridWindows @(Clamped 3)` over a `Grid '[Periodic 9]` compiled and produced
+  the right-hand column above. The new instance head is
+  `ShrinkableGrid (Ordinal x ': cs) (c y ': as) (Ordinal z ': bs)`, which asks
+  nothing at all of the source axis --- exactly the statement that a
+  restriction does not care what policy it is restricting. `IsCoord c` leaves
+  the instance context with it.
+
+  What to change at a call site: axes the operation leaves at full width are
+  untouched and keep their policies, so a caller already working in `Ordinal`
+  is unaffected except for the type application. `gridWindows`, `gridTiles`,
+  `windows` and `tiles` now take the window size as a `Nat` rather than as a
+  whole axis type, because there is no longer a policy to choose ---
+  `gridWindows @(Ordinal 3)` becomes `gridWindows @3`. `grid-atlas`'s
+  `atlasFromTiles` follows suit. A caller who wants a policy back on a
+  sub-grid restates it.
+
+  `Test.Windows`'s law that `gridWindows` agrees with `shrinkGrid` at every
+  offset was previously only statable where the source was already
+  `Ordinal`-axed; it is now statable at every policy, and is checked over
+  `Periodic` and `Clamped` sources too. A new property checks that a step out
+  of a window is `Nothing` rather than a source-policy answer.
+
+  The rule is stated in the README's design thesis, in
+  `Data.Grid.Sized.Internal.Grid.Windows`'s module header, and on
+  `permuteGrid`, which is the general form every restriction is an instance
+  of. The rest of the shape algebra --- `sliceGrid`, `takeGrid`, `dropGrid`,
+  `splitHigherDim` and the `slice`/`prefix`/`suffix` lenses --- still keeps
+  the source's policy and is sized-grid-pnws.
+
 * `Data.Grid.Sized.Coord.Class` is now a facade over
   `Coord.Class.Axis` and `Coord.Class.List`, both newly exposed
   (sized-grid-6kor.9). Its export list is unchanged. `Axis` holds what one
