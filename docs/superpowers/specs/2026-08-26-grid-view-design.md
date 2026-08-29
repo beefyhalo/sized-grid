@@ -194,6 +194,11 @@ name is published and the Haddock can carry the correction.
 ## Not covered here
 
 The pointing family — `FocusedGrid`, `Walker`, `traceOffset`, `tracePath`,
-`stepWalker` — is `sized-grid-ylhl`. The direct sliding-window transforms that
+`stepWalker` — is `sized-grid-ylhl`, answered on 2026-08-29 in
+[the pointing family](2026-08-29-pointing-family-design.md): its model is
+already complete at the `Coord` layer and only three of its operations were
+lifted, so that is an API addition too, not a new type and not a class. The
+"do not unify them" conclusion above survived the second look. The direct
+sliding-window transforms that
 avoid materialising each window are `sized-grid-psk4`, and piece 3 above is
 their read-only precursor rather than a substitute for them.
