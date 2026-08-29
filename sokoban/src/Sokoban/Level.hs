@@ -28,7 +28,11 @@
 -- size, the size is in the type, and a list of levels is a list of
 -- 'SomeLevel'.
 module Sokoban.Level
-  ( SomeLevel(..)
+  ( -- * A level's picture, before it has a size
+    Layout(..)
+  , readLayout
+    -- * Levels
+  , SomeLevel(..)
   , withPositive
   , parseLevel
   , parseLevelAt
@@ -48,6 +52,7 @@ import           Data.List       (isPrefixOf, sort)
 import qualified Data.Map.Strict as M
 import           Data.Maybe      (fromMaybe, isNothing)
 import           Data.Proxy      (Proxy (..))
+import           Data.Set        (Set)
 import qualified Data.Set        as Set
 import           Data.Type.Ord   (OrderingI (..))
 import           GHC.TypeLits    (KnownNat, SomeNat (..), cmpNat, someNatVal,
@@ -100,30 +105,37 @@ glyphTile (OnlyTile t) = t
 glyphTile (Crate t)    = t
 glyphTile (Player t)   = t
 
--- | A picture, read but not yet given a size. The stage between text and a
--- 'Level': everything is checked here except that the size is a size, because
--- checking that is what produces the type the level is at.
-data Picture = Picture
-    { picName   :: String
-    , picNote   :: String
-    , picCells  :: M.Map (Int, Int) Glyph
-    , picPlayer :: (Int, Int)
-    , picCrates :: [(Int, Int)]
-    , picGoals  :: [(Int, Int)]
-    , picWidth  :: Int
-    , picHeight :: Int
-    }
+-- | A level's picture, read and checked but not yet given a size.
+--
+-- The stage between text and a 'Level', and public because it is what a second
+-- surface would consume. "Sokoban.Flat" plays the same layout on a cylinder
+-- and on a plain rectangle in order to say whether a level needs the twist,
+-- and it has to be reading the /same/ picture as the strip does for that
+-- comparison to mean anything. One parser, two surfaces.
+--
+-- Everything here is in picture coordinates: @(column, row)@ with row zero at
+-- the bottom, the way 'spotXY' counts, and not the way the text reads.
+data Layout = Layout
+    { layoutName   :: String
+    , layoutNote   :: String
+    , layoutWalls  :: Set (Int, Int)
+    , layoutGoals  :: Set (Int, Int)
+    , layoutCrates :: Set (Int, Int)
+    , layoutPlayer :: (Int, Int)
+    , layoutWidth  :: Int
+    , layoutHeight :: Int
+    } deriving (Eq, Show)
 
 -- | Read one level, at whatever size its picture is.
 parseLevel :: String -> Either String SomeLevel
 parseLevel src = do
-    pic <- readPicture src
+    lay <- readLayout src
     let bad = Left "a level must be at least one cell each way"
     fromMaybe bad $
-        withPositive (picWidth pic) $ \(_ :: Proxy w) ->
+        withPositive (layoutWidth lay) $ \(_ :: Proxy w) ->
             fromMaybe bad $
-            withPositive (picHeight pic) $ \(_ :: Proxy h) ->
-                SomeLevel <$> assemble @w @h pic
+            withPositive (layoutHeight lay) $ \(_ :: Proxy h) ->
+                SomeLevel <$> assemble @w @h lay
 
 -- | Read one level at a size the caller already has in hand, failing if the
 -- picture is a different shape. What a test with a picture written into it
@@ -133,15 +145,15 @@ parseLevelAt ::
     => String
     -> Either String (Level w h)
 parseLevelAt src = do
-    pic <- readPicture src
+    lay <- readLayout src
     let want = (ordinalSize @w, ordinalSize @h)
-        got = (picWidth pic, picHeight pic)
+        got = (layoutWidth lay, layoutHeight lay)
     if want /= got
         then Left ("expected a picture " ++ show want ++ ", got " ++ show got)
-        else assemble @w @h pic
+        else assemble @w @h lay
 
-readPicture :: String -> Either String Picture
-readPicture = build . foldl' takeLine (Header "" "" []) . lines
+readLayout :: String -> Either String Layout
+readLayout = build . foldl' takeLine (Header "" "" []) . lines
   where
     takeLine acc raw =
         let line = dropTrailingCR raw
@@ -185,7 +197,7 @@ parseLevels = traverse parseLevel . filter (not . blank) . splitOn isRule . line
             (before, _:after) -> unlines before : splitOn p after
     trim = dropWhile isSpace . reverse . dropWhile isSpace . reverse
 
-build :: Header -> Either String Picture
+build :: Header -> Either String Layout
 build (Header name note rows) = do
     () <- unless' (null rows) "no picture: a level is at least one row of cells"
     () <-
@@ -208,15 +220,15 @@ build (Header name note rows) = do
             ("a level needs one goal per crate: " ++ show (length crates) ++
              " crates, " ++ show (length goals) ++ " goals")
     pure
-        Picture
-        { picName = name
-        , picNote = note
-        , picCells = cells
-        , picPlayer = player
-        , picCrates = crates
-        , picGoals = goals
-        , picWidth = width
-        , picHeight = height
+        Layout
+        { layoutName = name
+        , layoutNote = note
+        , layoutWalls = Set.fromList walls
+        , layoutGoals = Set.fromList goals
+        , layoutCrates = Set.fromList crates
+        , layoutPlayer = player
+        , layoutWidth = width
+        , layoutHeight = height
         }
   where
     unless' bad' msg =
@@ -237,19 +249,20 @@ build (Header name note rows) = do
     players = [xy | (xy, Player _) <- M.toList cells]
     crates = sort [xy | (xy, Crate _) <- M.toList cells]
     goals = sort [xy | (xy, g) <- M.toList cells, glyphTile g == Goal]
+    walls = [xy | (xy, g) <- M.toList cells, glyphTile g == Wall]
 
 assemble ::
        forall w h. KnownStrip w h
-    => Picture
+    => Layout
     -> Either String (Level w h)
-assemble pic = do
-    start <- at (picPlayer pic)
-    crateSpots <- traverse at (picCrates pic)
-    goalSpots <- traverse at (picGoals pic)
+assemble lay = do
+    start <- at (layoutPlayer lay)
+    crateSpots <- traverse at (Set.toList (layoutCrates lay))
+    goalSpots <- traverse at (Set.toList (layoutGoals lay))
     pure
         Level
-        { levelName = picName pic
-        , levelNote = picNote pic
+        { levelName = layoutName lay
+        , levelNote = layoutNote lay
         , levelBoard = boardFromGrid grid
         , levelGoals = Set.fromList (map spotCoord goalSpots)
         , levelStart =
@@ -269,8 +282,12 @@ assemble pic = do
     grid :: Grid (Strip w h) Tile
     grid =
         tabulateGrid $ \c ->
-            let (x, y) = spotXY (minBound, c)
-            in maybe Floor glyphTile (M.lookup (x, y) (picCells pic))
+            let xy = spotXY (minBound, c)
+            in if Set.member xy (layoutWalls lay)
+                   then Wall
+                   else if Set.member xy (layoutGoals lay)
+                            then Goal
+                            else Floor
 
 -- | A level written back out as the picture it was read from. Round-trips a
 -- level's terrain and its starting arrangement, not a game in progress.
@@ -299,19 +316,33 @@ levelPicture lvl =
                            | onGoal -> '.'
                            | otherwise -> '-'
 
--- | The levels the game starts with, so it runs with no arguments.
+-- | The levels the game starts with, so the game runs with no arguments.
 --
 -- Kept as text and read by the same reader a file goes through, so a level
--- that would not load from disk cannot hide in here. The deliberate
--- difficulty ramp, and the check that each level is solvable and is not
--- merely a flat puzzle in fancy dress, is sized-grid-lopy.3; these are the
--- ones the rules were written against.
+-- that would not load from disk cannot hide in here.
+--
+-- == The ramp
+--
+-- Ordered by idea rather than by size. Each level introduces exactly one thing
+-- and its note says what; nothing later needs an idea that has not been shown.
+-- The third is deliberately two pushes long, because the idea /is/ the level
+-- and padding it out would only bury it.
+--
+-- Every level after the first is verified to have no solution on a cylinder of
+-- the same shape or on a plain rectangle of the same shape --- see
+-- "Sokoban.Flat" and @sokoban --check@. That is the standard: a level whose
+-- answer does not need the half turn is a level about some other surface.
+--
+-- The first is the exception and is meant to be. It is a ring one cell wide,
+-- it needs the wrap and not the twist, and it goes first precisely because a
+-- player who has not yet believed that the two ends of the picture are the
+-- same place cannot be taught anything else.
 builtinLevels :: [SomeLevel]
 builtinLevels =
     either (error . ("builtinLevels: " ++)) id (parseLevels builtinSource)
 
--- | The first built-in level. Total, because 'builtinLevels' is a literal
--- this module can see is not empty.
+-- | The first built-in level. Total, because 'builtinLevels' is a literal this
+-- module can see is not empty.
 firstLevel :: SomeLevel
 firstLevel =
     case builtinLevels of
@@ -321,35 +352,83 @@ firstLevel =
 builtinSource :: String
 builtinSource =
     unlines
-        [ "; The strip's own levels. There is no left or right edge: the first and"
-        , "; last columns are next to each other, and crossing between them turns"
-        , "; the strip over."
-        , "name: One cell wide"
-        , "note: The whole level is one ring. The wall is in the way going right,"
-        , "note: and going left there is no edge to stop at -- so the crate leaves"
-        , "note: at one end of the picture and arrives at the other."
+        [ "; Sokoban on a Mobius strip. There is no left or right edge: the first"
+        , "; and last columns of every picture are next to each other, and crossing"
+        , "; between them turns the strip over, so you arrive in the row on the"
+        , "; other side of the middle."
+        , ";"
+        , "; The ramp is by idea. See Sokoban.Level's header, and check any level"
+        , "; you doubt with `sokoban --check`."
+        , "name: No edge to stop at"
+        , "note: One ring, one cell wide. The wall blocks the way right, and going"
+        , "note: left there is no edge to stop at -- so the crate leaves at one end"
+        , "note: of the picture and arrives at the other. Nothing here needs the"
+        , "note: half turn yet. A cylinder would do, which is why this is first."
         , "-$@#-.-"
         , "==="
+        , "name: The other row"
+        , "note: The crate has a wall above it and the end of the strip below it,"
+        , "note: so there is nowhere to stand to push it either way: sideways is"
+        , "note: all it has. Sideways goes through the seam, and the seam mirrors"
+        , "note: the axis it does not wrap -- so the crate comes back one row the"
+        , "note: other side of the middle, which is where the goal is."
+        , "#####"
+        , "---.-"
+        , "-@$--"
+        , "#####"
+        , "==="
+        , "name: Go yourself"
+        , "note: The crate is already on the deck it belongs on and there is nobody"
+        , "note: behind it. Two solid rows separate the decks -- and separate"
+        , "note: nothing, because the seam joins the top row to the bottom one."
+        , "note: Two pushes. Getting to them is the level."
+        , "-@----"
+        , "######"
+        , "######"
+        , "-.-$--"
+        , "==="
+        , "name: The long way"
+        , "note: This time the wall is in the crate's own row, and there is no"
+        , "note: getting behind it: the way past a wall on a strip is not around"
+        , "note: it but off the end of the picture and back on the far row."
+        , "#######"
+        , "---.---"
+        , "-$@#---"
+        , "#######"
+        , "==="
         , "name: The far row"
-        , "note: Walls above and below: the crate can only go sideways, and"
-        , "note: sideways is through the seam. The seam mirrors the axis it does"
-        , "note: not wrap, so the crate arrives in the row on the other side of the"
-        , "note: middle -- which is the only way anything reaches the goal. Roll"
-        , "note: this strip into a cylinder instead and the level has no solution."
+        , "note: A wall the whole way across, and it seals nothing: its two sides"
+        , "note: are the same side, one seam apart. That is true of every"
+        , "note: full-width wall on a Mobius strip and of none on a cylinder."
         , "------"
         , "--.---"
         , "######"
         , "-@$---"
         , "------"
         , "==="
-        , "name: Twice around"
-        , "note: One lap puts a crate in the mirrored row; only a second lap brings"
-        , "note: it back to the row it left, and this goal is in the row it left."
-        , "note: Pushing right is the trap: the crate fits between the player and"
-        , "note: the wall, and nothing can get behind it again."
-        , "------"
-        , "------"
+        , "name: One stays, one goes"
+        , "note: Two crates, and a goal on each row. One of them has a short walk"
+        , "note: and the other has to go all the way round. Deciding which is"
+        , "note: which, before you push anything, is the level."
         , "######"
-        , "-$@#.-"
-        , "------"
+        , "--.---"
+        , "-@$-$."
+        , "######"
+        , "==="
+        , "name: Both at once"
+        , "note: Both crates have to cross, and the corridor is one crate wide."
+        , "note: Send the wrong one first and there is nothing left behind the"
+        , "note: other to push it with."
+        , "#######"
+        , "--.-.--"
+        , "-$@$---"
+        , "#######"
+        , "==="
+        , "name: Three"
+        , "note: The same corridor, one more crate, and no room to change your"
+        , "note: mind halfway. Fifteen pushes. Undo is on u."
+        , "#######"
+        , "--.-..-"
+        , "-$@$-$-"
+        , "#######"
         ]

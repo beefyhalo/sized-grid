@@ -7,6 +7,7 @@
 module Main (main) where
 
 import           Sokoban.Board
+import           Sokoban.Flat
 import           Sokoban.Level
 import           Sokoban.Render     (run)
 import           Sokoban.Rules
@@ -27,6 +28,7 @@ main = do
         ["--help"] -> putStr (usage prog)
         [] -> run builtinLevels
         ["--check"] -> checkAll builtinLevels
+        ["--check", path] -> withFile path checkAll
         ["--text"] -> start builtinLevels
         ["--text", path] -> withFile path start
         [path] -> withFile path run
@@ -46,7 +48,9 @@ usage prog =
         , ""
         , "  with no argument, opens a window on the built-in levels"
         , "  --text    play in the terminal instead"
-        , "  --check   solve every built-in level and report, without playing"
+        , "  --check   solve every level three times -- on the strip, on a"
+        , "            cylinder of the same shape and on a plain rectangle --"
+        , "            and report whether the twist was needed"
         , ""
         , "keys, in the window: arrows or wasd / hjkl move, u undo, r restart,"
         , "      n / p change level, v change view, f change frame"
@@ -57,19 +61,44 @@ usage prog =
 die :: String -> IO a
 die msg = hPutStrLn stderr msg >> exitFailure
 
+-- | Solve every level three times: on the strip, on a cylinder of the same
+-- shape, and on a plain rectangle of the same shape. The first says the level
+-- can be finished; the other two say whether finishing it needed the surface.
 checkAll :: [SomeLevel] -> IO ()
-checkAll ls =
-    mapM_
-        (\(i, SomeLevel lvl) ->
-             putStrLn $
-             show (i :: Int) ++ ". " ++ levelName lvl ++ ": " ++
-             case solveLevel 200000 lvl of
-                 Nothing -> "NO SOLUTION FOUND"
-                 Just s ->
-                     show (length (solutionMoves s)) ++ " moves, " ++
-                     show (solutionPushes s) ++ " pushes, " ++
-                     show (solutionSeen s) ++ " states")
-        (zip [1 ..] ls)
+checkAll ls = do
+    mapM_ report (zip [1 ..] ls)
+    putStrLn ""
+    putStrLn
+        ("Levels whose answer is the twist: " ++ show (length headline) ++ " of " ++
+         show (length ls))
+  where
+    budget = 500000
+    report :: (Int, SomeLevel) -> IO ()
+    report (i, SomeLevel lvl) = do
+        putStrLn (show i ++ ". " ++ levelName lvl ++ "   " ++ size lvl)
+        putStrLn ("     strip: " ++ onStrip lvl)
+        putStrLn ("     " ++ flatVerdict lvl)
+    size :: forall w h. KnownStrip w h => Level w h -> String
+    size _ = let (a, b) = stripSize @w @h in show a ++ " around, " ++ show b ++ " across"
+    onStrip :: forall w h. KnownStrip w h => Level w h -> String
+    onStrip lvl =
+        case solveLevel budget lvl of
+            Nothing -> "NO SOLUTION FOUND"
+            Just s ->
+                show (length (solutionMoves s)) ++ " moves, " ++
+                show (solutionPushes s) ++ " pushes, " ++ show (solutionSeen s) ++
+                " states"
+    flatVerdict :: forall w h. KnownStrip w h => Level w h -> String
+    flatVerdict lvl =
+        case readLayout (levelPicture lvl) of
+            Left err -> "cannot re-read this level's own picture: " ++ err
+            Right lay -> verdictLine (verdict budget lay)
+    headline =
+        [ ()
+        | SomeLevel lvl <- ls
+        , Right lay <- [readLayout (levelPicture lvl)]
+        , Verdict Nothing Nothing <- [verdict budget lay]
+        ]
 
 start :: [SomeLevel] -> IO ()
 start [] = die "no levels"

@@ -18,6 +18,12 @@ description:
   chart as a rectangle, with the far side of each edge drawn past it, dimmed,
   in the row the seam sends it to. The consequence of a push through the seam
   is on screen before the push is made.
+  .
+  Every level ships with a proof that it needs the surface it is on. @sokoban
+  --check@ solves each one three times -- on the strip, on a cylinder of the
+  same shape, and on a plain rectangle of the same shape -- and reports which
+  of them could also finish it. Seven of the eight built-in levels have no
+  solution without the half turn.
 license:             MIT
 license-file:        LICENSE
 author:              Kevin Horlick
@@ -56,6 +62,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Sokoban.Board
+    Sokoban.Flat
     Sokoban.Level
     Sokoban.Render
     Sokoban.Rules

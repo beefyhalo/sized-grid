@@ -219,7 +219,12 @@ cellPicture :: KnownStrip w h => Frame -> Game w h -> Spot w h -> Picture
 cellPicture frame game s =
     pictures $
     [color (base here) (rectangleSolid tile tile)] ++
-    [color goalColour (rectangleWire (tile - 9) (tile - 9)) | here == Goal] ++
+    concat
+        [ [ color (withAlpha 0.4 goalColour) (rectangleSolid (tile - 12) (tile - 12))
+          , color goalColour (rectangleWire (tile - 9) (tile - 9))
+          ]
+        | here == Goal
+        ] ++
     [ color
         (if onGoal
              then doneColour

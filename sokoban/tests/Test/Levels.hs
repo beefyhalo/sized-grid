@@ -1,39 +1,61 @@
 {-# LANGUAGE DataKinds #-}
 
--- | The level format, and the levels that ship.
+-- | The level format, the levels that ship, and the standard they are held to.
 --
--- The solvability check is what stops a level shipping that nobody has
--- finished, and because the solver plays through "Sokoban.Rules" it is also
--- how a change to the rules announces itself: a level that stops having a
--- solution is a rule that stopped meaning what it meant.
+-- Three separate things are checked here, and they fail for different reasons:
+--
+--   * Every level has a solution. Because the solver plays through
+--     "Sokoban.Rules", a level that stops having one is a rule that stopped
+--     meaning what it meant, and this is where that shows up.
+--
+--   * Every level after the first needs the half turn --- no solution on a
+--     cylinder of the same shape, none on a plain rectangle of the same shape.
+--     This is the standard the epic asks for, and it is the one that separates
+--     a puzzle from a gimmick. It has already caught one level of mine that
+--     looked like a Mobius puzzle and was a cylinder puzzle.
+--
+--   * The two solvers agree. "Sokoban.Solve" plays the real rules on the real
+--     surface; "Sokoban.Flat" is forty lines of @Int@ arithmetic that has
+--     never heard of grid-sized. On a strip whose seam is walled off the two
+--     are looking at the same surface, so they must reach the same answer.
 module Test.Levels
   ( levelTests
   ) where
 
 import           Sokoban.Board
+import           Sokoban.Flat
 import           Sokoban.Level
 import           Sokoban.Rules
 import           Sokoban.Solve
 
 import           Data.Either      (isLeft)
+import           Data.Maybe       (mapMaybe)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
--- | Generous: the built-in levels are small, and a budget that has to be
--- tuned per level is a budget hiding a level that is too big.
+-- | Generous: the built-in levels are small, and a budget that has to be tuned
+-- per level is a budget hiding a level that is too big. The largest built-in
+-- reaches 3772 states.
 budget :: Int
 budget = 500000
+
+layoutOf :: SomeLevel -> Either String Layout
+layoutOf (SomeLevel l) = readLayout (levelPicture l)
+
+named :: SomeLevel -> String
+named (SomeLevel l) = levelName l
+
+solved' :: SomeLevel -> Maybe Solution
+solved' (SomeLevel l) = solveLevel budget l
 
 everyBuiltinIsSolvable :: TestTree
 everyBuiltinIsSolvable =
     testGroup
-        "every built-in level has a solution"
-        [ testCase (show i ++ ". " ++ name lvl) (check lvl)
+        "every built-in level has a solution, and it is a legal one"
+        [ testCase (show i ++ ". " ++ named lvl) (check lvl)
         | (i, lvl) <- zip [1 :: Int ..] builtinLevels
         ]
   where
-    name :: SomeLevel -> String
-    name (SomeLevel l) = levelName l
     check :: SomeLevel -> Assertion
     check (SomeLevel l) =
         case solveLevel budget l of
@@ -45,53 +67,113 @@ everyBuiltinIsSolvable =
                     (all outcomeMoved outs)
                 assertBool "and it finishes the level" (solved played)
 
+-- | The standard. The first level is the deliberate exception and is asserted
+-- as one, so that a change making it need the twist fails here rather than
+-- quietly contradicting its own note.
+everyBuiltinNeedsTheTwist :: TestTree
+everyBuiltinNeedsTheTwist =
+    testGroup
+        "the levels need the surface they are on"
+        [ testCase "the first level needs the wrap and not the twist" $
+          case layoutOf firstLevel of
+              Left err -> assertFailure err
+              Right lay -> do
+                  assertEqual
+                      "should be unsolvable on a rectangle"
+                      Nothing
+                      (solvableOn Rectangle budget lay)
+                  assertBool
+                      "should be solvable on a cylinder"
+                      (solvableOn Cylinder budget lay /= Nothing)
+        , testCase "every level after the first is unsolvable on both flat surfaces" $
+          assertEqual
+              "levels solvable without the half turn"
+              []
+              [ (named lvl, verdictLine v)
+              | lvl <- drop 1 builtinLevels
+              , Right lay <- [layoutOf lvl]
+              , let v = verdict budget lay
+              , v /= Verdict Nothing Nothing
+              ]
+        ]
+
+-- | Two implementations, one answer.
+--
+-- Walling off the first and last columns puts a wall on both sides of the
+-- seam, so no move can reach it and the strip /is/ the rectangle of the same
+-- shape. Both solvers are then looking at the same surface. The controls below
+-- are corridors in which every move is a push, so the two searches --- one
+-- shortest by moves, the other shortest by pushes --- are also answering the
+-- same question and the counts are comparable.
+solversAgree :: TestTree
+solversAgree =
+    testGroup
+        "with the seam walled off, the strip is a rectangle and both solvers say so"
+        [ agree "a forced corridor" 3 ["########", "#-@$--.#", "########"]
+        , agree "a forced push upwards" 1 ["#####", "#-.-#", "#-$-#", "#-@-#", "#####"]
+        , agree
+              "two crates, two pushes"
+              2
+              ["#######", "#--..-#", "#--$$-#", "#-@---#", "#######"]
+        , testCase "and both refuse the same impossible one" $
+          case parseLevel (unlines (headers ++ ["######", "#-@$#.#", "######"])) of
+              Left err -> assertFailure err
+              Right sl@(SomeLevel l) -> do
+                  assertEqual "the strip" Nothing (solveLevel budget l)
+                  case layoutOf sl of
+                      Left err -> assertFailure err
+                      Right lay ->
+                          assertEqual "the rectangle" Nothing (solvableOn Rectangle budget lay)
+        ]
+  where
+    headers = ["name: control", "note: control"]
+    agree :: String -> Int -> [String] -> TestTree
+    agree what pushes rows =
+        testCase what $
+        case parseLevel (unlines (headers ++ rows)) of
+            Left err -> assertFailure err
+            Right sl@(SomeLevel l) -> do
+                assertEqual
+                    "Sokoban.Solve, on the strip"
+                    (Just pushes)
+                    (solutionPushes <$> solveLevel budget l)
+                case layoutOf sl of
+                    Left err -> assertFailure err
+                    Right lay ->
+                        assertEqual
+                            "Sokoban.Flat, on the rectangle"
+                            (Just pushes)
+                            (solvableOn Rectangle budget lay)
+
+-- | A ramp, not a heap. Weak on purpose: asserting the exact ordering would
+-- break on every level edit, and what actually matters is that the game does
+-- not open on its hardest level or end on its easiest.
+theRampIsARamp :: TestTree
+theRampIsARamp =
+    testGroup
+        "the levels are a ramp"
+        [ testCase "there are at least six of them" $
+          assertBool
+              ("only " ++ show (length builtinLevels))
+              (length builtinLevels >= 6)
+        , testCase "the first is the smallest search and the last is the largest" $
+          case mapMaybe (fmap solutionSeen . solved') builtinLevels of
+              [] -> assertFailure "no level solved"
+              sizes@(smallest:_) -> do
+                  assertEqual "first" (minimum sizes) smallest
+                  assertEqual "last" (maximum sizes) (last sizes)
+        ]
+
 everyBuiltinIsNamedAndExplained :: TestTree
 everyBuiltinIsNamedAndExplained =
-    testCase "every built-in level says what it is and what it teaches" $
+    testCase "every built-in level says what it is and the one thing it teaches" $
     assertEqual
-        "levels with an empty name or note"
+        "levels with an empty name, or a note too short to be an explanation"
         []
         [ levelName l
         | SomeLevel l <- builtinLevels
-        , null (levelName l) || null (levelNote l)
+        , null (levelName l) || length (levelNote l) < 40
         ]
-
--- | The claim the game is making. A level whose solution never uses the seam
--- would work as well on a flat board, and this checks the two built-ins that
--- say they need it really do: cut the seam, and there is no solution left.
---
--- Cutting it is done in the picture rather than in the code --- walling off
--- the first and last columns leaves the same level on a board a crate cannot
--- get around --- so what is being tested is the level, not a second
--- implementation of the surface.
-seamIsLoadBearing :: TestTree
-seamIsLoadBearing =
-    testGroup
-        "the levels that claim to need the seam do need it"
-        [ testCase "the far row, with the seam walled off, has no solution" $
-          noSolution
-              [ "#------#"
-              , "#--.---#"
-              , "########"
-              , "#-@$---#"
-              , "#------#"
-              ]
-        , testCase "twice around, with the seam walled off, has no solution" $
-          noSolution
-              [ "#------#"
-              , "#------#"
-              , "########"
-              , "#-$@#.-#"
-              , "#------#"
-              ]
-        ]
-  where
-    noSolution :: [String] -> Assertion
-    noSolution rows =
-        case parseLevel (unlines ("name: cut" : "note: cut" : rows)) of
-            Left err -> assertFailure ("test level: " ++ err)
-            Right (SomeLevel l) ->
-                assertEqual "should be unsolvable" Nothing (solveLevel budget l)
 
 picturesRoundTrip :: TestTree
 picturesRoundTrip =
@@ -147,18 +229,17 @@ shortRowsAreFloor =
     case parseLevel (unlines ["name: n", "note: n", "-@$--.", "--"]) of
         Left err -> assertFailure err
         Right (SomeLevel l) ->
-            assertEqual
-                "padded out to six"
-                "-@$--.\n------\n"
-                (levelPicture l)
+            assertEqual "padded out to six" "-@$--.\n------\n" (levelPicture l)
 
 levelTests :: TestTree
 levelTests =
     testGroup
         "levels"
         [ everyBuiltinIsSolvable
+        , everyBuiltinNeedsTheTwist
+        , solversAgree
+        , theRampIsARamp
         , everyBuiltinIsNamedAndExplained
-        , seamIsLoadBearing
         , picturesRoundTrip
         , parserRefusals
         , commentsAndHeadings

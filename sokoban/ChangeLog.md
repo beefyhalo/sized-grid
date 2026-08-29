@@ -14,3 +14,7 @@
   player-centred, drawn in the player's own frame.
 * `sokoban-shot`, which photographs the game's own window through
   `glReadPixels`, because this machine cannot photograph it from outside.
+* Eight levels in a ramp by idea, each one saying what it teaches.
+* `Sokoban.Flat`, which plays the same layout on a cylinder and on a plain
+  rectangle of the same shape, so that "this level needs the half turn" is a
+  fact the test suite checks rather than a claim the level note makes.
