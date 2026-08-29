@@ -1,0 +1,43 @@
+cabal-version:       3.0
+name:                maze
+version:             0.1.0.0
+synopsis:            Maze generation and pathfinding through a grid's focus
+description:
+  Randomised depth-first carving and then breadth-first search on a
+  @Grid '[Clamped 61, Clamped 61]@, animated with gloss.
+  .
+  The demo exists for @FocusedGrid@. The carving head is not a coordinate the
+  algorithm carries beside a grid and keeps in step by hand --- it /is/ the
+  grid's focus, so \"look two cells that way\" is a @Path@ traced from the
+  focus, \"where am I\" is @pos@, and \"advance\" is @seek@. Neither phase
+  contains a bounds test or a piece of index arithmetic: on a @Clamped@ axis a
+  step that would leave the board is @Nothing@, and that is the only wall test
+  either algorithm needs.
+license:             MIT
+license-file:        LICENSE
+author:              Kevin Horlick
+maintainer:          beefyhalo@gmail.com
+category:            Game
+build-type:          Simple
+extra-doc-files:     ChangeLog.md
+
+executable maze
+  main-is:             Main.hs
+  other-modules:
+    Maze.Generate
+    Maze.Model
+    Maze.Render
+    Maze.Solve
+  build-depends:
+    , base       >=4.19 && <5
+    , comonad    >=5.0  && <5.1
+    , gloss      >=1.13 && <1.14
+    , lens       >=5.2  && <5.4
+    , random     >=1.2  && <1.4
+    , grid-sized
+  hs-source-dirs:      src
+  default-language:    GHC2024
+  ghc-options: -O2 -threaded
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints -Werror
