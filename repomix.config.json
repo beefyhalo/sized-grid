@@ -1,0 +1,20 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "compress": false,
+    "removeEmptyLines": true
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      ".beads/**",
+      "ChangeLog.md",
+      "dist-rule-check/**",
+      "bench/*.csv",
+      "**/*.golden"
+    ]
+  }
+}
