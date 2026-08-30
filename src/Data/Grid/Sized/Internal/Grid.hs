@@ -62,6 +62,7 @@ module Data.Grid.Sized.Internal.Grid
     scanAxis,
     DropAxis,
     foldAxis',
+    reduceAxis,
 
     -- * Windows and tiles
     ShrinkableGrid (..),

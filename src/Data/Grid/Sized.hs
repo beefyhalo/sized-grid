@@ -48,6 +48,7 @@ module Data.Grid.Sized
     scanAxis,
     DropAxis,
     foldAxis',
+    reduceAxis,
 
     -- * Windows and tiles
 

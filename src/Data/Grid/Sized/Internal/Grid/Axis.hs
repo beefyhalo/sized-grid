@@ -14,6 +14,7 @@ module Data.Grid.Sized.Internal.Grid.Axis
     scanAxis,
     DropAxis,
     foldAxis',
+    reduceAxis,
   )
 where
 
@@ -401,22 +402,67 @@ foldAxis' ::
 foldAxis' n f z (Grid v) =
   Grid (VG.fromList (blocks 0))
   where
-   (axisSize, stride) = axisSizeAndStride @n @cs @c
-   len = VG.length v
-   block = axisSize * stride
-   -- Fold a single fibre starting from base
-   foldFibre base i acc
-     | i >= axisSize = acc
-     | otherwise = foldFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
-   -- Process all fibres in a block
-   fibresOf blockStart base
-     | base >= blockStart + stride = []
-     | otherwise = foldFibre base 0 z : fibresOf blockStart (base + 1)
-   -- Process all blocks
-   blocks blockStart
-     | blockStart >= len = []
-     | otherwise = fibresOf blockStart blockStart ++ blocks (blockStart + block)
+    (axisSize, stride) = axisSizeAndStride @n @cs @c
+    len = VG.length v
+    block = axisSize * stride
+    -- Fold a single fibre starting from base
+    foldFibre base i acc
+      | i >= axisSize = acc
+      | otherwise = foldFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
+    -- Process all fibres in a block
+    fibresOf blockStart base
+      | base >= blockStart + stride = []
+      | otherwise = foldFibre base 0 z : fibresOf blockStart (base + 1)
+    -- Process all blocks
+    blocks blockStart
+      | blockStart >= len = []
+      | otherwise = fibresOf blockStart blockStart ++ blocks (blockStart + block)
 {-# INLINE foldAxis' #-}
 
-
-
+-- | Seedless strict left fold along one named axis, removing it.
+--
+-- > reduceAxis 1 max g   -- rather than reduceAxis (Proxy @1) max g
+--
+-- Like 'foldAxis'', but the first element of each fibre seeds the fold.  The
+-- @'IsCoordLifted' c@ constraint guarantees that every fibre has that first
+-- element, so no @Maybe@ or identity is needed.  This is useful for
+-- reductions such as @min@ and @max@ which have no suitable identity.
+--
+-- The fold runs strictly, left to right, in increasing index order along the
+-- axis, with the accumulator as the left argument.  It is deliberately not a
+-- wrapper around 'foldAxis'': seeding from the first element starts its inner
+-- loop at index one, avoiding an extra application of @f@ per fibre.
+reduceAxis ::
+  forall v cs a c.
+  forall n ->
+  (MapAxis n cs c, IsCoordLifted c, VG.Vector v a) =>
+  (a -> a -> a) ->
+  GridOf v cs a ->
+  GridOf v (DropAxis n cs) a
+reduceAxis n f (Grid v) =
+  Grid $
+    VG.create $ do
+      out <- VGM.unsafeNew (len `quot` axisSize)
+      let reduceFibre base i acc
+            | i >= axisSize = acc
+            | otherwise =
+                reduceFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
+          fibresOf blockStart base outIndex
+            | base >= blockStart + stride = pure outIndex
+            | otherwise = do
+                let !first = VG.unsafeIndex v base
+                    !result = reduceFibre base 1 first
+                VGM.unsafeWrite out outIndex result
+                fibresOf blockStart (base + 1) (outIndex + 1)
+          blocks blockStart outIndex
+            | blockStart >= len = pure ()
+            | otherwise = do
+                nextOutIndex <- fibresOf blockStart blockStart outIndex
+                blocks (blockStart + block) nextOutIndex
+      blocks 0 0
+      pure out
+  where
+    (axisSize, stride) = axisSizeAndStride @n @cs @c
+    len = VG.length v
+    block = axisSize * stride
+{-# INLINE reduceAxis #-}
