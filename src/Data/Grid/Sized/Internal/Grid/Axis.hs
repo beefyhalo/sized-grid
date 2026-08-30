@@ -222,7 +222,26 @@ scanAxisStrided ::
   v a
 scanAxisStrided axisSize stride f v
   | stride == 1 && axisSize > 0 =
-      VG.concat (map (VG.scanl1' f) (splitVectorBySize axisSize v))
+      VG.create $ do
+        out <- VGM.unsafeNew len
+        let scanBlock blockStart i
+              | i >= blockStart + axisSize = pure ()
+              | i == blockStart = do
+                  let !a0 = VG.unsafeIndex v i
+                  VGM.unsafeWrite out i a0
+                  scanBlock blockStart (i + 1)
+              | otherwise = do
+                  prev <- VGM.unsafeRead out (i - 1)
+                  let !acc = f prev (VG.unsafeIndex v i)
+                  VGM.unsafeWrite out i acc
+                  scanBlock blockStart (i + 1)
+            blocks blockStart
+              | blockStart >= len = pure ()
+              | otherwise = do
+                  scanBlock blockStart blockStart
+                  blocks (blockStart + axisSize)
+        blocks 0
+        pure out
   | otherwise =
       VG.create $ do
         out <- VGM.unsafeNew len
