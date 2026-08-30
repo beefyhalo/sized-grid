@@ -41,7 +41,9 @@ newtype Reflective (n :: Nat) = Reflective
 
 deriving newtype instance (KnownNat n, 1 <= n) => Random (Reflective n)
 
-deriving newtype instance (KnownNat n, 1 <= n) => Enum (Reflective n)
+instance (KnownNat n, 1 <= n) => Enum (Reflective n) where
+  toEnum x = Reflective $ unsafeOrdinal $ fst (bounceAt @n 0 x)
+  fromEnum (Reflective o) = ordinalToInt o
 
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflective n)
 

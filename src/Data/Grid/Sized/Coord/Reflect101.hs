@@ -40,7 +40,9 @@ newtype Reflect101 (n :: Nat) = Reflect101
 
 deriving newtype instance (KnownNat n, 1 <= n) => Random (Reflect101 n)
 
-deriving newtype instance (KnownNat n, 1 <= n) => Enum (Reflect101 n)
+instance (KnownNat n, 1 <= n) => Enum (Reflect101 n) where
+  toEnum x = Reflect101 $ unsafeOrdinal $ fst (mirrorAt @n 0 x)
+  fromEnum (Reflect101 o) = ordinalToInt o
 
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflect101 n)
 

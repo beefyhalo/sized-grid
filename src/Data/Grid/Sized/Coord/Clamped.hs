@@ -37,7 +37,14 @@ newtype Clamped (n :: Nat) = Clamped
 
 deriving newtype instance (KnownNat n, 1 <= n) => Random (Clamped n)
 
-deriving newtype instance (KnownNat n, 1 <= n) => Enum (Clamped n)
+instance (KnownNat n, 1 <= n) => Enum (Clamped n) where
+  toEnum x = Clamped $ unsafeOrdinal $ clamp 0 (ordinalSize @n - 1) x
+    where
+      clamp lo hi y
+        | y < lo = lo
+        | y > hi = hi
+        | otherwise = y
+  fromEnum (Clamped o) = ordinalToInt o
 
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Clamped n)
 
