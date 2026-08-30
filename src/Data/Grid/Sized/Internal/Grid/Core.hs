@@ -60,6 +60,7 @@ import Data.Proxy (Proxy (..))
 import Data.These (These (..))
 import Data.Vector qualified as V
 import Data.Vector.Generic qualified as VG
+import Data.Vector.Unboxed qualified as VU
 import Data.Zip (Unzip (..), Zip (..))
 import GHC.Generics qualified as GHC
 import GHC.TypeLits qualified as GHC
@@ -279,6 +280,10 @@ imapGrid ::
   GridOf v cs b
 imapGrid f (Grid v) = Grid (VG.imap (f . unsafeCoordFromPosition) v)
 {-# INLINEABLE imapGrid #-}
+{-# SPECIALIZE imapGrid :: forall cs. (Coord cs -> Int -> Int) -> GridOf VU.Vector cs Int -> GridOf VU.Vector cs Int #-}
+{-# SPECIALIZE imapGrid :: forall cs. (Coord cs -> Double -> Double) -> GridOf VU.Vector cs Double -> GridOf VU.Vector cs Double #-}
+{-# SPECIALIZE imapGrid :: forall cs. (Coord cs -> Int -> Int) -> GridOf V.Vector cs Int -> GridOf V.Vector cs Int #-}
+{-# SPECIALIZE imapGrid :: forall cs. (Coord cs -> Double -> Double) -> GridOf V.Vector cs Double -> GridOf V.Vector cs Double #-}
 
 -- | Pointwise combination of two grids of the same shape.
 zipWithGrid ::

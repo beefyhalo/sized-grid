@@ -204,6 +204,7 @@ import Data.Grid.Sized.Internal.Grid
     unsafeGridFromVector,
   )
 import Data.Kind (Type)
+import Data.Vector qualified as V
 import Data.Vector.Generic qualified as VG
 import Data.Vector.Generic.Mutable qualified as VGM
 import Data.Vector.Unboxed qualified as VU
@@ -420,6 +421,10 @@ stencilGrid (Stencil w tbl) f g =
 -- "Why both kernels are @INLINE@" for what that costs, measured
 -- (@sized-grid-v6ye@). Do not weaken it without re-running @bench\/Main.hs@.
 {-# INLINE stencilGrid #-}
+{-# SPECIALIZE stencilGrid :: forall cs. Stencil cs -> (Int -> [Int] -> Int) -> GridOf VU.Vector cs Int -> GridOf VU.Vector cs Int #-}
+{-# SPECIALIZE stencilGrid :: forall cs. Stencil cs -> (Double -> [Double] -> Double) -> GridOf VU.Vector cs Double -> GridOf VU.Vector cs Double #-}
+{-# SPECIALIZE stencilGrid :: forall cs. Stencil cs -> (Int -> [Int] -> Int) -> GridOf V.Vector cs Int -> GridOf V.Vector cs Int #-}
+{-# SPECIALIZE stencilGrid :: forall cs. Stencil cs -> (Double -> [Double] -> Double) -> GridOf V.Vector cs Double -> GridOf V.Vector cs Double #-}
 
 -- | Rebuild a grid from each cell and its neighbours, folded in place rather
 -- than gathered into a list first.
@@ -480,6 +485,10 @@ stencilFoldGrid (Stencil w tbl) step seed g =
 -- unboxed grid the pragma is worth 7.5x in time and 74x in allocation over a
 -- hundred generations. Module Haddock, @sized-grid-v6ye@.
 {-# INLINE stencilFoldGrid #-}
+{-# SPECIALIZE stencilFoldGrid :: forall cs. Stencil cs -> (Int -> Int -> Int) -> (Int -> Int) -> GridOf VU.Vector cs Int -> GridOf VU.Vector cs Int #-}
+{-# SPECIALIZE stencilFoldGrid :: forall cs. Stencil cs -> (Double -> Double -> Double) -> (Double -> Double) -> GridOf VU.Vector cs Double -> GridOf VU.Vector cs Double #-}
+{-# SPECIALIZE stencilFoldGrid :: forall cs. Stencil cs -> (Int -> Int -> Int) -> (Int -> Int) -> GridOf V.Vector cs Int -> GridOf V.Vector cs Int #-}
+{-# SPECIALIZE stencilFoldGrid :: forall cs. Stencil cs -> (Double -> Double -> Double) -> (Double -> Double) -> GridOf V.Vector cs Double -> GridOf V.Vector cs Double #-}
 
 -- | `stencilGrid` with each cell forced where it is written, rather than left
 -- as a thunk for whoever forces the grid.
