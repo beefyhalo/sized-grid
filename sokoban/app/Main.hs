@@ -8,7 +8,7 @@ module Main (main) where
 
 import Control.Monad (when)
 import Data.Char (toLower)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Set qualified as Set
 import Sokoban.Board
 import Sokoban.Flat
@@ -55,9 +55,15 @@ usage prog =
       "",
       "  with no argument, opens a window on the built-in levels",
       "  --text    play in the terminal instead",
-      "  --check   solve every level three times -- on the strip, on a",
-      "            cylinder of the same shape and on a plain rectangle --",
-      "            and report whether the twist was needed",
+      "  --check   solve every level on its own surface and on each flat",
+      "            surface of the same shape it is fair to compare against,",
+      "            and report whether the half turn was needed",
+      "",
+      "a level is a picture of itself, one character per cell: # wall, space",
+      "or - floor, . goal, $ crate, * crate on goal, @ player, + player on a",
+      "goal. Levels in a file are separated by a line of three or more equals",
+      "signs, and each may carry name:, note: and surface: lines. surface: is",
+      "one of mobius, klein or projective, and defaults to mobius.",
       "",
       "the window opens on a title screen: space plays, l is the level",
       "screen, escape is one screen back, and q leaves.",
@@ -77,15 +83,15 @@ usage prog =
 die :: String -> IO a
 die msg = hPutStrLn stderr msg >> exitFailure
 
--- | Solve every level three times: on the strip, on a cylinder of the same
--- shape, and on a plain rectangle of the same shape. The first says the level
--- can be finished; the other two say whether finishing it needed the surface.
+-- | Solve every level on its own surface, and again on each flat surface of
+-- the same shape it is fair to compare against. The first says the level can
+-- be finished; the rest say whether finishing it needed the gluing.
 checkAll :: [SomeLevel] -> IO ()
 checkAll ls = do
   mapM_ report (zip [1 ..] ls)
   putStrLn ""
   putStrLn
-    ( "Levels whose answer is the twist: "
+    ( "Levels whose answer is the gluing: "
         ++ show (length headline)
         ++ " of "
         ++ show (length ls)
@@ -94,13 +100,21 @@ checkAll ls = do
     budget = 500000
     report :: (Int, SomeLevel) -> IO ()
     report (i, SomeLevel lvl) = do
-      putStrLn (show i ++ ". " ++ levelName lvl ++ "   " ++ size lvl)
-      putStrLn ("     strip: " ++ onStrip lvl)
+      putStrLn
+        ( show i
+            ++ ". "
+            ++ levelName lvl
+            ++ "   "
+            ++ size lvl
+            ++ " on "
+            ++ surfaceTitle (levelSurface lvl)
+        )
+      putStrLn ("     " ++ surfaceName (levelSurface lvl) ++ ": " ++ onSurface lvl)
       putStrLn ("     " ++ flatVerdict lvl)
     size :: forall w h. (KnownStrip w h) => Level w h -> String
     size _ = let (a, b) = stripSize @w @h in show a ++ " around, " ++ show b ++ " across"
-    onStrip :: forall w h. (KnownStrip w h) => Level w h -> String
-    onStrip lvl =
+    onSurface :: forall w h. (KnownStrip w h) => Level w h -> String
+    onSurface lvl =
       case solveLevel budget lvl of
         Nothing -> "NO SOLUTION FOUND"
         Just s ->
@@ -114,12 +128,14 @@ checkAll ls = do
     flatVerdict lvl =
       case readLayout (levelPicture lvl) of
         Left err -> "cannot re-read this level's own picture: " ++ err
-        Right lay -> verdictLine (verdict budget lay)
+        Right lay -> verdictLine surface (verdict surface budget lay)
+      where
+        surface = levelSurface lvl
     headline =
       [ ()
       | SomeLevel lvl <- ls,
         Right lay <- [readLayout (levelPicture lvl)],
-        Verdict Nothing Nothing <- [verdict budget lay]
+        Verdict Nothing <- [verdict (levelSurface lvl) budget lay]
       ]
 
 start :: [SomeLevel] -> IO ()
@@ -182,26 +198,25 @@ dirKey 'j' = Just DirDown
 dirKey 's' = Just DirDown
 dirKey _ = Nothing
 
--- | The board as text, with the far side of the seam drawn dimmed past each
--- edge.
+-- | The board as text, with the far side of every seam drawn dimmed past it.
 --
 -- This is candidate (b) of sized-grid-lopy.1 --- the flat rectangle with ghost
--- continuations --- at the cheapest possible fidelity. Leaving the board
--- sideways puts you in the row the mirror sends you to, so past the left edge
--- is the /last/ few columns of that row and past the right edge is the first
--- few, and both are drawn upside down relative to the row they are printed
--- beside. A player who can plan a seam crossing from this does not need a
--- window; if this is unreadable, that is what the window has to fix.
+-- continuations --- at the cheapest possible fidelity, and it asks the surface
+-- where the picture carries on rather than knowing (sized-grid-lopy.7). On a
+-- Mobius strip that means three columns each side and nothing above or below,
+-- because there is genuinely nothing there; on a Klein bottle or a projective
+-- plane it means all four. A player who can plan a seam crossing from this
+-- does not need a window; if this is unreadable, that is what the window has
+-- to fix.
 render :: forall w h. (KnownStrip w h) => Frame -> Game w h -> String
 render frame game =
   unlines $
-    [ levelName lvl,
+    [ levelName lvl ++ "   on " ++ surfaceTitle surface,
       "",
-      replicate (ghost + 4) ' '
-        ++ "the seam: dimmed cells are the far side,"
-        ++ " mirrored"
+      replicate (ghostCols + 4) ' '
+        ++ "dimmed cells are the far side of a seam"
     ]
-      ++ map row (reverse [0 .. across - 1])
+      ++ map row (reverse [-ghostRows .. across - 1 + ghostRows])
       ++ [ "",
            "goals left "
              ++ show (goalsLeft game)
@@ -210,10 +225,10 @@ render frame game =
              ++ "   pushes "
              ++ show (playPushes play)
              ++ "   facing "
-             ++ dirName (dirOf frame (playFlipped play) (playFacing play))
+             ++ dirName (dirOf frame (playTurn play) (playFacing play))
              ++ "   frame "
              ++ frameName
-             ++ upright
+             ++ standing
          ]
       ++ ( if null (levelNote lvl)
              then []
@@ -221,34 +236,45 @@ render frame game =
          )
   where
     lvl = gameLevel game
+    surface = gameSurface game
     play = gamePlay game
     frameName =
       case frame of
         ChartFrame -> "chart"
         PlayerFrame -> "player"
-    upright
-      | playFlipped play = " (upside down)"
-      | otherwise = ""
+    standing =
+      case turnNote (playTurn play) of
+        "" -> ""
+        note -> " (" ++ note ++ ")"
     (around, across) = stripSize @w @h
-    ghost = min 3 around
-    -- The row a step through the seam from row y arrives in, as the row
-    -- number this function prints rather than as a chart coordinate.
-    partner y = across - 1 - y
+    ghostCols = depth (around, 0) 3 around
+    ghostRows = depth (0, across) 2 across
+    depth outside most n
+      | isJust (spotBeyond @w @h surface outside) = min most n
+      | otherwise = 0
     row y =
-      pad (show y)
+      pad (label y)
         ++ " "
-        ++ dim [cellChar x (partner y) | x <- [around - ghost .. around - 1]]
-        ++ "|"
+        ++ dim [cellChar x y | x <- [-ghostCols .. -1]]
+        ++ wall y
         ++ [cellChar x y | x <- [0 .. around - 1]]
-        ++ "|"
-        ++ dim [cellChar x (partner y) | x <- [0 .. ghost - 1]]
+        ++ wall y
+        ++ dim [cellChar x y | x <- [around .. around + ghostCols - 1]]
         ++ " "
-        ++ show y
+        ++ label y
+    -- A ghost row is not numbered: it is somewhere else on the surface, and
+    -- giving it a row number would be claiming it is a row of this picture.
+    label y
+      | y < 0 || y >= across = ""
+      | otherwise = show y
+    wall y
+      | y < 0 || y >= across = " "
+      | otherwise = "|"
     pad t = replicate (2 - length t) ' ' ++ t
     dim t = "\ESC[2m" ++ t ++ "\ESC[0m"
     cellChar x y =
-      case spotAt @w @h x y of
-        Nothing -> '?'
+      case spotBeyond @w @h surface (x, y) of
+        Nothing -> ' '
         Just s
           | spotCoord s == spotCoord (playPlayer play) ->
               if onGoal s

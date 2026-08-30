@@ -11,12 +11,19 @@
 -- is meant to replace it. This is the title screen, the pause between levels,
 -- and the picture at the top of the README.
 --
+-- A Mobius strip, and only that one. The game is played on three surfaces
+-- (sized-grid-lopy.7) and this draws the one of them that fits in space: a
+-- Klein bottle and a projective plane can only be shown passing through
+-- themselves, which is a different picture and a different piece of geometry.
+-- 'Sokoban.Board.surfaceIsBand' is where that is written down, and
+-- "Sokoban.Render" says so on screen rather than drawing the wrong surface.
+--
 -- == The parametrisation, and why it is the right one
 --
 -- 'bandPoint' is the textbook Mobius strip: a circle of radius @R@ carrying a
 -- segment that turns half a revolution over one lap. What makes it the right
--- one /here/ is that its gluing is the game's gluing and not merely one like
--- it. Advancing the column by a full lap negates the offset from the band's
+-- one /here/ is that its gluing is the gluing @Data.Grid.Atlas.Mobius@ walks
+-- on, and not merely one like it. Advancing the column by a full lap negates the offset from the band's
 -- centre line, so
 --
 -- > bandPoint b w h (u + w) (h - v) == bandPoint b w h u v

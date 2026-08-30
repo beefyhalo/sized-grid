@@ -24,6 +24,8 @@ module Test.Levels
 where
 
 import Data.Either (isLeft)
+import Data.Function (on)
+import Data.List (groupBy)
 import Data.Maybe (isJust, mapMaybe)
 import Sokoban.Board
 import Sokoban.Flat
@@ -38,6 +40,13 @@ import Test.Tasty.HUnit
 -- reaches 3772 states.
 budget :: Int
 budget = 500000
+
+-- | The levels grouped into runs of one surface each, in order.
+runsBySurface :: [SomeLevel] -> [[SomeLevel]]
+runsBySurface = groupBy ((==) `on` surfaceOf)
+  where
+    surfaceOf :: SomeLevel -> Surface
+    surfaceOf (SomeLevel l) = levelSurface l
 
 layoutOf :: SomeLevel -> Either String Layout
 layoutOf (SomeLevel l) = readLayout (levelPicture l)
@@ -85,15 +94,16 @@ everyBuiltinNeedsTheTwist =
             assertBool
               "should be solvable on a cylinder"
               (isJust (solvableOn Cylinder budget lay)),
-      testCase "every level after the first is unsolvable on both flat surfaces" $
+      testCase "every level after the first is unsolvable on every flat surface" $
         assertEqual
           "levels solvable without the half turn"
           []
-          [ (named lvl, verdictLine v)
-          | lvl <- drop 1 builtinLevels,
+          [ (named lvl, verdictLine surface v)
+          | lvl@(SomeLevel l) <- drop 1 builtinLevels,
             Right lay <- [layoutOf lvl],
-            let v = verdict budget lay,
-            v /= Verdict Nothing Nothing
+            let surface = levelSurface l
+                v = verdict surface budget lay,
+            v /= Verdict Nothing
           ]
     ]
 
@@ -156,12 +166,18 @@ theRampIsARamp =
         assertBool
           ("only " ++ show (length builtinLevels))
           (length builtinLevels >= 6),
-      testCase "the first is the smallest search and the last is the largest" $
-        case mapMaybe (fmap solutionSeen . solved') builtinLevels of
-          [] -> assertFailure "no level solved"
-          sizes@(smallest : _) -> do
-            assertEqual "first" (minimum sizes) smallest
-            assertEqual "last" (maximum sizes) (last sizes)
+      -- Within one surface's run, not across the whole pack: the levels on
+      -- the other two surfaces are a coda and start over from an easy one,
+      -- since a player meeting a new gluing is a beginner again.
+      testCase "on each surface, the first is the smallest search and the last is the largest" $
+        sequence_
+          [ case mapMaybe (fmap solutionSeen . solved') run of
+              [] -> assertFailure "no level solved"
+              sizes@(smallest : _) -> do
+                assertEqual "first" (minimum sizes) smallest
+                assertEqual "last" (maximum sizes) (last sizes)
+          | run <- runsBySurface builtinLevels
+          ]
     ]
 
 everyBuiltinIsNamedAndExplained :: TestTree

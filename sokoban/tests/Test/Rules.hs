@@ -19,6 +19,10 @@ import Test.Tasty.QuickCheck as QC
 -- | A board from a picture, so a test states its case as the case rather than
 -- as grid-building code. Fixed at the one size every test here uses; a picture
 -- of the wrong shape fails now rather than somewhere confusing later.
+-- | A player who has crossed one mirrored sideways seam.
+upsideDown :: Turn
+upsideDown = Turn False True
+
 level :: [String] -> Level 6 5
 level rows =
   case parseLevelAt (unlines rows) of
@@ -57,9 +61,9 @@ crateGoesAround =
       (playPlayer (levelStart lvl))
       (playPlayer (gamePlay afterLap))
     assertBool "one lap leaves the player upside down" $
-      playFlipped (gamePlay afterLap)
+      turnV (playTurn (gamePlay afterLap))
     assertBool "two laps put the player back up" $
-      not (playFlipped (gamePlay afterTwo))
+      not (turnV (playTurn (gamePlay afterTwo)))
 
 crateOffTheMiddleRow :: TestTree
 crateOffTheMiddleRow =
@@ -106,7 +110,7 @@ straddlingTheSeam =
       "crate came out on the other side, in the mirrored row"
       [(0, 1)]
       (crateCells g')
-    assertBool "the player has not crossed yet" $ not (playFlipped play)
+    assertBool "the player has not crossed yet" $ playTurn play == square
     -- And the next push moves the player through, onto the cell the crate
     -- has just left.
     let (g'', o') = move ChartFrame DirRight g'
@@ -117,7 +121,7 @@ straddlingTheSeam =
       "crate is one further along the mirrored row"
       [(1, 1)]
       (crateCells g'')
-    assertBool "and now the player is upside down" (playFlipped play')
+    assertBool "and now the player is upside down" (turnV (playTurn play'))
 
 refusals :: TestTree
 refusals =
@@ -125,8 +129,8 @@ refusals =
     "the three ways a move is refused"
     [ testCase "stepping off the straight edge" $
         assertEqual
-          "should be the edge of the strip"
-          OffTheStrip
+          "should be the edge of the surface"
+          OffTheEdge
           (snd (move ChartFrame DirDown (newGame lvl))),
       testCase "walking into a wall" $
         assertEqual
@@ -214,20 +218,20 @@ frames :: TestTree
 frames =
   testGroup
     "the two frames"
-    [ testCase "chart frame ignores the player's parity" $
+    [ testCase "chart frame ignores how the player is standing" $
         assertEqual
           "up is up"
-          [headingFor ChartFrame False d | d <- allDirs]
-          [headingFor ChartFrame True d | d <- allDirs],
+          [headingFor ChartFrame square d | d <- allDirs]
+          [headingFor ChartFrame upsideDown d | d <- allDirs],
       testCase "player frame swaps up and down once flipped, and nothing else" $ do
         assertEqual
           "left and right are untouched"
-          (map (headingFor PlayerFrame False) [DirLeft, DirRight])
-          (map (headingFor PlayerFrame True) [DirLeft, DirRight])
+          (map (headingFor PlayerFrame square) [DirLeft, DirRight])
+          (map (headingFor PlayerFrame upsideDown) [DirLeft, DirRight])
         assertEqual
           "up flipped is down"
-          (headingFor PlayerFrame False DirDown)
-          (headingFor PlayerFrame True DirUp),
+          (headingFor PlayerFrame square DirDown)
+          (headingFor PlayerFrame upsideDown DirUp),
       testCase "a lap turns the player over, so the same key walks the other way" $ do
         let lvl =
               level
@@ -242,7 +246,7 @@ frames =
             -- mirror, so the player is back where it started and
             -- upside down.
             (lapped, _) = replay PlayerFrame (replicate 6 DirRight) g0
-        assertBool "upside down" (playFlipped (gamePlay lapped))
+        assertBool "upside down" (turnV (playTurn (gamePlay lapped)))
         assertEqual
           "same cell as the start"
           (spotXY (playPlayer (gamePlay g0)))

@@ -124,6 +124,10 @@ glyphTile (Player t) = t
 -- the bottom, the way 'spotXY' counts, and not the way the text reads.
 data Layout = Layout
   { layoutName :: String,
+    -- | Which gluing the level asked for, already looked up. A level that
+    -- names no surface gets a Mobius strip, which is what every level written
+    -- before there was a choice meant.
+    layoutSurface :: Surface,
     layoutNote :: String,
     layoutWalls :: Set (Int, Int),
     layoutGoals :: Set (Int, Int),
@@ -162,7 +166,7 @@ parseLevelAt src = do
     else assemble @w @h lay
 
 readLayout :: String -> Either String Layout
-readLayout = build . foldl' takeLine (Header "" "" []) . lines
+readLayout = build . foldl' takeLine (Header "" "" "" []) . lines
   where
     takeLine acc raw =
       let line = dropTrailingCR raw
@@ -172,6 +176,7 @@ readLayout = build . foldl' takeLine (Header "" "" []) . lines
               | Just v <- afterKey "name:" line -> acc {accName = v}
               | Just v <- afterKey "note:" line ->
                   acc {accNote = joinNote (accNote acc) v}
+              | Just v <- afterKey "surface:" line -> acc {accSurface = v}
               | all isSpace line -> acc
               | otherwise -> acc {accRows = accRows acc ++ [line]}
     afterKey key line
@@ -185,6 +190,7 @@ readLayout = build . foldl' takeLine (Header "" "" []) . lines
 
 data Header = Header
   { accName :: String,
+    accSurface :: String,
     accNote :: String,
     accRows :: [String]
   }
@@ -207,7 +213,22 @@ parseLevels = traverse parseLevel . filter (not . blank) . splitOn isRule . line
     trim = dropWhile isSpace . reverse . dropWhile isSpace . reverse
 
 build :: Header -> Either String Layout
-build (Header name note rows) = do
+build (Header name wanted note rows) = do
+  surface <-
+    case wanted of
+      "" -> Right mobius
+      n ->
+        maybe
+          ( Left
+              ( "unknown surface "
+                  ++ show n
+                  ++ " (one of "
+                  ++ show (map surfaceName surfaces)
+                  ++ ")"
+              )
+          )
+          Right
+          (surfaceNamed n)
   () <- unless' (null rows) "no picture: a level is at least one row of cells"
   () <-
     unless'
@@ -238,6 +259,7 @@ build (Header name note rows) = do
   pure
     Layout
       { layoutName = name,
+        layoutSurface = surface,
         layoutNote = note,
         layoutWalls = Set.fromList walls,
         layoutGoals = Set.fromList goals,
@@ -279,14 +301,15 @@ assemble lay = do
   pure
     Level
       { levelName = layoutName lay,
+        levelSurface = layoutSurface lay,
         levelNote = layoutNote lay,
-        levelBoard = boardFromGrid grid,
+        levelBoard = boardFromGrid (layoutSurface lay) grid,
         levelGoals = Set.fromList (map spotCoord goalSpots),
         levelStart =
           Play
             { playPlayer = start,
-              playFlipped = False,
-              playFacing = headingFor ChartFrame False DirRight,
+              playTurn = square,
+              playFacing = headingFor ChartFrame square DirRight,
               playCrates = Set.fromList (map spotCoord crateSpots),
               playMoves = 0,
               playPushes = 0
@@ -308,7 +331,10 @@ assemble lay = do
                   else Floor
 
 -- | A level written back out as the picture it was read from. Round-trips a
--- level's terrain and its starting arrangement, not a game in progress.
+-- level's terrain and its starting arrangement --- not a game in progress, and
+-- not the header: what comes back is the cells, which is what every caller of
+-- this wants, and a level's name and surface are already in hand wherever one
+-- is.
 levelPicture :: forall w h. (KnownStrip w h) => Level w h -> String
 levelPicture lvl =
   unlines
@@ -345,6 +371,12 @@ levelPicture lvl =
 -- and its note says what; nothing later needs an idea that has not been shown.
 -- The third is deliberately two pushes long, because the idea /is/ the level
 -- and padding it out would only bury it.
+--
+-- The ramp is the eight on the Mobius strip. The two after it are on the other
+-- two surfaces grid-atlas carries (sized-grid-lopy.7) and are a coda rather
+-- than a continuation: a player who has finished the strip has met everything
+-- the game teaches, and these say what the same rules look like when the
+-- gluing changes underneath them.
 --
 -- Every level after the first is verified to have no solution on a cylinder of
 -- the same shape or on a plain rectangle of the same shape --- see
@@ -448,5 +480,32 @@ builtinSource =
       "#######",
       "--.-..-",
       "-$@$-$-",
-      "#######"
+      "#######",
+      "===",
+      "; The coda. Same rules, same keys, a different gluing underneath.",
+      "surface: klein",
+      "name: The other deck",
+      "note: A Klein bottle: sideways still turns you over, and now the top",
+      "note: and bottom rows are joined too -- straight through, the way a",
+      "note: cylinder joins, so this board has no edge anywhere at all. The",
+      "note: wall gives the crate nowhere to go but sideways, and sideways is",
+      "note: still the seam with the turn in it.",
+      "------",
+      "---.--",
+      "######",
+      "-@$---",
+      "------",
+      "===",
+      "surface: projective",
+      "name: Next door, the long way",
+      "note: A projective plane: both pairs of edges turn you over. The goal",
+      "note: is the next cell along and you cannot push the crate into it,",
+      "note: because there is nowhere to stand on the far side. Off the bottom",
+      "note: swaps your left with your right, so that is the way across --",
+      "note: and the crate has to come all the way back down.",
+      "##-@##",
+      "##--##",
+      "##--##",
+      "##--##",
+      "##$.##"
     ]

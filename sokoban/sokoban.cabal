@@ -8,11 +8,17 @@ description:
   @Data.Grid.Atlas.Mobius@.
   .
   The point is that nothing in the rules knows about the twist. A push is two
-  calls to @mobiusStep@ --- one for the player, one for the crate, the second
-  in the frame the first landed in --- and that is the whole of the
-  accommodation. Crossing the seam mirrors the axis it does not wrap, so a
-  crate pushed off one end of the board arrives at the other end in the row on
-  the far side of the middle, and levels are built out of exactly that.
+  steps --- one for the player, one for the crate, the second in the frame the
+  first landed in --- and that is the whole of the accommodation. Crossing the
+  seam mirrors the axis it does not wrap, so a crate pushed off one end of the
+  board arrives at the other end in the row on the far side of the middle, and
+  levels are built out of exactly that.
+  .
+  Which gluing is a per-level choice, and it turned out to cost almost nothing:
+  a level may name a Mobius strip, a Klein bottle or a projective plane, and
+  the rules, the solver, the level format and every view are the same code for
+  all three. Two levels ship on the other two surfaces to say what the same
+  rules look like when the gluing changes underneath them.
   .
   The window opens on a title screen, because what a Mobius strip is has to be
   said before a level is on screen rather than after. Behind the sentence that
@@ -33,10 +39,11 @@ description:
   not ask the player to take the surface on trust.
   .
   Every level ships with a proof that it needs the surface it is on. @sokoban
-  --check@ solves each one three times -- on the strip, on a cylinder of the
-  same shape, and on a plain rectangle of the same shape -- and reports which
-  of them could also finish it. Seven of the eight built-in levels have no
-  solution without the half turn.
+  --check@ solves each one on its own surface and again on each flat surface of
+  the same shape it is fair to compare against -- a rectangle, a cylinder, and
+  a torus where the level's own surface glues both pairs of edges -- and
+  reports which of them could also finish it. Nine of the ten built-in levels
+  have no solution without a half turn somewhere.
 license:             MIT
 license-file:        LICENSE
 author:              Kevin Horlick
@@ -130,6 +137,7 @@ test-suite tests
     Test.Rules
     Test.Seam
     Test.Shell
+    Test.Surface
 
   build-depends:
     , base

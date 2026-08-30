@@ -46,10 +46,12 @@ lapOn :: (Int, Int) -> (Float, Float, Float)
 lapOn (x, y) =
   bandPoint band around across (fromIntegral x + 0.5 + fromIntegral around) (fromIntegral y + 0.5)
 
--- | Where the /game/ says a lap from here lands.
+-- | Where the /game/ says a lap from here lands. On a Mobius strip, since
+-- that is the surface this parametrisation is a picture of --- 'surfaceIsBand'
+-- is 'False' for the other two, and there is no band to check them against.
 lapTo :: (Int, Int) -> (Int, Int)
 lapTo (x, y) =
-  case walkFrom ChartFrame (fromJust (spotAt @W @H x y), False) (replicate around DirRight) of
+  case walkFrom mobius ChartFrame (fromJust (spotAt @W @H x y), square) (replicate around DirRight) of
     Nothing -> error ("lapTo: a lap left the strip at " ++ show (x, y))
     Just (s, _) -> spotXY s
 

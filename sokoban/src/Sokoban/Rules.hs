@@ -32,6 +32,7 @@ module Sokoban.Rules
   ( -- * A level
     Level (..),
     levelPlay,
+    gameSurface,
 
     -- * A game in progress
     Play (..),
@@ -70,6 +71,10 @@ import Sokoban.Board
 -- grid.
 data Level w h = Level
   { levelName :: String,
+    -- | Which gluing this level is played on. The only place in the game where
+    -- a particular surface is ever named (sized-grid-lopy.7): every rule, the
+    -- solver and every view ask the level rather than assuming a strip.
+    levelSurface :: Surface,
     -- | The one thing this level is teaching. Empty for a level that is
     -- teaching nothing, which is a level that should probably not ship.
     levelNote :: String,
@@ -87,21 +92,21 @@ data Level w h = Level
 -- small.
 data Play w h = Play
   { playPlayer :: !(Spot w h),
-    -- | Whether the player has crossed the seam an odd number of times, and
-    -- so is upside down with respect to the chart. Only 'PlayerFrame' reads
-    -- it, but it is state of the game and not of the view: it is a fact about
-    -- where the player has been, and undo has to put it back.
-    playFlipped :: !Bool,
+    -- | How the player is standing with respect to the chart, which every
+    -- mirrored seam changes. Only 'PlayerFrame' reads it, but it is state of
+    -- the game and not of the view: it is a fact about where the player has
+    -- been, and undo has to put it back.
+    playTurn :: !Turn,
     -- | Which way the last move pointed, for drawing. Not consulted by any
     -- rule --- a Sokoban pushes by walking into a crate, so facing is never
-    -- an input --- but on this surface the player needs to see which way they
-    -- are about to go, because it decides whether the next step is through
-    -- the seam.
+    -- an input --- but on these surfaces the player needs to see which way
+    -- they are about to go, because it decides whether the next step is
+    -- through a seam, and which one.
     --
     -- A 'Heading' and not the 'Dir' that was pressed, because a heading names
     -- an axis of the chart and a key press does not: the same key means
-    -- different headings on the two sides of the seam. A view that wants the
-    -- key back asks 'dirOf' for it, in the frame it is drawing in.
+    -- different headings on the two sides of a mirrored seam. A view that
+    -- wants the key back asks 'dirOf' for it, in the frame it is drawing in.
     playFacing :: !Heading,
     playCrates :: !(Set (Coord (Strip w h))),
     playMoves :: !Int,
@@ -131,6 +136,11 @@ data Game w h = Game
 levelPlay :: Level w h -> Play w h
 levelPlay = levelStart
 
+-- | The surface this game is played on. Every rule that steps goes through
+-- here rather than naming a gluing.
+gameSurface :: Game w h -> Surface
+gameSurface = levelSurface . gameLevel
+
 newGame :: Level w h -> Game w h
 newGame lvl = Game {gameLevel = lvl, gamePlay = levelStart lvl, gamePast = []}
 
@@ -141,18 +151,22 @@ restart = newGame . gameLevel
 
 -- | What a key press did.
 --
--- The two refusals are kept apart on purpose. 'OffTheStrip' is the surface
--- running out --- the 'Straight' axis, the one edge a Mobius strip genuinely
--- has --- and 'BlockedByWall' is terrain. They look identical to a player
+-- The two refusals are kept apart on purpose. 'OffTheEdge' is the surface
+-- running out and 'BlockedByWall' is terrain. They look identical to a player
 -- staring at the boundary of a rectangle, and telling them apart is most of
--- what makes the strip legible: the left and right edges are not edges at
--- all, and the top and bottom are.
+-- what makes the surface legible: some of the picture's edges are not edges at
+-- all, and which ones is what the level is about.
+--
+-- Only a Mobius strip can answer 'OffTheEdge'. A Klein bottle and a projective
+-- plane have no boundary, so on those it is unreachable rather than wrong ---
+-- and a rule that had been written for the edge alone would have been the
+-- thing that broke when the second surface arrived.
 data Outcome
   = Walked
   | Pushed
   | BlockedByWall
   | BlockedByCrate
-  | OffTheStrip
+  | OffTheEdge
   deriving (Eq, Show)
 
 -- | Did this outcome change the game?
@@ -166,7 +180,7 @@ outcomeName Walked = "walked"
 outcomeName Pushed = "pushed"
 outcomeName BlockedByWall = "a wall"
 outcomeName BlockedByCrate = "a crate with no room behind it"
-outcomeName OffTheStrip = "the edge of the strip"
+outcomeName OffTheEdge = "the edge of the surface"
 
 tileAt :: (KnownStrip w h) => Game w h -> Spot w h -> Tile
 tileAt g = boardTile (levelBoard (gameLevel g))
@@ -193,12 +207,12 @@ solved g = levelGoals (gameLevel g) `Set.isSubsetOf` playCrates (gamePlay g)
 -- refused rather than as nothing at all.
 move :: (KnownStrip w h) => Frame -> Dir -> Game w h -> (Game w h, Outcome)
 move frame dir g =
-  case stepSpot here heading of
-    Nothing -> (g, OffTheStrip)
+  case stepSpot surface here heading of
+    Nothing -> (g, OffTheEdge)
     Just (ahead, ahead', crossing)
       | not (walkable (tileAt g ahead)) -> (g, BlockedByWall)
       | crateAt play ahead ->
-          case stepSpot ahead ahead' of
+          case stepSpot surface ahead ahead' of
             Nothing -> (g, BlockedByCrate)
             Just (beyond, _, _)
               | occupied g play beyond -> (g, BlockedByCrate)
@@ -218,18 +232,19 @@ move frame dir g =
       | otherwise -> (commit crossing play ahead, Walked)
   where
     play = gamePlay g
+    surface = gameSurface g
     here = playPlayer play
-    heading = headingFor frame (playFlipped play) dir
+    heading = headingFor frame (playTurn play) dir
     -- The crate's own crossing is not consulted. A crate has no frame to
     -- reverse --- it is a box, and a box looks the same either way round ---
-    -- so the only parity in the game is the player's, and it comes from the
+    -- so the only frame in the game is the player's, and it comes from the
     -- player's own step.
     commit crossing p landed =
       g
         { gamePlay =
             p
               { playPlayer = landed,
-                playFlipped = playFlipped p /= reversedFrame crossing,
+                playTurn = turnAfter heading crossing (playTurn p),
                 playFacing = heading,
                 playMoves = playMoves p + 1
               },

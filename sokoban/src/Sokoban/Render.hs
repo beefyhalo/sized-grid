@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 
 -- | How a board looks, and the question sized-grid-lopy.1 exists to answer:
@@ -62,6 +63,8 @@ module Sokoban.Render
   )
 where
 
+import Data.Char (toUpper)
+import Data.Maybe (isJust)
 import Data.Set qualified as Set
 import Graphics.Gloss.Data.Color
 import Graphics.Gloss.Data.Picture
@@ -83,13 +86,20 @@ viewName Band = "the band itself, one edge and no ends"
 
 -- | The one sentence a view needs said beside it, which is not what it is
 -- called: this is what the player is meant to read off it.
-viewNote :: View -> String
-viewNote Flat =
-  "the coloured tabs pair the edges: leave one row and you arrive at the tab of the same colour"
-viewNote Centred =
-  "drawn in the player's frame, so crossing the seam looks like nothing at all"
-viewNote Band =
-  "the pink line is the edge of the strip: one line, twice round, and there is only the one"
+--
+-- Takes the surface because the band's sentence is a claim about an edge, and
+-- two of the three surfaces have none --- and on those there is no band drawn
+-- for it to be a claim about.
+viewNote :: Surface -> View -> String
+viewNote _ Flat =
+  "the coloured tabs pair the edges: leave one and you arrive at the tab of the same colour"
+viewNote _ Centred =
+  "drawn in the player's frame, so crossing a seam looks like nothing at all"
+viewNote surface Band
+  | surfaceIsBand surface =
+      "the pink line is the edge of the strip: one line, twice round, and there is only the one"
+  | otherwise =
+      "this surface has no picture in space -- press v for one that has"
 
 -- * Colours
 
@@ -138,12 +148,16 @@ inkColour = greyN 0.9
 
 faintColour = greyN 0.55
 
--- | One colour per pair of rows the seam joins. Distinct hues rather than a
--- ramp, because what the player has to read off is which two rows are the same
--- row, and \"these two are the same colour\" is a question a ramp makes harder
--- rather than easier.
+-- | One colour per pair of cells a seam joins, keyed on the pair rather than
+-- on any particular gluing: the tab where a step leaves and the tab where it
+-- arrives ask with the same two numbers the other way round, so they come out
+-- the same colour whatever the seam does.
+--
+-- Distinct hues rather than a ramp, because what the player has to read off is
+-- which two edges are the same edge, and \"these two are the same colour\" is a
+-- question a ramp makes harder rather than easier.
 pairColour :: Int -> Int -> Color
-pairColour across y = cycle palette !! min y (across - 1 - y)
+pairColour i j = cycle palette !! min i j
   where
     palette =
       [ makeColor 0.95 0.35 0.75 1,
@@ -184,7 +198,7 @@ cellPicture frame mark game s =
          | hasCrate
          ]
       ++ [color playerColour (circleSolid (tile / 2 - 5)) | isPlayer]
-      ++ [ color background (facingWedge (dirOf frame (playFlipped now) (playFacing now)))
+      ++ [ color background (facingWedge (dirOf frame (playTurn now) (playFacing now)))
          | isPlayer
          ]
       ++ [color markColour (rectangleWire (tile - 3) (tile - 3)) | marked]
@@ -224,50 +238,121 @@ dimmed amount p =
 
 -- * The flat view
 
-drawFlat :: forall w h. (KnownStrip w h) => Frame -> Maybe (Spot w h) -> Game w h -> Picture
-drawFlat frame mark game =
-  pictures $
-    concat [ghostCells, boardCells, seamTags, [strait halfH, strait (-halfH)]]
+-- | How far past each side the picture is continued, in cells: sideways and
+-- upwards. Zero where the surface has a genuine edge there, since there is
+-- nothing on the far side of one to draw.
+ghostDepth :: forall w h. (KnownStrip w h) => Surface -> (Int, Int)
+ghostDepth surface = (depth (around, 0) 3 around, depth (0, across) 2 across)
+  where
+    (around, across) = stripSize @w @h
+    depth just_outside most n
+      | isJust (spotBeyond @w @h surface just_outside) = min most n
+      | otherwise = 0
+
+drawFlat ::
+  forall w h.
+  (KnownStrip w h) =>
+  Surface ->
+  Frame ->
+  Maybe (Spot w h) ->
+  Game w h ->
+  Picture
+drawFlat surface frame mark game =
+  pictures (concat [ghostCells, boardCells, seamTags, edges])
   where
     (around, across) = stripSize @w @h
     halfW = fromIntegral around * tile / 2
     halfH = fromIntegral across * tile / 2
-    ghostCols = min 3 around
-    cell x y = maybe blank (cellPicture frame mark game) (spotAt @w @h x y)
-    -- Column @x@ of the picture, which may be outside the board: that is what
-    -- a ghost column is.
+    (ghostCols, ghostRows) = ghostDepth @w @h surface
+    beyond = spotBeyond @w @h surface
+    -- Column @x@, row @y@ of the picture, either of which may be outside the
+    -- board: that is what a ghost is.
     place x y =
       translate
         (tile * (fromIntegral x - fromIntegral (around - 1) / 2))
         (tile * (fromIntegral y - fromIntegral (across - 1) / 2))
-    boardCells = [place x y (cell x y) | x <- [0 .. around - 1], y <- [0 .. across - 1]]
-    -- Leaving the board sideways puts you in the row the mirror sends this one
-    -- to, so past the right edge is the /start/ of that row and past the left
-    -- edge is the /end/ of it.
-    mirrorRow y = across - 1 - y
+    boardCells =
+      [ place x y (maybe blank (cellPicture frame mark game) (spotAt @w @h x y))
+      | x <- [0 .. around - 1],
+        y <- [0 .. across - 1]
+      ]
+    -- What is past each side, drawn dimmed where the picture would run out.
+    -- The consequence of a push through a seam is on screen before the push is
+    -- made, which is the whole reason this view exists.
     ghostCells =
-      [ place column y (dimmed 0.62 (cell source (mirrorRow y)))
-      | y <- [0 .. across - 1],
-        (column, source) <-
-          [(around + k, k) | k <- [0 .. ghostCols - 1]]
-            ++ [(-k, around - k) | k <- [1 .. ghostCols]]
+      [ place col row (dimmed 0.62 (cellPicture frame mark game s))
+      | (col, row, s) <-
+          [ (col, y, s)
+          | y <- [0 .. across - 1],
+            k <- [1 .. ghostCols],
+            col <- [around - 1 + k, -k],
+            Just s <- [beyond (col, y)]
+          ]
+            ++ [ (x, row, s)
+               | x <- [0 .. around - 1],
+                 k <- [1 .. ghostRows],
+                 row <- [across - 1 + k, -k],
+                 Just s <- [beyond (x, row)]
+               ]
       ]
-    -- The seam, drawn one row at a time and coloured by which row it joins
-    -- to. Crossing the right edge of row y puts you at the left edge of row
-    -- @across - 1 - y@, so those two get the same colour --- and the player
+    -- A tab outside every glued half-edge, coloured by the half-edge it leads
+    -- to. Leaving here puts you at the tab of the same colour, and the player
     -- reads the pairing off the picture instead of being told it.
-    seamTags =
-      [ translate x (tile * (fromIntegral y - fromIntegral (across - 1) / 2)) $
-          color (pairColour across y) (rectangleSolid 5 (tile - 3))
-      | y <- [0 .. across - 1],
-        x <- [-halfW - 2, halfW + 2]
+    seamTags = concatMap tag edgeCells
+    edgeCells =
+      [(around - 1, y, DirRight) | y <- [0 .. across - 1]]
+        ++ [(0, y, DirLeft) | y <- [0 .. across - 1]]
+        ++ [(x, across - 1, DirUp) | x <- [0 .. around - 1]]
+        ++ [(x, 0, DirDown) | x <- [0 .. around - 1]]
+    tag (x, y, dir) =
+      case beyond (outside (x, y) dir) of
+        Nothing -> []
+        Just there ->
+          let (x', y') = spotXY there
+              sideways = dir == DirLeft || dir == DirRight
+              hue
+                | sideways = pairColour y y'
+                | otherwise = pairColour x x'
+              at
+                | sideways = translate (edgeOf dir) (cellAt y across)
+                | otherwise = translate (cellAt x around) (edgeOf dir)
+              bar
+                | sideways = rectangleSolid 5 (tile - 3)
+                | otherwise = rectangleSolid (tile - 3) 5
+           in [at (color hue bar)]
+    outside (x, y) DirRight = (x + 1, y)
+    outside (x, y) DirLeft = (x - 1, y)
+    outside (x, y) DirUp = (x, y + 1)
+    outside (x, y) DirDown = (x, y - 1)
+    edgeOf DirRight = halfW + 2
+    edgeOf DirLeft = -halfW - 2
+    edgeOf DirUp = halfH + 2
+    edgeOf DirDown = -halfH - 2
+    cellAt i n = tile * (fromIntegral i - fromIntegral (n - 1) / 2)
+    -- And a plain grey line along any side the surface genuinely ends at, so
+    -- that a boundary and a seam do not look alike. A Mobius strip has two of
+    -- these and the other surfaces have none.
+    edges =
+      [ color edgeColour (line (span' dir))
+      | dir <- [DirUp, DirDown, DirLeft, DirRight],
+        ghostFor dir == 0
       ]
-    strait y = color edgeColour (line [(-halfW - 12, y), (halfW + 12, y)])
+    ghostFor DirUp = ghostRows
+    ghostFor DirDown = ghostRows
+    ghostFor _ = ghostCols
+    span' DirUp = [(-halfW - 12, halfH), (halfW + 12, halfH)]
+    span' DirDown = [(-halfW - 12, -halfH), (halfW + 12, -halfH)]
+    span' DirLeft = [(-halfW, -halfH - 12), (-halfW, halfH + 12)]
+    span' DirRight = [(halfW, -halfH - 12), (halfW, halfH + 12)]
 
-flatSize :: forall w h. (KnownStrip w h) => Game w h -> (Float, Float)
-flatSize _ = (fromIntegral (around + 2 * min 3 around) * tile, fromIntegral across * tile)
+flatSize :: forall w h. (KnownStrip w h) => Surface -> Game w h -> (Float, Float)
+flatSize surface _ =
+  ( fromIntegral (around + 2 * ghostCols) * tile,
+    fromIntegral (across + 2 * ghostRows) * tile
+  )
   where
     (around, across) = stripSize @w @h
+    (ghostCols, ghostRows) = ghostDepth @w @h surface
 
 -- * The player-centred view
 
@@ -275,14 +360,21 @@ flatSize _ = (fromIntegral (around + 2 * min 3 around) * tile, fromIntegral acro
 radius :: Int
 radius = 5
 
-drawCentred :: forall w h. (KnownStrip w h) => Frame -> Maybe (Spot w h) -> Game w h -> Picture
-drawCentred frame mark game = pictures (cells ++ [horizon])
+drawCentred ::
+  forall w h.
+  (KnownStrip w h) =>
+  Surface ->
+  Frame ->
+  Maybe (Spot w h) ->
+  Game w h ->
+  Picture
+drawCentred surface frame mark game = pictures (cells ++ [horizon])
   where
     now = gamePlay game
-    origin = (playPlayer now, playFlipped now)
+    origin = (playPlayer now, playTurn now)
     cells =
       [ translate (tile * fromIntegral dx) (tile * fromIntegral dy) $
-          case cellAround origin (dx, dy) of
+          case cellAround surface origin (dx, dy) of
             Nothing -> color voidColour (rectangleSolid (tile - 2) (tile - 2))
             Just (s, _) -> cellPicture frame mark game s
       | dx <- [-radius .. radius],
@@ -383,13 +475,36 @@ drawView :: (KnownStrip w h) => View -> Band -> Frame -> Maybe (Spot w h) -> Gam
 drawView view band frame mark g =
   translate 0 (-20) $
     case view of
-      Flat -> fitInto 2.2 boardBox (flatSize g) (drawFlat frame mark g)
-      Centred -> fitInto 2.2 boardBox centredSize (drawCentred frame mark g)
+      Flat -> fitInto 2.2 boardBox (flatSize surface g) (drawFlat surface frame mark g)
+      Centred -> fitInto 2.2 boardBox centredSize (drawCentred surface frame mark g)
       -- A band is drawn at whatever size its own geometry comes out, and that
       -- is a long way under the box for a short strip, so it is allowed to be
       -- blown up much further than a board of cells would want to be. Nothing
       -- in it is a fixed number of pixels.
-      Band -> fitInto 6 boardBox (bandSize band g) (drawBand band mark g)
+      Band
+        | surfaceIsBand surface ->
+            fitInto 6 boardBox (bandSize band g) (drawBand band mark g)
+        | otherwise -> noBand surface
+  where
+    surface = gameSurface g
+
+-- | What the band view has to say about a surface it cannot draw.
+--
+-- Not an empty screen and not a fallback to another view: the player asked for
+-- this one, and the honest answer is that this surface does not fit in the
+-- space the picture is drawn in.
+noBand :: Surface -> Picture
+noBand surface =
+  pictures
+    [ say 40 (greyN 0.75) (capital (surfaceTitle surface) ++ " does not fit in space."),
+      say (-10) faintColour "It can only be drawn passing through itself, and this game",
+      say (-46) faintColour "has no picture of that. Press v for one that does fit."
+    ]
+  where
+    say y c str =
+      translate (-(4.2 * fromIntegral (length str))) y (scale 0.13 0.13 (color c (text str)))
+    capital (c : rest) = toUpper c : rest
+    capital [] = []
 
 -- | Scale a picture of a known size to fill a box, up to a limit the caller
 -- sets. A one-row strip would otherwise be drawn at the height of the window,

@@ -386,29 +386,55 @@ fitSay x y room s c str = say x y (min s (room / max 1 (wide 1 str))) c str
 
 -- * The title screen
 
+-- | The way in, and the only place the surface gets explained: by the time a
+-- level is on screen it is too late.
+--
+-- What it says is the surface's own sentence rather than one written here, so
+-- that a level pack on a Klein bottle opens by describing a Klein bottle
+-- (sized-grid-lopy.7). The picture behind it is the level about to be played,
+-- as a band where the surface is one and flat where it is not.
 drawTitle :: App -> Picture
 drawTitle app =
   pictures $
     [ mid 296 0.26 inkColour "SOKOBAN ON A MOBIUS STRIP",
-      band
+      picture
     ]
       ++ zipWith blurbLine [0 :: Int ..] blurb
       ++ [mid (-296) 0.11 faintColour "space  play      l  the levels      q  quit"]
   where
-    -- Set as a block and not line by line: four separately centred lines are
-    -- ragged down both sides, which reads as a mistake rather than as a
-    -- paragraph.
+    -- Set as a block and not line by line: separately centred lines are ragged
+    -- down both sides, which reads as a mistake rather than as a paragraph.
+    titleShrink = 300 / snd boardBox
     blurbLeft = -(maximum (map (wide 0.105) blurb) / 2)
     blurbLine i = say blurbLeft (-150 - 26 * fromIntegral i) 0.105 inkColour
-    band =
+    picture =
       case appGame app of
-        Session g -> translate 0 70 (bandInto (740, 300) (appBand app) g)
+        Session g
+          | surfaceIsBand (gameSurface g) ->
+              translate 0 70 (bandInto (740, 300) (appBand app) g)
+          | otherwise ->
+              -- The flat view fits itself to the whole board box, which on the
+              -- title screen runs into the title. Scaling the finished picture
+              -- down to the band's box is enough, since nothing in it is a
+              -- fixed number of pixels.
+              translate 0 70 $
+                scale titleShrink titleShrink $
+                  drawView Flat (appBand app) ChartFrame Nothing g
     blurb =
-      [ "The board has no left edge and no right edge. Its two ends are the",
-        "same end, joined with a half turn -- so a crate pushed off one side",
-        "arrives at the other in the row on the far side of the middle, and",
-        "your own up is now down. There is one edge. It goes round twice."
-      ]
+      case appGame app of
+        Session g -> wrapTo 68 (surfaceNote (gameSurface g))
+
+-- | Break a paragraph into lines of at most @room@ characters, greedily.
+--
+-- A surface describes itself in one string, because a surface is a fact and
+-- not a layout, and this is where that becomes four lines of a title screen.
+wrapTo :: Int -> String -> [String]
+wrapTo room = foldl place [] . words
+  where
+    place [] w = [w]
+    place ls w
+      | length (last ls) + 1 + length w <= room = init ls ++ [last ls ++ " " ++ w]
+      | otherwise = ls ++ [w]
 
 -- * The level screen
 
@@ -444,6 +470,13 @@ drawLevels app =
             translate 0 12 picture,
             fitSay
               (-(boxW / 2) + 12)
+              (boxH / 2 - 22)
+              (boxW - 50)
+              0.075
+              faintColour
+              surface,
+            fitSay
+              (-(boxW / 2) + 12)
               (-(boxH / 2) + 16)
               (boxW - 24)
               0.09
@@ -460,11 +493,12 @@ drawLevels app =
         y = 230 - boxH * (fromIntegral row + 0.5)
         -- Both come out of the same unpacking, since the size a level is drawn
         -- at cannot leave the case that knows it.
-        (picture, name) =
+        (picture, name, surface) =
           case sessionAt (appLevels app) i of
             Session s ->
               ( thumbnail (boxW - 44, boxH - 74) s,
-                levelName (gameLevel s)
+                levelName (gameLevel s),
+                surfaceName (gameSurface s)
               )
     frame' i
       | i == appPick app = seamColour
@@ -499,8 +533,9 @@ lapMark t g
   | otherwise =
       fst
         <$> walkFrom
+          (gameSurface g)
           ChartFrame
-          (playPlayer now, playFlipped now)
+          (playPlayer now, playTurn now)
           (replicate walked DirRight)
   where
     now = gamePlay g
@@ -542,16 +577,26 @@ readout app g cleared = pictures (zipWith bodyLine [0 ..] body)
             ++ viewName (appView app)
             ++ "     frame: "
             ++ frameLabel (appFrame app)
-            ++ (if playFlipped now then " (the player is upside down)" else "")
+            ++ ( case turnNote (playTurn now) of
+                   "" -> ""
+                   note -> " (the player is " ++ note ++ ")"
+               )
         )
       ]
     frameLabel ChartFrame = "chart"
     frameLabel PlayerFrame = "player"
 
+-- | The surface the current level is on, which the footer needs and cannot
+-- get at through the existential.
+appSurface :: App -> Surface
+appSurface app =
+  case appGame app of
+    Session g -> gameSurface g
+
 footer :: App -> Maybe Float -> Picture
 footer app cleared =
   pictures
-    [ say (-430) (-292) 0.1 faintColour (viewNote (appView app)),
+    [ say (-430) (-292) 0.1 faintColour (viewNote (appSurface app) (appView app)),
       say (-430) (-312) 0.1 faintColour keys
     ]
   where

@@ -4,20 +4,35 @@
 -- interesting on a flat board? If it would, the topology is decoration.
 -- Answering that by eye does not work --- a level can /look/ as though it
 -- needs the seam and be solvable by an ordinary route nobody noticed --- so it
--- is answered by solving the same layout twice more, on the two flat surfaces
+-- is answered by solving the same layout again on each of the flat surfaces
 -- of the same shape:
 --
---   * 'Rectangle', with walls where the strip has its seam. If a level is
---     solvable here, neither the wrap nor the twist is doing anything.
+--   * 'Rectangle', with walls where the surface has its seams. If a level is
+--     solvable here, none of the gluing is doing anything.
 --
---   * 'Cylinder', wrapped the same way around but /without/ the half turn. If
---     a level is solvable here but not on a rectangle, the wrap is load
---     bearing and the twist is not --- and the level belongs in a game about
---     cylinders.
+--   * 'Cylinder', wrapped sideways but /without/ the half turn. If a level is
+--     solvable here but not on a rectangle, the wrap is load bearing and the
+--     twist is not --- and the level belongs in a game about cylinders.
 --
--- A level that is solvable on the strip and on neither of these is a level
--- whose answer is the twist. That is the only kind worth shipping as a
--- headline, and 'verdict' is what says which kind a level is.
+--   * 'Torus', wrapped both ways and still without a turn anywhere.
+--
+-- A level solvable on its own surface and on none of these is a level whose
+-- answer is the gluing. That is the only kind worth shipping as a headline,
+-- and 'verdict' is what says which kind a level is.
+--
+-- == Only fair comparisons
+--
+-- Which of the three a level is compared against depends on the surface it is
+-- played on, and getting that wrong is not a detail. A torus joins its top to
+-- its bottom; a Mobius strip does not join anything to anything there, because
+-- that is where its edge is. Offering a Mobius level a torus hands the solver
+-- a route the level's own surface has never had, and it will take it: the
+-- third built-in level is solvable on a torus in two pushes and needs a lap of
+-- the seam on the strip it is actually played on.
+--
+-- So a comparison is only offered when it glues no more than the level's own
+-- surface does, which 'surfaceEdged' is enough to decide --- an edge is a pair
+-- of sides that is joined to nothing, and a torus joins every pair.
 --
 -- == Why this is written out again rather than reusing the rules
 --
@@ -29,8 +44,9 @@
 -- it and the strip ever disagree about a level that should be flat-solvable,
 -- one of them is wrong and it is worth finding out which.
 module Sokoban.Flat
-  ( Surface (..),
-    surfaceName,
+  ( Comparison (..),
+    comparisonName,
+    comparisonsFor,
     solvableOn,
     Verdict (..),
     verdict,
@@ -39,37 +55,54 @@ module Sokoban.Flat
 where
 
 import Control.Applicative ((<|>))
+import Data.List (intercalate)
+import Data.Maybe (listToMaybe)
 import Data.Set qualified as Set
+import Sokoban.Board (Surface, surfaceEdged)
 import Sokoban.Level (Layout (..))
 
--- | A surface of the same shape as the level's strip that is not a Mobius
--- strip.
-data Surface
-  = -- | No wrap at all: the left and right columns have walls beyond them.
+-- | A flat surface of the same shape as the level's own, in order of how
+-- little topology it needs.
+--
+-- The order is load bearing: every move available on a rectangle is available
+-- on a cylinder, and every move on a cylinder is available on a torus, so a
+-- layout solvable on one is solvable on all the later ones and the /first/ one
+-- that solves it is the weakest claim that can be made about the level.
+data Comparison
+  = -- | No wrap at all: every side has a wall beyond it.
     Rectangle
-  | -- | Wrapped around, no half turn: leaving the right of row @y@ arrives at
-    -- the left of row @y@.
+  | -- | Wrapped sideways, no half turn: leaving the right of row @y@ arrives
+    -- at the left of row @y@.
     Cylinder
+  | -- | Wrapped both ways, and still no half turn anywhere.
+    Torus
   deriving (Eq, Show, Enum, Bounded)
 
-surfaceName :: Surface -> String
-surfaceName Rectangle = "a plain rectangle"
-surfaceName Cylinder = "a cylinder"
+comparisonName :: Comparison -> String
+comparisonName Rectangle = "a plain rectangle"
+comparisonName Cylinder = "a cylinder"
+comparisonName Torus = "a torus"
+
+-- | The flat surfaces it is fair to judge a level on this surface against: the
+-- ones that glue no more than it does. See the module header.
+comparisonsFor :: Surface -> [Comparison]
+comparisonsFor surface
+  | surfaceEdged surface = [Rectangle, Cylinder]
+  | otherwise = [Rectangle, Cylinder, Torus]
 
 -- | Where a step from @(x, y)@ lands, or 'Nothing' if it leaves the surface.
-step :: Surface -> Int -> Int -> (Int, Int) -> (Int, Int) -> Maybe (Int, Int)
-step surface w h (dx, dy) (x, y)
-  | y' < 0 || y' >= h = Nothing
-  | dx == 0 = Just (x, y')
-  | otherwise =
-      case surface of
-        Rectangle
-          | x' < 0 || x' >= w -> Nothing
-          | otherwise -> Just (x', y')
-        Cylinder -> Just (x' `mod` w, y')
+step :: Comparison -> Int -> Int -> (Int, Int) -> (Int, Int) -> Maybe (Int, Int)
+step surface w h (dx, dy) (x, y) =
+  case surface of
+    Rectangle -> (,) <$> inside w x' <*> inside h y'
+    Cylinder -> (,) (x' `mod` w) <$> inside h y'
+    Torus -> Just (x' `mod` w, y' `mod` h)
   where
     x' = x + dx
     y' = y + dy
+    inside n i
+      | i < 0 || i >= n = Nothing
+      | otherwise = Just i
 
 -- | The fewest pushes that finish this layout on the given surface, or
 -- 'Nothing' if there is no solution within the budget.
@@ -77,7 +110,7 @@ step surface w h (dx, dy) (x, y)
 -- Counted in pushes rather than moves so the number is comparable with
 -- 'Sokoban.Solve.solutionPushes': the two searches walk different graphs, and
 -- the move counts are not the same question.
-solvableOn :: Surface -> Int -> Layout -> Maybe Int
+solvableOn :: Comparison -> Int -> Layout -> Maybe Int
 solvableOn surface budget lay
   | won crates0 = Just 0
   | otherwise = bfs budget (Set.singleton (player0, crates0)) [(player0, crates0, 0)]
@@ -125,31 +158,50 @@ solvableOn surface budget lay
                   (Set.insert (p', crates') s0, acc0, hit0 <|> Just pushes')
               | otherwise = (Set.insert (p', crates') s0, st : acc0, hit0)
 
--- | What kind of level this is: which of the flat surfaces of the same shape
--- can also solve it.
-data Verdict = Verdict
-  { verdictOnRectangle :: Maybe Int,
-    verdictOnCylinder :: Maybe Int
-  }
+-- | What kind of level this is: the weakest flat surface of the same shape
+-- that can also solve it, and in how many pushes.
+--
+-- 'Nothing' is the answer a level wants. It says the level cannot be finished
+-- without a half turn somewhere, which is the whole of what makes it a level
+-- about a surface rather than a level that happens to be drawn on one.
+newtype Verdict = Verdict (Maybe (Comparison, Int))
   deriving (Eq, Show)
 
-verdict :: Int -> Layout -> Verdict
-verdict budget lay =
-  Verdict
-    { verdictOnRectangle = solvableOn Rectangle budget lay,
-      verdictOnCylinder = solvableOn Cylinder budget lay
-    }
+-- | The surface is passed in rather than read off the 'Layout' because a
+-- caller with a level in hand already has it, and a layout re-read from a
+-- level's own picture has lost it: 'Sokoban.Level.levelPicture' writes the
+-- cells and not the header.
+verdict :: Surface -> Int -> Layout -> Verdict
+verdict surface budget lay =
+  Verdict $
+    listToMaybe
+      [ (c, n)
+      | c <- comparisonsFor surface,
+        Just n <- [solvableOn c budget lay]
+      ]
 
--- | The verdict as a sentence, strongest claim first.
-verdictLine :: Verdict -> String
-verdictLine (Verdict rect cyl) =
-  case (rect, cyl) of
-    (Just n, _) ->
-      "flat: solvable on a plain rectangle in "
-        ++ show n
-        ++ " pushes -- neither the wrap nor the twist is doing anything"
-    (Nothing, Just n) ->
-      "cylinder: solvable wrapped without the twist in "
-        ++ show n
-        ++ " pushes -- the wrap is load bearing, the twist is not"
-    (Nothing, Nothing) -> "MOBIUS: no solution on a rectangle or a cylinder"
+-- | The verdict as a sentence.
+verdictLine :: Surface -> Verdict -> String
+verdictLine surface (Verdict Nothing) =
+  "NEEDS THE TURN: no solution on "
+    ++ list (map comparisonName (comparisonsFor surface))
+  where
+    list [] = "any flat surface"
+    list [one] = one
+    list xs = intercalate ", " (init xs) ++ " or " ++ last xs
+verdictLine
+  _
+  (Verdict (Just (c, n))) =
+    case c of
+      Rectangle ->
+        "flat: solvable on a plain rectangle in "
+          ++ show n
+          ++ " pushes -- none of the gluing is doing anything"
+      Cylinder ->
+        "cylinder: solvable wrapped sideways without a turn in "
+          ++ show n
+          ++ " pushes -- the wrap is load bearing, the turn is not"
+      Torus ->
+        "torus: solvable wrapped both ways without a turn in "
+          ++ show n
+          ++ " pushes -- the wraps are load bearing, the turns are not"
