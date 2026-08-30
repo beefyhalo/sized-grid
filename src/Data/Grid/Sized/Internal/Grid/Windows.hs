@@ -207,7 +207,9 @@ gridTiles (Grid v) =
      in map Grid $ splitVectorBySize size v
 {-# INLINEABLE gridTiles #-}
 
--- | 'gridTiles' as an optic. The @Mod ~ 0@ constraint that makes 'gridTiles'
+-- | 'gridTiles' as an indexed optic. The index is the policy-free ordinal
+-- offset of the tile along the restricted axis. The @Mod ~ 0@ constraint that
+-- makes 'gridTiles'
 -- total is exactly the statement that the tiles are disjoint and exactly
 -- partition the grid, which is the precondition for a lawful 'Traversal':
 -- setting through disjoint, covering foci has only one sensible meaning,
@@ -228,11 +230,18 @@ tiles ::
     KnownNat (MaxCoordSize (Ordinal n ': rest)),
     CoordNat big `Mod` n ~ 0
   ) =>
-  Traversal' (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
-tiles f (Grid v) =
-  requiring @(CoordNat big `Mod` n ~ 0) $
-    Grid
-      <$> traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))) f v
+  IndexedTraversal'
+    (Coord '[Ordinal (CoordNat big `Div` n)])
+    (GridOf v (big ': rest) a)
+    (GridOf v (Ordinal n ': rest) a)
+tiles =
+  reindexed (unsafeCoordFromPosition @'[Ordinal (CoordNat big `Div` n)])
+    . indexing
+    . traversal
+    $ \f (Grid v) ->
+      requiring @(CoordNat big `Mod` n ~ 0) $
+        Grid
+          <$> traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))) f v
 {-# INLINEABLE tiles #-}
 
 -- | Every overlapping window of size @n@ along a grid's outermost axis,
@@ -295,7 +304,9 @@ gridWindows (Grid v) =
         ]
 {-# INLINEABLE gridWindows #-}
 
--- | 'gridWindows' as an optic -- and, on purpose, no more than a 'Fold'.
+-- | 'gridWindows' as an indexed optic -- and, on purpose, no more than an
+-- 'IndexedFold'. The index is the policy-free ordinal offset of the window
+-- along the restricted axis.
 --
 -- A window of size 3 over an axis of 9 puts cell 2 in three overlapping
 -- windows (see 'gridWindows'). A 'Traversal'\'s foci must be
@@ -316,6 +327,12 @@ windows ::
     KnownNat n,
     n <= CoordNat big
   ) =>
-  Fold (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
-windows = folding (gridWindows @n)
+  IndexedFold
+    (Coord '[Ordinal (CoordNat big - n + 1)])
+    (GridOf v (big ': rest) a)
+    (GridOf v (Ordinal n ': rest) a)
+windows =
+  reindexed (unsafeCoordFromPosition @'[Ordinal (CoordNat big - n + 1)])
+    . indexing
+    $ folding (gridWindows @n)
 {-# INLINEABLE windows #-}

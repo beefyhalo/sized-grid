@@ -27,8 +27,8 @@ where
 
 import Control.Lens
 import Data.Grid.Sized.Class (IsGrid (..))
-import Data.Grid.Sized.Coord (AllSizedKnown, Coord)
-import Data.Grid.Sized.Coord.Class (IsCoord, IsCoordList)
+import Data.Grid.Sized.Coord (AllSizedKnown, Coord, MaxCoordSize, unsafeCoordFromPosition)
+import Data.Grid.Sized.Coord.Class (CoordNat, IsCoord, IsCoordList)
 import Data.Grid.Sized.Internal.Grid
   ( CollapseGrid,
     Grid,
@@ -61,6 +61,7 @@ import GHC.TypeLits
     type (+),
     type (-),
     type (<=),
+    type Div,
   )
 
 -- | Lift a bijective coordinate optic to a grid permutation. Each direction
@@ -190,15 +191,21 @@ suffix n =
 {-# INLINE suffix #-}
 
 lowerDim ::
+  forall v x y as bs c.
   (Vector v x, Vector v y, AllSizedKnown as) =>
-  Traversal
+  IndexedTraversal
+    (Coord '[Ordinal (CoordNat c)])
     (GridOf v (c ': as) x)
     (GridOf v (c ': bs) y)
     (GridOf v as x)
     (GridOf v bs y)
-lowerDim = mapLowerDim
+lowerDim =
+  reindexed (unsafeCoordFromPosition @'[Ordinal (CoordNat c)])
+    . indexing
+    $ traversal mapLowerDim
 
--- | Read the fibres along one named axis without offering write-back.
+-- | Read the fibres along one named axis without offering write-back. The
+-- index is the policy-free ordinal position in the enumeration of fibres.
 --
 -- The fibres are disjoint, so a 'Traversal' could provide the same read
 -- direction, but its applicative write path would have to retain every
@@ -209,6 +216,12 @@ axisFold ::
   forall v cs a c.
   forall n ->
   (MapAxis n cs c, VG.Vector v a) =>
-  Fold (GridOf v cs a) (GridOf v '[c] a)
-axisFold n = folding (axisFibres n)
+  IndexedFold
+    (Coord '[Ordinal (MaxCoordSize cs `Div` CoordNat c)])
+    (GridOf v cs a)
+    (GridOf v '[c] a)
+axisFold n =
+  reindexed (unsafeCoordFromPosition @'[Ordinal (MaxCoordSize cs `Div` CoordNat c)])
+    . indexing
+    $ folding (axisFibres n)
 {-# INLINEABLE axisFold #-}

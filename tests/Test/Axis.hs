@@ -17,7 +17,7 @@ where
 
 -- The orphan 'Arbitrary' instance for 'Grid'.
 
-import Control.Lens (toListOf)
+import Control.Lens (itoListOf, toListOf)
 import Data.Foldable (toList)
 import Data.Grid.Sized
 import Data.Maybe (fromJust)
@@ -124,6 +124,15 @@ axisTests =
                     [2, 7, 12],
                     [3, 8, 13],
                     [4, 9, 14]
+                  ],
+       testCase "axisFold returns each fibre's ordinal offset" $
+         let g = tabulateGrid coordPosition :: Grid Flat Int
+          in map (fmap toList) (itoListOf (axisFold 0) g)
+               @?= [ (unsafeOrdinal 0 :| EmptyCoord, [0, 5, 10]),
+                    (unsafeOrdinal 1 :| EmptyCoord, [1, 6, 11]),
+                    (unsafeOrdinal 2 :| EmptyCoord, [2, 7, 12]),
+                    (unsafeOrdinal 3 :| EmptyCoord, [3, 8, 13]),
+                    (unsafeOrdinal 4 :| EmptyCoord, [4, 9, 14])
                   ],
       -- 'scanAxis' has its own body: it reads one element back rather than
       -- gathering a fibre, so it shares no code with 'mapAxis' beyond the

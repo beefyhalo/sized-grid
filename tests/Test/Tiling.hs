@@ -8,7 +8,7 @@ module Test.Tiling
   )
 where
 
-import Control.Lens (over, toListOf)
+import Control.Lens (itoListOf, over, toListOf)
 import Data.Foldable (toList)
 import Data.Grid.Sized
 import Data.Maybe (fromJust)
@@ -47,6 +47,15 @@ nineColumns = zipLowerDim gridTiles nineByNine
 -- | 'tiles' as a getter agrees with 'gridTiles'.
 tilesIsGridTiles :: Grid '[Ordinal 4, Ordinal 4] Int -> Property
 tilesIsGridTiles g = toListOf (tiles @1) g === rows g
+
+tilesCarryOffsets :: Property
+tilesCarryOffsets =
+  map (fmap toList) (itoListOf (tiles @1) fourByFour)
+    === [ (unsafeOrdinal 0 :| EmptyCoord, [1, 2, 3, 4]),
+          (unsafeOrdinal 1 :| EmptyCoord, [5, 6, 7, 8]),
+          (unsafeOrdinal 2 :| EmptyCoord, [9, 10, 11, 12]),
+          (unsafeOrdinal 3 :| EmptyCoord, [13, 14, 15, 16])
+        ]
 
 -- | 'over' at the identity function is the identity -- the first half of the
 -- Traversal laws.
@@ -133,6 +142,7 @@ tilingTests =
       testGroup
         "tiles is a lawful Traversal"
         [ testProperty "toListOf tiles == gridTiles" tilesIsGridTiles,
+          testProperty "tiles carry their offsets" tilesCarryOffsets,
           testProperty "over tiles id == id" overTilesId,
           testProperty
             "over tiles f . over tiles g == over tiles (f . g)"
