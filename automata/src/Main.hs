@@ -13,6 +13,7 @@ module Main (main) where
 
 import Automata.Ant qualified as Ant
 import Automata.Wireworld qualified as Wireworld
+import Data.Maybe (fromMaybe)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -77,5 +78,5 @@ main = do
       exitFailure
     Right opts ->
       case optDemo opts of
-        Wireworld -> Wireworld.run (maybe 10 id (optRate opts))
-        Ant t -> Ant.run t (maybe 400 id (optRate opts))
+        Wireworld -> Wireworld.run (fromMaybe 10 (optRate opts))
+        Ant t -> Ant.run t (fromMaybe 400 (optRate opts))

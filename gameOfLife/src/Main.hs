@@ -313,9 +313,9 @@ displayFor :: Int -> Int -> String -> DisplayInfo
 displayFor w h name =
   DisplayInfo
     { tileSize = ts,
-      originX = -(59 * ts) / 2,
-      originY = -fh / 2 + pad + ts / 2,
-      hudLeft = -fw / 2 + 20,
+      originX = -((59 * ts) / 2),
+      originY = -(fh / 2) + pad + ts / 2,
+      hudLeft = -(fw / 2) + 20,
       hudTop = fh / 2 - 30,
       topologyName = name
     }

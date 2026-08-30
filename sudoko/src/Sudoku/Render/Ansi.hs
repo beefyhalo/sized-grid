@@ -20,7 +20,7 @@ import Control.Exception (bracket_)
 import Control.Monad (when)
 import Data.Grid.Sized (Coord, allCoord, indexGrid)
 import Data.List (intercalate)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Sudoku.Board
 import Sudoku.Solve
 import System.IO
@@ -98,7 +98,7 @@ animate rate givens = do
       case s of
         Place p _ b -> (b, Just (p, True), placed + 1, undone)
         Undo p b -> (b, Just (p, False), placed, undone + 1)
-        Done mb -> (maybe board id mb, Nothing, placed, undone)
+        Done mb -> (fromMaybe board mb, Nothing, placed, undone)
     frame tty board focus placed undone = do
       putStr (if tty then home else "\n")
       putStr (render tty givens board focus placed undone)

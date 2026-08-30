@@ -38,6 +38,7 @@ module Sokoban.Flat
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Set qualified as Set
 import Sokoban.Level (Layout (..))
 
@@ -121,7 +122,7 @@ solvableOn surface budget lay
             visit (s0, acc0, hit0) st@(p', crates', pushes')
               | Set.member (p', crates') s0 = (s0, acc0, hit0)
               | won crates' =
-                  (Set.insert (p', crates') s0, acc0, maybe (Just pushes') Just hit0)
+                  (Set.insert (p', crates') s0, acc0, hit0 <|> Just pushes')
               | otherwise = (Set.insert (p', crates') s0, st : acc0, hit0)
 
 -- | What kind of level this is: which of the flat surfaces of the same shape

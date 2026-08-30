@@ -24,7 +24,7 @@ module Test.Levels
 where
 
 import Data.Either (isLeft)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (isJust, mapMaybe)
 import Sokoban.Board
 import Sokoban.Flat
 import Sokoban.Level
@@ -84,7 +84,7 @@ everyBuiltinNeedsTheTwist =
               (solvableOn Rectangle budget lay)
             assertBool
               "should be solvable on a cylinder"
-              (solvableOn Cylinder budget lay /= Nothing),
+              (isJust (solvableOn Cylinder budget lay)),
       testCase "every level after the first is unsolvable on both flat surfaces" $
         assertEqual
           "levels solvable without the half turn"

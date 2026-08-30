@@ -292,7 +292,7 @@ drawFlat frame game =
     halfW = fromIntegral around * tile / 2
     halfH = fromIntegral across * tile / 2
     ghostCols = min 3 around
-    cell x y = fromMaybe blank (cellPicture frame game <$> spotAt @w @h x y)
+    cell x y = maybe blank (cellPicture frame game) (spotAt @w @h x y)
     -- Column @x@ of the picture, which may be outside the board: that is what
     -- a ghost column is.
     place x y =

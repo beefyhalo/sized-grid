@@ -270,8 +270,8 @@ lawViolations =
   [ (toAxisIndex c, d)
   | c <- allCoordLike @(CoordNat x) @(CoordContainer x) :: [x],
     d <- [negate reach .. reach],
-    Just _ <- [offsetIsCoord c d],
-    axisFrameFlips c d
+    axisFrameFlips c d,
+    Just _ <- [offsetIsCoord c d]
   ]
   where
     reach = 2 * ordinalSize @(CoordNat x)

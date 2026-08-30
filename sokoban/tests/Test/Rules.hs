@@ -7,6 +7,7 @@ module Test.Rules
   )
 where
 
+import Data.Maybe (fromMaybe, isNothing)
 import Data.Set qualified as Set
 import Sokoban.Board
 import Sokoban.Level
@@ -171,7 +172,7 @@ undoRestores =
   testGroup
     "undo"
     [ testCase "at the start there is nothing to take back" $
-        assertBool "should be Nothing" (maybe True (const False) (undo (newGame lvl))),
+        assertBool "should be Nothing" (isNothing (undo (newGame lvl))),
       testProperty "any run of moves, undone, is the start again" $
         forAll (listOf (elements allDirs)) $ \dirs ->
           let g0 = newGame lvl
@@ -188,7 +189,7 @@ undoRestores =
           "------",
           "------"
         ]
-    playOf g = gamePlay g
+    playOf = gamePlay
     undoAll g = maybe g undoAll (undo g)
 
 winning :: TestTree
@@ -274,7 +275,7 @@ counting =
         play = gamePlay g
     assertEqual "three moves" 3 (playMoves play)
     assertEqual "two of them pushes" 2 (playPushes play)
-    let back = foldl' (\x _ -> maybe x id (undo x)) g [1 :: Int .. 3]
+    let back = foldl' (\x _ -> fromMaybe x (undo x)) g [1 :: Int .. 3]
     assertEqual "and back to nothing" (levelStart lvl) (gamePlay back)
 
 ruleTests :: TestTree

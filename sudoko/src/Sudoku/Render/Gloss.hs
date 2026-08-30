@@ -11,7 +11,7 @@ module Sudoku.Render.Gloss
 where
 
 import Data.Grid.Sized (Coord, allCoord, indexGrid)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Graphics.Gloss.Interface.Pure.Game
 import Sudoku.Board
 import Sudoku.Solve
@@ -106,7 +106,7 @@ step1 v =
                 }
             Done mb ->
               v'
-                { viewBoard = maybe (viewBoard v) id mb,
+                { viewBoard = fromMaybe (viewBoard v) mb,
                   viewFocus = Nothing,
                   viewStatus = if isJust mb then Solved else NoSolution,
                   viewRunning = False
@@ -164,7 +164,7 @@ cellSize = 56
 -- so the row index counts downwards while the screen's y counts up.
 cellCentre :: Int -> Int -> (Float, Float)
 cellCentre r c =
-  ( -4 * cellSize + fromIntegral c * cellSize,
+  ( -(4 * cellSize) + fromIntegral c * cellSize,
     116 - fromIntegral r * cellSize
   )
 
@@ -225,7 +225,7 @@ boardLines :: Picture
 boardLines = pictures (map vertical edges ++ map horizontal edges)
   where
     edges = [0 .. 9 :: Int]
-    lo = -4.5 * cellSize
+    lo = -(4.5 * cellSize)
     hi = 4.5 * cellSize
     top = 116 + 0.5 * cellSize
     at i = lo + fromIntegral i * cellSize

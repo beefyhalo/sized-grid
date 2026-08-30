@@ -6,7 +6,9 @@
 -- first. It stays because it is testable in a pipe, which the window is not.
 module Main (main) where
 
+import Control.Monad (when)
 import Data.Char (toLower)
+import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Sokoban.Board
 import Sokoban.Flat
@@ -120,9 +122,7 @@ start levels = do
     go [] = putStrLn "That is all of them."
     go (SomeLevel lvl : rest) = do
       finished <- loop ChartFrame (newGame lvl)
-      if finished
-        then go rest
-        else pure ()
+      when finished $ go rest
 
 -- | Returns whether the level was finished, as opposed to quit out of.
 loop :: (KnownStrip w h) => Frame -> Game w h -> IO Bool
@@ -146,7 +146,7 @@ keys [] frame game = loop frame game
 keys (c : cs) frame game =
   case c of
     'q' -> pure False
-    'u' -> keys cs frame (maybe game id (undo game))
+    'u' -> keys cs frame (fromMaybe game (undo game))
     'r' -> keys cs frame (restart game)
     'n' -> pure True
     'f' -> keys cs (other frame) game

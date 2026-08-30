@@ -44,7 +44,7 @@ where
 import Data.Foldable (toList)
 import Data.Grid.Sized hiding (All, Compose)
 import Data.List (intercalate)
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes, isJust, mapMaybe)
 import Data.Monoid (All (..), Any (..))
 
 newtype Symbol = Symbol (Ordinal 9)
@@ -171,7 +171,7 @@ parseBoard input
               Left "the board breaks the rules before the search starts"
           | otherwise -> Right b
   where
-    cells = [c | Just c <- map cellOf input]
+    cells = mapMaybe cellOf input
     cellOf ch
       | ch `elem` ("0._" :: String) = Just Nothing
       | ch >= '1' && ch <= '9' =

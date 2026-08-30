@@ -26,7 +26,7 @@ where
 
 import Data.Grid.Sized hiding (All, Compose)
 import Data.List (find)
-import Data.Maybe (isNothing)
+import Data.Maybe (isJust, isNothing)
 import Sudoku.Board
 
 -- | One move of the search.
@@ -109,5 +109,5 @@ traceStats = go 0 0
   where
     go !p !u (Place {} : ss) = go (p + 1) u ss
     go !p !u (Undo {} : ss) = go p (u + 1) ss
-    go !p !u (Done b : _) = Stats p u (maybe False (const True) b)
+    go !p !u (Done b : _) = Stats p u (isJust b)
     go !p !u [] = Stats p u False

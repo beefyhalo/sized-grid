@@ -21,6 +21,7 @@ module Sokoban.Solve
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Grid.Sized (Coord)
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -89,16 +90,13 @@ solveFrom budget game
           | won p' =
               ( Set.insert k s,
                 acc',
-                maybe
-                  ( Just
-                      ( Solution
-                          (reverse path')
-                          (playPushes p')
-                          (expanded' + length acc')
-                      )
-                  )
-                  Just
-                  hit
+                hit
+                  <|> Just
+                    ( Solution
+                        (reverse path')
+                        (playPushes p')
+                        (expanded' + length acc')
+                    )
               )
           | otherwise = (Set.insert k s, (p', path') : acc', hit)
           where

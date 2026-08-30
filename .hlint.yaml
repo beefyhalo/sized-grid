@@ -1,0 +1,30 @@
+# HLint configuration for grid-sized.
+#
+# `hlint .` from the repo root is expected to be clean. The maintained tree
+# carries no hints; the entries below cover paths that are not linted and the
+# handful of library sites where the pointful form is load-bearing and is kept
+# on purpose rather than "fixed".
+
+# README.lhs is a symlink to README.md -- prose with fenced Haskell, not a
+# module, so hlint's parser chokes on it. spike/* are frozen ADR spikes with
+# their own cabal.project files; they are not maintained to lint-clean.
+- arguments:
+    - --ignore-glob=README.lhs
+    - --ignore-glob=spike/**
+
+# `stencilGrid` and the other fills pass `\i -> gatherAt tbl w v f i` to
+# VG.generate rather than the eta-reduced `gatherAt tbl w v f`. The lambda
+# saturates `gatherAt`, whose {-# INLINE #-} fires only at full arity --
+# eta-reducing it leaves a call per element in the hot fill loop. The benchmark
+# gate in ci.yml is what would eventually catch that; the lambda keeps it from
+# happening. Same story for `foldAt`.
+- ignore: {name: Avoid lambda, within: Data.Grid.Sized.Stencil}
+
+# `ix c f = cellLens c f` is eta-expanded deliberately: a `Lens'` is used where
+# a `Traversal'` is asked for, and that coercion only goes through with both
+# arguments in scope. The reason is spelled out at the definition.
+- ignore: {name: Eta reduce, within: Data.Grid.Sized.Internal.Grid.Core}
+
+# `prefix`/`suffix` bind a visible `forall n ->` (RequiredTypeArguments)
+# argument, which is not eta-reducible.
+- ignore: {name: Eta reduce, within: Data.Grid.Sized.Optics.Grid}

@@ -175,7 +175,7 @@ iterateStencilFoldStrict s n g = iterate (stencilFoldStepStrict s) g !! n
 
 -- | The same repeated step without the lazy list created by 'iterate'.
 iterateStencilFoldLoop :: (VG.Vector v Int) => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
-iterateStencilFoldLoop stencil count = go count
+iterateStencilFoldLoop stencil = go
   where
     go 0 grid = grid
     go remaining grid = go (remaining - 1) (stencilFoldStep stencil grid)

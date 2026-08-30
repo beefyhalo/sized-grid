@@ -29,7 +29,7 @@ where
 import Control.Lens (review)
 import Data.Grid.Sized
 import Data.Grid.Sized.Unboxed
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Vector.Generic qualified as VG
 import Data.Vector.Generic.Mutable qualified as VGM
 import Data.Vector.Unboxed qualified as VU
@@ -178,7 +178,7 @@ circuitBoard circuit =
             (cx, ch) <- zip [0 ..] row,
             Just v <- [cellOf ch]
           ]
-   in tabulateGrid (\c -> maybe Empty id (lookup (coordPosition c) live))
+   in tabulateGrid (\c -> fromMaybe Empty (lookup (coordPosition c) live))
   where
     rows = circuitRows circuit
     height = length rows
@@ -298,8 +298,8 @@ draw w = fitTo (worldWin w) $ pictures (cells ++ [hud w])
     cells =
       [ translate x y (color col (rectangleSolid (tileSize - 2) (tileSize - 2)))
       | (c, v) <- zip allCoord (VG.toList (gridVector (worldGrid w))),
-        Just col <- [cellColour v],
-        let (x, y) = cellCentre c
+        let (x, y) = cellCentre c,
+        Just col <- [cellColour v]
       ]
 
 hud :: World -> Picture

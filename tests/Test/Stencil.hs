@@ -111,8 +111,8 @@ strictGridAgreesWithStencilGrid ::
   TestTree
 strictGridAgreesWithStencilGrid name r =
   testProperty name $ \(g :: Grid cs Int) ->
-    gridVector (stencilGrid' (mooreStencil r) (\x ns -> (x, ns)) g)
-      === gridVector (stencilGrid (mooreStencil r) (\x ns -> (x, ns)) g)
+    gridVector (stencilGrid' (mooreStencil r) (,) g)
+      === gridVector (stencilGrid (mooreStencil r) (,) g)
 
 -- | @stencilFoldGrid'@ against `stencilFoldGrid`, the same claim for the fold
 -- kernel.
