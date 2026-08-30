@@ -55,3 +55,9 @@ dist-newstyle/
 # work.
 .claude/*
 !.claude/settings.json
+
+# sokoban-shot writes a PPM of the game's own window, and defaults to writing
+# it into whatever directory it was run from. They are 7MB each and are working
+# output, not evidence to keep: capture/ppm2png.py turns one into something to
+# look at, and the shot can always be retaken.
+*.ppm
