@@ -17,6 +17,7 @@ module Data.Grid.Sized.Coord.Class.List
   ( IsCoordList (..),
     IsCoordListF,
     MapDiff,
+    MapStep,
     AllDiffSame,
   )
 where
@@ -37,6 +38,27 @@ import Generics.SOP (All, I (..), NP (..))
 type family MapDiff xs where
   MapDiff '[] = '[]
   MapDiff (x ': xs) = Diff x ': MapDiff xs
+
+-- | One signed step count per axis: the displacement a /checked/ move takes,
+-- as against the 'MapDiff' an affine one does.
+--
+-- The two are the same list wherever both exist -- every 'Diff' in this
+-- library is 'Int' -- but they are stuck on different things.
+-- @'MapDiff' cs@ reduces only where every axis has an 'Data.AffineSpace.AffineSpace'
+-- instance, and 'Data.Grid.Sized.Ordinal.Ordinal' deliberately has none: it
+-- cannot leave its interval, so it has no affine action to offer. A bounds
+-- check is not an affine action, though. 'Data.Grid.Sized.Coord.Class.offsetIsCoord'
+-- already says so -- its displacement is a plain 'Int' -- and this family is
+-- that same statement one level up, so that
+-- 'Data.Grid.Sized.Coord.offsetCoord' and everything built on it works on the
+-- axis whose whole purpose is to have no boundary policy.
+--
+-- See sized-grid-i0ob.2. Affine movement keeps 'MapDiff': being total is what
+-- the axis type licenses, and excluding @Ordinal@ from it is the design
+-- working.
+type family MapStep xs where
+  MapStep '[] = '[]
+  MapStep (x ': xs) = Int ': MapStep xs
 
 -- | All Diffs of the members of the list must be equal. At a concrete list
 -- this reduces to one @~@ per axis and costs nothing at run time, unlike a
@@ -153,17 +175,17 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
   -- builds a value of every axis type on the way to taking its index again.
   posIndices :: Int -> [Int]
 
-  -- | Offset each axis by its own displacement, or 'Nothing' if any axis
+  -- | Offset each axis by its own step count, or 'Nothing' if any axis
   -- refuses. The fold behind 'Data.Grid.Sized.Coord.offsetCoord'.
   --
-  -- The displacement constraint is the type family 'AllDiffSame' rather
-  -- than a class constraint, since a class constraint would be a
-  -- dictionary the method takes at run time -- exactly the per-axis cost
-  -- this fold exists to remove.
+  -- Indexed by 'MapStep' and not 'MapDiff', so it carries no obligation at
+  -- all beyond 'IsCoordList': the per-axis operation it folds,
+  -- 'offsetIsCoord', is a bounds check taking an 'Int', and a bounds check
+  -- is something every axis can do -- 'Data.Grid.Sized.Ordinal.Ordinal'
+  -- included, which @MapDiff@ shut out.
   posOffset ::
-    (AllDiffSame Int cs) =>
     Int ->
-    NP I (MapDiff cs) ->
+    NP I (MapStep cs) ->
     Maybe Int
 
   -- | Every combination of per-axis values reachable within @r@ steps on
@@ -267,7 +289,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
       (i, r) -> i : posIndices @xs r
 
   -- The displacement drives the match: ':*' on it is what refines @xs@ far
-  -- enough for 'MapDiff' to reduce, the job the coord's own ':*' used to do
+  -- enough for 'MapStep' to reduce, the job the coord's own ':*' used to do
   -- when this took one.
   posOffset p (I dx :* dxs) =
     case p `quotRem` stride of

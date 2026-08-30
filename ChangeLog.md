@@ -9,6 +9,36 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **Bug fix, and a widening.** Checked movement works on an `Ordinal` axis,
+  so a window is a grid you can move around inside (sized-grid-i0ob.2).
+  `offsetCoord`, `coordRay`, `offsetCoordUpTo`, `Path`, `walkPath`,
+  `traceOffset`, `tracePath` and `walkEverywhere` are now indexed by a new
+  type family `MapStep cs` — one signed `Int` per axis — rather than by
+  `MapDiff cs`, the list of per-axis `Diff`s.
+
+  They were typed in terms of an *affine* displacement when what they use is a
+  per-axis bounds check: `offsetIsCoord` already takes a plain `Int`. `Ordinal`
+  deliberately has no `AffineSpace` instance — it cannot leave its interval —
+  so `MapDiff` was stuck on it and none of the functions above typechecked
+  there. Since every restriction (`gridWindows`, `gridTiles`, `shrinkGrid`,
+  `takeGrid`, `dropGrid`, `sliceGrid`, `splitHigherDim`, and the
+  `slice`/`prefix`/`suffix` lenses) narrows its axis to `Ordinal`, the
+  capability the window's own type is chosen to promise was unreachable: the
+  README and the `$windows` Haddock both said a window's off-grid step is
+  `Nothing` rather than an invented answer, and there was no such step.
+
+  Source-compatible, and checked: no call site changed in this repository or
+  in its downstream consumer. At every axis list where both families reduce
+  they reduce to the same list, so `Delta (MapStep cs)` and
+  `Delta (MapDiff cs)` are the same type wherever anything compiled before.
+  The one visible addition is on `walkPathTotal`, which bridges the two halves
+  and so states `MapDiff cs ~ MapStep cs` — free at a concrete axis list.
+
+  Total movement is unchanged and deliberately still refuses `Ordinal`:
+  `(.+^)`, `(.-.)`, `transportCoord` and `stepWalker` keep `MapDiff`, because
+  being total is something the axis type has to license. Two compile-fail
+  tests hold that line.
+
 * **New.** `coordIndices` and `coordIndices2` ask a coordinate where it is:
   one `Int` per axis, first axis first (sized-grid-bzzy). `coordIndices` is a
   new `IsCoordList` method, `posIndices`, wrapped -- the same stride decode

@@ -10,6 +10,7 @@ module Test.Windows
   )
 where
 
+import Control.Comonad (extract)
 import Control.Lens (toListOf)
 import Data.Foldable (toList)
 import Data.Grid.Sized
@@ -93,6 +94,115 @@ windowHasNoSeamOfItsOwn src k o =
               === toList src !! (ordinalToInt k + ordinalToInt o')
           Nothing -> property (target < 0 || target >= 3)
 
+-- * Moving inside a window (sized-grid-i0ob.2)
+
+-- | The window of @[1 .. 9]@ at offset 1: @[2, 3, 4]@, on an 'Ordinal' axis.
+windowOfNine :: Grid '[Ordinal 3] Int
+windowOfNine = gridWindows @3 nine !! 1
+  where
+    nine = fromJust (gridFromList [1 .. 9]) :: Grid '[Periodic 9] Int
+
+-- | A coordinate on that window's single axis.
+ord1 :: Int -> Coord '[Ordinal 3]
+ord1 i = fromJust (numToOrdinal i) :| EmptyCoord
+
+-- | The corresponding one-dimensional step.
+d1 :: Int -> Delta (MapStep '[Ordinal 3])
+d1 a = a :^ NoDelta
+
+-- | The 3x3 window of a doubly-'Periodic' 9x9 at offset (1, 1): the shape the
+-- issue reproduced against, both axes 'Ordinal'.
+windowOf9x9 :: Grid '[Ordinal 3, Ordinal 3] Int
+windowOf9x9 = shrinkGrid offset src
+  where
+    offset = one :| one :| EmptyCoord :: Coord '[Ordinal 7, Ordinal 7]
+    one = fromJust (numToOrdinal (1 :: Int))
+    src =
+      fromJust (gridFromList [[9 * r + c + 1 | c <- [0 .. 8]] | r <- [0 .. 8]]) ::
+        Grid '[Periodic 9, Periodic 9] Int
+
+ord2 :: Int -> Int -> Coord '[Ordinal 3, Ordinal 3]
+ord2 r c = fromJust (numToOrdinal r) :| fromJust (numToOrdinal c) :| EmptyCoord
+
+d2 :: Int -> Int -> Delta (MapStep '[Ordinal 3, Ordinal 3])
+d2 a b = a :^ b :^ NoDelta
+
+-- | Checked movement inside a window: the capability the window's own type is
+-- chosen to promise.
+--
+-- 'Data.Grid.Sized.Coord.offsetCoord' and everything built on it used to be
+-- indexed by @'MapDiff' cs@, which is stuck on 'Ordinal' -- so none of these
+-- calls typechecked, and a window was a grid nothing could move in. They are
+-- indexed by 'MapStep' now. The assertions are about what the window
+-- /answers/: a step that stays inside it succeeds, and a step that leaves it
+-- is 'Nothing' rather than the source's wrap.
+movementInsideAWindow :: TestTree
+movementInsideAWindow =
+  testGroup
+    "checked movement inside a window"
+    [ testCase "the window under test" $
+        assertEqual "" [2, 3, 4] (toList windowOfNine),
+      testCase "a step that stays inside the window succeeds" $
+        assertEqual "" (Just (ord1 1)) (offsetCoord (ord1 0) (d1 1)),
+      -- The source is Periodic 9, so the same step at the same cell wraps
+      -- there. The window is not, and does not.
+      testCase "a step off the window's far edge is Nothing, not a wrap" $
+        assertEqual "" Nothing (offsetCoord (ord1 2) (d1 1)),
+      testCase "a step off the window's near edge is Nothing, not a wrap" $
+        assertEqual "" Nothing (offsetCoord (ord1 0) (d1 (-1))),
+      -- A ray on the Periodic source never ends; on the window it ends at the
+      -- window's own edge, which is the whole point of the Ordinal axis.
+      testCase "a ray stops at the window's edge" $
+        assertEqual "" [ord1 1, ord1 2] (coordRay (ord1 0) (d1 1)),
+      testCase "the same ray on the Periodic source does not stop" $
+        assertEqual
+          ""
+          20
+          (length (take 20 (coordRay (zeroCoord :: Coord '[Periodic 9]) (1 :^ NoDelta)))),
+      testCase "offsetCoordUpTo reports where the walk left the window" $
+        assertEqual
+          ""
+          (Left (OffGrid (ord1 2) 2))
+          (offsetCoordUpTo 5 (ord1 0) (d1 1)),
+      testCase "a path that leaves the window and comes back still fails" $
+        assertEqual
+          ""
+          Nothing
+          (walkPath (ord1 0) (Path [d1 (-1), d1 1])),
+      testCase "a path that stays inside the window succeeds" $
+        assertEqual
+          ""
+          (Just (ord1 2))
+          (walkPath (ord1 0) (Path [d1 1, d1 1])),
+      testCase "traceOffset reads the window's own cells" $
+        assertEqual
+          ""
+          (Just 3)
+          (traceOffset (d1 1) (focusedAtZero windowOfNine)),
+      testCase "traceOffset off the window's edge is Nothing" $
+        assertEqual
+          ""
+          Nothing
+          (traceOffset (d1 (-1)) (focusedAtZero windowOfNine)),
+      testGroup
+        "the same, on the two-axis window the issue reproduced against"
+        [ testCase "the window under test" $
+            assertEqual "" [11, 12, 13, 20, 21, 22, 29, 30, 31] (toList windowOf9x9),
+          testCase "a diagonal step inside the window succeeds" $
+            assertEqual "" (Just (ord2 1 1)) (offsetCoord (ord2 0 0) (d2 1 1)),
+          testCase "either axis can refuse on its own" $ do
+            assertEqual "row" Nothing (offsetCoord (ord2 2 0) (d2 1 0))
+            assertEqual "column" Nothing (offsetCoord (ord2 0 2) (d2 0 1)),
+          testCase "walkEverywhere is defined on an Ordinal-axed grid" $
+            assertEqual
+              ""
+              (Just 21)
+              ( extract
+                  (walkEverywhere (Path [d2 1 1]) (focusedAtZero windowOf9x9))
+              )
+        ]
+    ]
+
 -- | A window is a slice: 'gridWindows' produces exactly the length-3 runs
 -- @take 3 . drop n@ would, one for every valid @n@ in order.
 windowsAreSlices :: Grid '[Ordinal 5] Int -> Property
@@ -125,6 +235,7 @@ windowTests =
         "gridWindows agrees with shrinkGrid, 2D with the second axis fixed"
         windowIsShrinkGrid2D,
       testProperty "toListOf windows == gridWindows" windowsIsGridWindows,
+      movementInsideAWindow,
       testGroup
         "a restriction destroys the boundary policy"
         [ testProperty

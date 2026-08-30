@@ -120,6 +120,19 @@ import Generics.SOP
 -- have not been restricted, and the offsets are 'Ordinal' too, an offset
 -- being an index rather than a position in a space.
 --
+-- That off-grid step is 'Data.Grid.Sized.Coord.offsetCoord', and it is
+-- reachable here: checked movement is indexed by
+-- @'Data.Grid.Sized.Coord.MapStep' cs@, one signed step count per axis, and
+-- not by the affine @'Data.Grid.Sized.Coord.MapDiff' cs@, because all it ever
+-- asks of an axis is a bounds check. So a window is a grid a caller can move
+-- around inside --- 'Data.Grid.Sized.Coord.offsetCoord',
+-- 'Data.Grid.Sized.Coord.coordRay', 'Data.Grid.Sized.Coord.walkPath' and the
+-- 'Data.Grid.Sized.Focused.FocusedGrid' liftings of them all work on it
+-- (sized-grid-i0ob.2). Total movement --- @('Data.AffineSpace..+^')@,
+-- 'Data.Grid.Sized.Focused.stepWalker' --- still refuses 'Ordinal', which is
+-- the first rule working and not a gap: an axis that cannot leave its interval
+-- licenses no way to come back.
+--
 -- A window that kept its source\'s policy would describe a seam that is not in
 -- the space it is a view of: periodicity is a property of a whole axis, so a
 -- proper sub-window of a periodic axis is not periodic, and \"clamped\" means

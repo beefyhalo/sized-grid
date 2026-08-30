@@ -71,10 +71,9 @@ instance
 -- step would leave the grid.
 traceOffset ::
   ( AllSizedKnown cs,
-    IsCoordList cs,
-    AllDiffSame Int cs
+    IsCoordList cs
   ) =>
-  Delta (MapDiff cs) ->
+  Delta (MapStep cs) ->
   FocusedGrid cs a ->
   Maybe a
 traceOffset d (FocusedGrid g p) = index g <$> offsetCoord p d
@@ -83,8 +82,7 @@ traceOffset d (FocusedGrid g p) = index g <$> offsetCoord p d
 -- 'walkPath' rather than summed first.
 tracePath ::
   ( AllSizedKnown cs,
-    IsCoordList cs,
-    AllDiffSame Int cs
+    IsCoordList cs
   ) =>
   Path cs ->
   FocusedGrid cs a ->
@@ -94,8 +92,7 @@ tracePath p (FocusedGrid g focusPos) = index g <$> walkPath focusPos p
 -- | Start a walker at every cell and follow the same 'Path' from each.
 walkEverywhere ::
   ( AllSizedKnown cs,
-    IsCoordList cs,
-    AllDiffSame Int cs
+    IsCoordList cs
   ) =>
   Path cs ->
   FocusedGrid cs a ->

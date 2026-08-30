@@ -32,6 +32,20 @@
 -- @-1@. To ask where a cell is, ask 'coordIndices' (or 'coordIndices2' at two
 -- axes), which reports each axis's own index and never a negative number.
 --
+-- == Two displacement lists, one for each half of the movement table
+--
+-- @'MapDiff' cs@ is the affine one, and it is what @('Data.AffineSpace..+^')@,
+-- @('Data.AffineSpace..-.')@ and 'transportCoord' take: those are /total/, and
+-- being total is something each axis type has to license by having an
+-- 'Data.AffineSpace.AffineSpace' instance.
+--
+-- @'MapStep' cs@ is the checked one --- one signed 'Int' per axis --- and it is
+-- what 'offsetCoord', 'coordRay', 'offsetCoordUpTo' and 'Path' take. A checked
+-- step needs no affine action, only a per-axis bounds check, so it is available
+-- on every axis including 'Data.Grid.Sized.Ordinal.Ordinal', which has no
+-- affine action to give and so is stuck under @MapDiff@. The two lists are the
+-- same list wherever both reduce.
+--
 -- == Where the pieces live
 --
 -- This module is a facade. Nothing is defined here; each group below is
@@ -140,6 +154,7 @@ module Data.Grid.Sized.Coord
     Length,
     MaxCoordSize,
     MapDiff,
+    MapStep,
     AffineCoordList,
     AllDiffSame,
     AllSizedKnown (..),

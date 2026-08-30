@@ -8,7 +8,7 @@
 --     conversions, and the size predicates.
 --   * "Data.Grid.Sized.Coord.Class.List" -- the row-major fold over the axis
 --     list: 'IsCoordList' and its two instances, plus 'IsCoordListF',
---     'MapDiff' and 'AllDiffSame'.
+--     'MapDiff', 'MapStep' and 'AllDiffSame'.
 --
 -- The second is built on the first and the first does not mention the second,
 -- so the split is one edge with no cycle.
@@ -19,6 +19,7 @@ module Data.Grid.Sized.Coord.Class
     IsCoordListF,
     Boundaryless,
     MapDiff,
+    MapStep,
     AllDiffSame,
     Extremum (..),
     Even,

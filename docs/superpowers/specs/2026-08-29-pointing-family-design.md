@@ -257,6 +257,14 @@ passed through, as recommended below.
    argument `i0ob.2` makes for `offsetCoord`, and it is what lets a walker
    exist in a window.
 
+   **`MapStep` has landed, `sized-grid-i0ob.2`.** It is exported from
+   `Data.Grid.Sized.Coord`, and `offsetCoord`, `coordRay`, `offsetCoordUpTo`,
+   `Path`, `walkPath`, `traceOffset`, `tracePath` and `walkEverywhere` are all
+   indexed by it and all work on an `Ordinal` axis. Source-compatible as
+   predicted: no call site in this repo or in `../aoc` changed. The heading
+   itself is still `Diff (Coord cs)` — that is this piece, and it is now
+   unblocked.
+
 3. **State the checked-step law on `IsCoord`** and fix `Reflect101`'s
    fixed-point tie-break so it holds. Filed separately; blocks piece 4 only
    in the sense that piece 4's semantics are undefined until it is settled.

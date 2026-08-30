@@ -114,6 +114,15 @@ compileFailTests =
         assertCompileFails
           "RestrictionKeepsSourcePolicy.hs"
           "Couldn't match type: Ordinal 3",
+      -- sized-grid-i0ob.2's negative half. Checked movement was re-indexed by
+      -- 'MapStep' so that it works on 'Ordinal'; total movement was not, and
+      -- must not be. The substring is the stuck type itself, so a regression
+      -- that gave 'Ordinal' an affine action would compile cleanly rather than
+      -- fail differently.
+      testCase "(.+^) on an Ordinal axis" $
+        assertCompileFails "AffineStepOnOrdinal.hs" "Diff (Ordinal 5)",
+      testCase "stepWalker on an Ordinal axis" $
+        assertCompileFails "StepWalkerOnOrdinal.hs" "Diff (Ordinal 5)",
       testCase "walkPathTotal on a coord with a walled axis" $
         assertCompileFails
           "WalkPathTotalNotBoundaryless.hs"

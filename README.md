@@ -47,6 +47,15 @@ narrowed axis is `Ordinal`: no walls, no wrap, and an off-grid step that returns
 `Nothing` rather than an invented answer, whatever the source's policy was. Axes
 they leave at full width keep theirs, because those have not been restricted.
 
+That off-grid step is `offsetCoord`, and it is genuinely reachable on an
+`Ordinal` axis, so a window is a grid you can move around inside. Checked
+movement takes one signed step count per axis (`MapStep`) rather than an affine
+displacement (`MapDiff`), because all it ever asks of an axis is a bounds check,
+and every axis can do that. Total movement — `(.+^)`, `stepWalker` — still
+refuses `Ordinal`, and that is the first rule working rather than a gap: being
+total is something the coordinate type has to license, and an axis that cannot
+leave its interval licenses nothing.
+
 The rule sorts the rest of the shape algebra too. Operations that keep every
 axis at its own size keep every policy — `transposeGrid`, `splitGrid`,
 `combineGrid`, `mapLowerDim`. And *construction* is where a policy is declared

@@ -13,7 +13,6 @@ module Data.Grid.Sized.Coord.Neighbourhood
   )
 where
 
-import Data.AffineSpace (Diff)
 import Data.Grid.Sized.Coord.Class
 import Data.Grid.Sized.Coord.Delta
 import Data.Grid.Sized.Coord.Internal
@@ -21,13 +20,19 @@ import Data.Grid.Sized.Coord.Internal
 -- | The checked counterpart of 'Data.AffineSpace..+^': succeeds only if every axis's own
 -- boundary policy allows the step, so a torus axis can wrap while a bounded
 -- axis in the same coord refuses.
+--
+-- The displacement is a @'Delta' ('MapStep' cs)@ -- one signed step count per
+-- axis -- and not the @'Data.AffineSpace.Diff' ('Coord' cs)@ an affine move
+-- takes. Asking for a 'Diff' asked every axis for an affine action this
+-- function never uses, which shut out the one axis type that has none:
+-- @offsetCoord@ now works on 'Data.Grid.Sized.Ordinal.Ordinal', and so inside
+-- a window (sized-grid-i0ob.2). At every axis list where both types exist
+-- they are the same type, so a call site cannot tell the difference.
 offsetCoord ::
   forall cs.
-  ( IsCoordList cs,
-    AllDiffSame Int cs
-  ) =>
+  (IsCoordList cs) =>
   Coord cs ->
-  Diff (Coord cs) ->
+  Delta (MapStep cs) ->
   Maybe (Coord cs)
 offsetCoord (Coord p) (Delta d) = Coord <$> posOffset @cs p d
 
