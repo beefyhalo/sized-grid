@@ -109,6 +109,24 @@ class IsCoord (c :: Nat -> Type) where
   -- displacement reverses this axis's own sense of direction; used by
   -- reflecting boundaries. Default is 'False' (no reversal) for every other
   -- policy.
+  --
+  -- Law, not checkable by GHC, tested for every axis type -- and the reason
+  -- it is worth stating at all is that a reflecting axis whose mirror sits
+  -- /on/ a lattice point has a fixed point where the parity is genuinely
+  -- ambiguous, and this is what settles which way to resolve it
+  -- (sized-grid-c0s9):
+  --
+  -- 1. @'offsetIsCoord' c d == 'Just' c'@ implies
+  --    @not ('axisFrameFlipsIsCoord' c d)@ -- a checked step that succeeds
+  --    has not hit a wall, so the frame does not turn.
+  --
+  -- What it buys: a checked step can carry a heading with no fold of its own.
+  -- If 'offsetIsCoord' said yes, the heading passes through unchanged, so
+  -- @'Data.Grid.Sized.Coord.Neighbourhood.offsetCoord'@ is already the
+  -- checked counterpart of
+  -- @'Data.Grid.Sized.Coord.Transform.transportCoord'@. Without it the two
+  -- mirror policies disagree about what a checked step means: one walks to
+  -- the wall and stops, the other turns around a cell early.
   axisFrameFlipsIsCoord :: (KnownNat n, 1 <= n) => c n -> Int -> Bool
   axisFrameFlipsIsCoord _ _ = False
 

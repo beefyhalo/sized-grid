@@ -123,13 +123,25 @@ trail w = w : maybe [] trail (stepWithin w)
 -- Clamped   : [((1,0),1),((1,1),1),((1,2),1),((1,3),1),((1,4),1)]
 -- Periodic  : [((1,0),1),((1,1),1),((1,2),1),((1,3),1),((1,4),1),((1,0),1),...
 -- Reflective: [((1,0),1),((1,1),1),((1,2),1),((1,3),1),((1,4),1)]
+-- Reflect101: [((1,0),1),((1,1),1),((1,2),1),((1,3),1),((1,4),1)]
+-- @
+--
+-- The last row is what this spike was reporting when it was written, and it
+-- read
+--
+-- @
 -- Reflect101: [((1,0),1),((1,1),1),((1,2),1),((1,3),1),((1,4),-1),((1,3),-1),...
 -- @
 --
--- @Reflective@ stops at the wall and @Reflect101@ turns around, which is the
--- inconsistency the design doc reports: @Reflect101@ is the only axis where a
--- step the bounds check /accepts/ also reports a frame flip, because
--- @mirrorAt@ resolves its fixed point @r == m@ as reflected.
+-- @Reflective@ stopped at the wall and @Reflect101@ turned around one cell
+-- early, because @mirrorAt@ resolved its fixed point @r == m@ as reflected
+-- and so was the only axis where a step the bounds check /accepts/ also
+-- reported a frame flip. That is fixed (sized-grid-c0s9): the tie-break now
+-- resolves both mirrors as /not/ reflected, which is stated as a law on
+-- 'Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord' and tested for every
+-- axis type. The two policies agree again, and the @if axisFrameFlipsIsCoord@
+-- in @posStepT@ below is now provably a no-op -- which is exactly why the
+-- real operation needs no fold of its own.
 policyWalks :: IO ()
 policyWalks = do
     report "Ordinal   " (board :: Grid '[Ordinal 5, Ordinal 5] Int)

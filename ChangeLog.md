@@ -9,6 +9,25 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **Behaviour change, `Reflect101` only.** `axisFrameFlips` no longer reports
+  a frame flip for a step that lands exactly on a mirror cell
+  (sized-grid-c0s9). `Reflect101`'s mirrors sit *on* lattice points rather
+  than on the wall beyond them, so the far mirror is a fixed point whose
+  parity is genuinely ambiguous, and `mirrorAt` used to resolve it as
+  reflected. That made `Reflect101` the only axis in the library where a step
+  the bounds check *accepts* also reports a flip --- on a 5-cell axis, all
+  five steps landing on cell 4, plus standing still on it --- so a walker
+  taking checked steps turned around one cell early where `Reflective` walks
+  to the wall and stops.
+
+  `(.+^)` is bit-for-bit unchanged: at the fixed point the position formula's
+  two branches already agreed, so only the flag moved. The reading it was
+  breaking is now a stated law on
+  `Data.Grid.Sized.Coord.Class.axisFrameFlipsIsCoord` --- *a checked step that
+  succeeds has not hit a wall, so the frame does not turn* --- tested
+  exhaustively for every axis type. It is what lets a checked step carry a
+  heading with no fold of its own.
+
 * **Breaking.** The rest of the restriction family destroys the boundary
   policy too (sized-grid-pnws), completing sized-grid-mbh0. `takeGrid`,
   `dropGrid`, `sliceGrid` and `splitHigherDim` return `Ordinal` along the axis

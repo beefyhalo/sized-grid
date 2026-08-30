@@ -8,6 +8,12 @@
 -- Both are total on ('.+^') by construction, so the obligation checked here is
 -- not "does it stay in range" but "does the closed form compute the right
 -- bounce" -- checked against slow, obviously-correct recursive references.
+--
+-- The 'IsCoord' frame-flip law -- a checked step that succeeds has not hit a
+-- wall, so the frame does not turn -- is checked here too, over every axis
+-- type rather than just these two. It lives here because these two are the
+-- only policies with any way to break it: everywhere else
+-- 'axisFrameFlipsIsCoord' takes the constant-'False' default.
 module Test.Reflective
   ( reflectiveTests
   ) where
@@ -17,9 +23,10 @@ import           Test.Arbitrary        ()
 
 import           Control.Lens          (view)
 import           Data.AffineSpace      ((.+^))
+import           GHC.TypeLits          (KnownNat)
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Test.Tasty.QuickCheck (testProperty, (===), (==>))
+import           Test.Tasty.QuickCheck (testProperty, (===))
 
 -- | Billiard bounce off two walls @size@ apart, written the obvious recursive way.
 bounceRef :: Int -> Int -> Int
@@ -57,15 +64,18 @@ bounceFlipRef size = go False
       | i >= size = go (not flipped) (2 * size - 1 - i)
       | otherwise = flipped
 
--- | Tracks parity through 'reflect101Ref''s recursion. Unlike 'bounceFlipRef',
--- not checked at every input: at @i@ an exact multiple of @m@ the wall sits on
--- the lattice, so the fixed point admits more than one reflection convention.
--- The property test below excludes that case; 'frameFlipExamples' pins the
--- convention there explicitly instead.
+-- | Tracks parity through 'reflect101Ref''s recursion, plus the one thing the
+-- recursion cannot derive. At @i@ an exact multiple of @m@ the wall sits on
+-- the lattice, so the walker has landed on a mirror rather than crossed one,
+-- and the parity is genuinely ambiguous -- whichever answer the fold order
+-- happens to reach there is an artefact of the fold, not a fact. The library
+-- resolves every such landing as no turn, because the 'IsCoord' law leaves it
+-- no choice (sized-grid-c0s9), and the guard below says so once so the
+-- property can be total rather than filtered.
 reflect101FlipRef :: Int -> Int -> Bool
 reflect101FlipRef m
   | m == 0 = const False
-  | otherwise = go False
+  | otherwise = \i -> i `mod` m /= 0 && go False i
   where
     go flipped i
       | i < 0 = go (not flipped) (negate i)
@@ -77,6 +87,15 @@ rf = Reflective . unsafeOrdinal
 
 r1 :: Int -> Reflect101 5
 r1 = Reflect101 . unsafeOrdinal
+
+-- | The two non-reflecting bounded\/unbounded policies, for the law tests
+-- below: they take the constant-'False' default, and the point of including
+-- them is that the law is 'IsCoord'\'s rather than the mirrors'.
+hwOf :: forall n. KnownNat n => Int -> Clamped n
+hwOf = Clamped . unsafeOrdinal
+
+peOf :: forall n. KnownNat n => Int -> Periodic n
+peOf = Periodic . unsafeOrdinal
 
 bounceExamples :: TestTree
 bounceExamples =
@@ -197,10 +216,16 @@ frameFlipExamples =
     , testCase "Reflect101: the degenerate size-1 axis never bounces" $
         assertEqual "" False
           (axisFrameFlips (Reflect101 (unsafeOrdinal 0) :: Reflect101 1) 37)
-    , -- A choice, not a derivable fact: landing exactly on the far wall counts as
-      -- flipped even though the position formula's two branches agree there.
-      testCase "Reflect101: landing exactly on the far wall counts as flipped" $
-        assertEqual "" True (axisFrameFlips (r1 0) (-4))
+    , -- A choice, not a derivable fact -- the position formula's two branches
+      -- agree on the mirror cell, so only the flag is at stake -- and the
+      -- choice the 'IsCoord' law forces: a step the bounds check accepts must
+      -- not report a turn (sized-grid-c0s9).
+      testCase "Reflect101: landing exactly on a mirror is not a turn" $ do
+        assertEqual "onto the far mirror" False (axisFrameFlips (r1 0) 4)
+        assertEqual "onto it the mirrored way round" False (axisFrameFlips (r1 0) (-4))
+        assertEqual "standing still on it" False (axisFrameFlips (r1 4) 0)
+    , testCase "Reflect101: one step past the far mirror does turn" $
+        assertEqual "" True (axisFrameFlips (r1 0) 5)
     ]
 
 frameFlipAgreesWithReferenceTests :: TestTree
@@ -213,14 +238,100 @@ frameFlipAgreesWithReferenceTests =
     , testProperty "Reflective, size 1" $ \(c :: Reflective 1) (d :: Int) ->
         let i = ordinalToInt (view asOrdinal c)
          in axisFrameFlips c d === bounceFlipRef 1 (i + d)
-    , -- Excludes multiples of @m@, where 'reflect101FlipRef' doesn't claim to agree.
-      testProperty "Reflect101, size 5" $ \(c :: Reflect101 5) (d :: Int) ->
+    , testProperty "Reflect101, size 5" $ \(c :: Reflect101 5) (d :: Int) ->
         let i = ordinalToInt (view asOrdinal c)
-         in (i + d) `mod` 4 /= 0 ==> axisFrameFlips c d === reflect101FlipRef 4 (i + d)
+         in axisFrameFlips c d === reflect101FlipRef 4 (i + d)
+    , -- Every cell is a mirror when @m == 1@, so nothing ever turns.
+      testProperty "Reflect101, size 2 (every cell a mirror)" $
+        \(c :: Reflect101 2) (d :: Int) ->
+          let i = ordinalToInt (view asOrdinal c)
+           in axisFrameFlips c d === reflect101FlipRef 1 (i + d)
     , testProperty "Reflect101, size 1 (the degenerate axis)" $
         \(c :: Reflect101 1) (d :: Int) ->
           let i = ordinalToInt (view asOrdinal c)
            in axisFrameFlips c d === reflect101FlipRef 0 (i + d)
+    ]
+
+-- | Every (position, displacement) pair on one axis where the bounds check
+-- accepts the step and 'axisFrameFlips' nonetheless reports a turn. The
+-- 'IsCoord' law says this list is empty, whatever the policy.
+--
+-- Exhaustive rather than sampled: an axis is a handful of cells and the
+-- displacements that matter all fit inside two periods, so the whole domain
+-- is cheaper to check than a generator is to tune -- and the five cases
+-- 'Reflect101' used to have were exactly the five landing on one cell, which
+-- is the shape a generator is worst at finding.
+lawViolations :: forall x. IsCoordLifted x => [(Int, Int)]
+lawViolations =
+  [ (toAxisIndex c, d)
+  | c <- allCoordLike @(CoordNat x) @(CoordContainer x) :: [x]
+  , d <- [negate reach .. reach]
+  , Just _ <- [offsetIsCoord c d]
+  , axisFrameFlips c d
+  ]
+  where
+    reach = 2 * ordinalSize @(CoordNat x)
+
+-- | One walker stepped along an axis by the rule the law licenses: take the
+-- checked step, and turn only if the axis says the step turned you. The law
+-- makes the second half a no-op, which is the point -- this is
+-- @transportCoordMaybe@'s axis-level core, and it is why that operation needs
+-- no fold of its own (sized-grid-pc93, sized-grid-qbal).
+--
+-- Fuelled because a torus never stops.
+checkedWalk :: forall x. IsCoordLifted x => Int -> x -> Int -> [(Int, Int)]
+checkedWalk fuel c d
+  | fuel <= 0 = []
+  | otherwise =
+      (toAxisIndex c, d) :
+      case offsetIsCoord c d of
+        Nothing -> []
+        Just c' ->
+          checkedWalk (fuel - 1) c' (if axisFrameFlips c d then negate d else d)
+
+frameFlipLawTests :: TestTree
+frameFlipLawTests =
+  testGroup
+    "a checked step that succeeds does not turn the frame"
+    [ testGroup
+        "no axis type reports a flip on a step the bounds check accepts"
+        [ testCase "Ordinal" $ assertEqual "" [] (lawViolations @(Ordinal 5))
+        , testCase "Clamped" $ assertEqual "" [] (lawViolations @(Clamped 5))
+        , testCase "Periodic" $ assertEqual "" [] (lawViolations @(Periodic 5))
+        , testCase "Reflective" $ assertEqual "" [] (lawViolations @(Reflective 5))
+        , testCase "Reflect101" $ assertEqual "" [] (lawViolations @(Reflect101 5))
+        , -- The sizes where the two mirrors coincide or sit next to each
+          -- other, so every cell is a mirror and the fixed point is not an
+          -- edge case but the whole axis.
+          testCase "Reflective, size 1" $
+            assertEqual "" [] (lawViolations @(Reflective 1))
+        , testCase "Reflect101, size 2" $
+            assertEqual "" [] (lawViolations @(Reflect101 2))
+        , testCase "Reflect101, size 1" $
+            assertEqual "" [] (lawViolations @(Reflect101 1))
+        ]
+    , -- The spike's finding, at axis scope: before sized-grid-c0s9 the
+      -- 'Reflect101' walker turned around on cell 3 and walked back, while
+      -- every other policy ran to the wall and stopped.
+      testGroup
+        "a walker taking checked steps runs to the wall and stops there"
+        [ testCase "Ordinal" $
+            assertEqual "" [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)]
+              (checkedWalk 10 (unsafeOrdinal @5 0) 1)
+        , testCase "Clamped" $
+            assertEqual "" [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)]
+              (checkedWalk 10 (hwOf @5 0) 1)
+        , testCase "Reflective" $
+            assertEqual "" [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)]
+              (checkedWalk 10 (rf 0) 1)
+        , testCase "Reflect101" $
+            assertEqual "" [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)]
+              (checkedWalk 10 (r1 0) 1)
+        , -- Not a wall to stop at: the torus keeps its heading and laps.
+          testCase "Periodic laps instead, still without turning" $
+            assertEqual "" [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1), (0, 1), (1, 1)]
+              (checkedWalk 7 (peOf @5 0) 1)
+        ]
     ]
 
 reflectiveTests :: TestTree
@@ -234,4 +345,5 @@ reflectiveTests =
     , boundaryAndDistanceStayDefaultTests
     , frameFlipExamples
     , frameFlipAgreesWithReferenceTests
+    , frameFlipLawTests
     ]
