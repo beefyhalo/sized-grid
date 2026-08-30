@@ -35,6 +35,15 @@ module Data.Grid.Sized.Internal.Grid.Core
     foldlGrid',
     scanl1Grid,
 
+    -- * Shrinking to a bare vector
+
+    --
+    -- $shrinking
+    mapMaybeGrid,
+    filterGrid,
+    catMaybesGrid,
+    witherGrid,
+
     -- * Type-level machinery
     CollapseGrid,
 
@@ -54,8 +63,10 @@ import Data.Functor.Classes
 import Data.Functor.Rep
 import Data.Grid.Sized.Coord
 import Data.Grid.Sized.Internal.Grid.Nest
+import Data.Hashable (Hashable (..))
 import Data.Kind (Type)
 import Data.List.NonEmpty qualified as NE
+import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.These (These (..))
 import Data.Vector qualified as V
@@ -70,8 +81,8 @@ import GHC.TypeLits qualified as GHC
 newtype GridOf v (cs :: [Type]) a = Grid
   { unGrid :: v a
   }
-  deriving stock (GHC.Generic, Eq, Show)
-  deriving newtype (NFData, Eq1, Show1, Functor)
+  deriving stock (GHC.Generic, Eq, Ord, Show)
+  deriving newtype (NFData, Eq1, Ord1, Show1, Functor)
 
 type instance Index (GridOf v cs a) = Coord cs
 
@@ -137,6 +148,30 @@ instance (Traversable v) => Traversable (GridOf v cs) where
 
 instance (IsCoordList cs) => Each (Grid cs a) (Grid cs b) a b where
   each = traverse
+
+-- | A grid hashes as its elements in row-major order, salted first with the
+-- cell count. Lawful for the same reason the derived 'Eq' is: both are
+-- structural over the one field, so equal grids fold to equal hashes and the
+-- @a == b ==> hashWithSalt s a == hashWithSalt s b@ law holds pointwise. It
+-- touches only the flat vector, so it carries no `IsCoordList` and sits with
+-- the size-agnostic instances rather than the coordinate-aware ones. This is
+-- what lets a `Grid` be a `HashMap` \/ `HashSet` key -- a transposition table
+-- keyed on board state, or a hash-consed quadtree node (sized-grid-h6ki).
+--
+-- The leading @hashWithSalt salt (V.length v)@ mixes in the length the way
+-- @hashable@\'s own list and array instances do; here the length is fixed by
+-- @cs@, so it only ever separates grids of different shape that share an
+-- element type, but it is one cheap word and keeps the instance's shape the
+-- same as the rest of the ecosystem's.
+--
+-- Boxed only, like 'Applicative' and 'Num' above: @Hashable@\'s `Eq`
+-- superclass is discharged here by the stock-derived @Eq (Grid cs a)@, which
+-- reduces to `Eq a`; a @GridOf v cs@ form would have to carry @Eq (v a)@ on
+-- the head for no caller that has asked.
+instance (Hashable a) => Hashable (Grid cs a) where
+  hashWithSalt salt (Grid v) =
+    V.foldl' hashWithSalt (hashWithSalt salt (V.length v)) v
+  {-# INLINE hashWithSalt #-}
 
 -- | Asserts, rather than checks, that the vector holds exactly
 -- @MaxCoordSize cs@ elements. Re-exported from "Data.Grid.Sized.Unsafe".
@@ -317,6 +352,63 @@ foldlGrid' f z (Grid v) = VG.foldl' f z v
 scanl1Grid :: (VG.Vector v a) => (a -> a -> a) -> GridOf v cs a -> GridOf v cs a
 scanl1Grid f (Grid v) = Grid (VG.scanl1' f v)
 {-# INLINE scanl1Grid #-}
+
+-- $shrinking
+--
+-- A `GridOf` fixes its cell count at @'MaxCoordSize' cs@ and every class
+-- instance it has preserves that count, so there is no lawful
+-- @Filterable@\/@Witherable@ instance: @catMaybes :: Grid cs (Maybe a) -> Grid
+-- cs a@ has no @cs@-shaped result to return when a cell is `Nothing`, and the
+-- @Filterable@ law @catMaybes . fmap Just = id@ only pins the all-@Just@ case,
+-- so it cannot even rule out a total-but-wrong instance (sized-grid-g74j).
+--
+-- What a fixed grid /can/ offer, in the spirit of `foldlGrid'` and the rest of
+-- @$bulk@, is the same selection done honestly: the result is a plain
+-- `Data.Vector.Generic.Vector` in row-major order, its length decided by the
+-- predicate rather than the type. Reach for these to collect a subset of cells
+-- -- the alive cells of a board, the walls of a maze -- without pretending the
+-- grid shrank. They are @Data.Vector.Generic@\'s own @mapMaybe@\/@filter@ with
+-- the newtype peeled off; no @witherable@ dependency is involved.
+
+-- | Row-major cells for which @f@ says `Just`, as a bare vector.
+mapMaybeGrid ::
+  (VG.Vector v a, VG.Vector v b) =>
+  (a -> Maybe b) ->
+  GridOf v cs a ->
+  v b
+mapMaybeGrid f (Grid v) = VG.mapMaybe f v
+{-# INLINE mapMaybeGrid #-}
+
+-- | Row-major cells satisfying the predicate, as a bare vector.
+filterGrid ::
+  (VG.Vector v a) =>
+  (a -> Bool) ->
+  GridOf v cs a ->
+  v a
+filterGrid p (Grid v) = VG.filter p v
+{-# INLINE filterGrid #-}
+
+-- | The `Just` cells of a grid of `Maybe`s, in row-major order, as a bare
+-- vector. @'mapMaybeGrid' id@.
+catMaybesGrid ::
+  (VG.Vector v (Maybe a), VG.Vector v a) =>
+  GridOf v cs (Maybe a) ->
+  v a
+catMaybesGrid (Grid v) = VG.mapMaybe id v
+{-# INLINE catMaybesGrid #-}
+
+-- | Effectful `mapMaybeGrid`: run @f@ on every cell in row-major order, then
+-- keep the `Just`s as a bare vector. Goes through a list so no
+-- @'VG.Vector' v ('Maybe' b)@ is needed for the intermediate, which keeps it
+-- usable at an unboxed @v@.
+witherGrid ::
+  (Applicative f, VG.Vector v a, VG.Vector v b) =>
+  (a -> f (Maybe b)) ->
+  GridOf v cs a ->
+  f (v b)
+witherGrid f (Grid v) =
+  VG.fromList . catMaybes <$> traverse f (VG.toList v)
+{-# INLINEABLE witherGrid #-}
 
 -- | `AllSizedKnown` is `Applicative`'s cost, not `Apply`'s: it is only there
 -- for `pure`, which has to materialise a vector of the right length out of

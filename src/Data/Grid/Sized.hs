@@ -22,6 +22,10 @@ module Data.Grid.Sized
     imapGrid,
     zipWithGrid,
     foldlGrid',
+    mapMaybeGrid,
+    filterGrid,
+    catMaybesGrid,
+    witherGrid,
 
     -- * Type-level machinery
     CollapseGrid,

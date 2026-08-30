@@ -308,5 +308,40 @@ invariantTests =
             assertWellSized
               "over (axis 1)"
               (over (axis 1) (scanl1Grid (+)) twoByThreeByTwo)
+        ],
+      -- The shrinking helpers (sized-grid-g74j) deliberately do NOT hold the
+      -- size invariant: they drop to a bare vector whose length the predicate
+      -- decides. What they must hold instead is that the result is the matching
+      -- sublist of the grid's own row-major element order -- nothing added,
+      -- nothing reordered.
+      testGroup
+        "Shrinking helpers select a row-major subsequence"
+        [ testCase "filterGrid is filter over the row-major elements" $
+            assertEqual
+              "filterGrid even 3x3"
+              (V.fromList (filter even (toList threeByThree)))
+              (filterGrid even threeByThree),
+          testCase "filterGrid (const True) is the whole grid vector" $
+            assertEqual
+              "filterGrid keeps everything"
+              (gridVector threeByThree)
+              (filterGrid (const True) threeByThree),
+          testCase "filterGrid (const False) is empty" $
+            assertEqual "filterGrid drops everything" V.empty (filterGrid (const False) threeByThree),
+          testCase "mapMaybeGrid keeps and transforms the Just cells in order" $
+            assertEqual
+              "mapMaybeGrid evens * 10"
+              (V.fromList [20, 40, 60, 80])
+              (mapMaybeGrid (\x -> if even x then Just (x * 10) else Nothing) threeByThree),
+          testCase "catMaybesGrid is mapMaybeGrid id" $
+            assertEqual
+              "catMaybesGrid odds"
+              (V.fromList [1, 3, 5, 7, 9])
+              (catMaybesGrid (fmap (\x -> if odd x then Just x else Nothing) threeByThree)),
+          testCase "witherGrid runs the effect and keeps the Justs in order" $
+            assertEqual
+              "witherGrid > 5"
+              (Identity (V.fromList [6, 7, 8, 9]))
+              (witherGrid (\x -> Identity (if x > 5 then Just x else Nothing)) threeByThree)
         ]
     ]

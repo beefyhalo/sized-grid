@@ -37,6 +37,7 @@ module Test.Utils
     foldable1Laws,
     traversable1Laws,
     traversable1BranchingLaws,
+    hashableLaws,
     lawsToTest,
   )
 where
@@ -62,6 +63,7 @@ import Data.Functor.Rep
 import Data.Grid.Sized.Coord.Class
 import Data.Grid.Sized.Ordinal
 import Data.Group (Abelian, Group (..))
+import Data.Hashable (Hashable (..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Proxy
@@ -338,6 +340,38 @@ comonadLaws =
           ( "duplicate . duplicate == fmap duplicate . duplicate",
             property coassociativity
           )
+        ]
+
+-- | The `Hashable` law that has teeth: equal values hash equally, at every
+-- salt. Hand-rolled -- @quickcheck-classes@ ships no bundle for it -- and
+-- stated over a structurally rebuilt copy rather than the raw input, so the
+-- "equal" side is a value distinct from @x@ that @('==')@ still accepts, not a
+-- reflexivity no-op. Checked for both @hashWithSalt@ (at an arbitrary salt)
+-- and the salt-free @hash@.
+hashableLaws ::
+  forall f.
+  ( Functor f,
+    Hashable (f Int),
+    Show (f Int),
+    Arbitrary (f Int)
+  ) =>
+  Proxy (f Int) ->
+  Laws
+hashableLaws _ =
+  let -- A value distinct from @x@ that @('==')@ still accepts, so the
+      -- congruence property below is not a disguised reflexivity check.
+      rebuilt :: f Int -> f Int
+      rebuilt = fmap (\v -> v + 1 - 1)
+      saltedCongruence :: Int -> f Int -> Property
+      saltedCongruence salt x =
+        (x === rebuilt x)
+          .&&. (hashWithSalt salt x === hashWithSalt salt (rebuilt x))
+      hashCongruence :: f Int -> Property
+      hashCongruence x = hash x === hash (rebuilt x)
+   in Laws
+        "Hashable"
+        [ ("x == y => hashWithSalt s x == hashWithSalt s y", property saltedCongruence),
+          ("x == y => hash x == hash y", property hashCongruence)
         ]
 
 -- | @tabulate@ and @index@ are inverse, in both directions.

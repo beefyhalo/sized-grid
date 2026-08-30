@@ -9,6 +9,16 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **New instances: `Ord`, `Ord1` and `Hashable` for `Grid`.** `Ord`/`Ord1`
+  extend the existing newtype-derived `Eq`/`Eq1`/`Show1` clause — lexicographic
+  on the backing vector, which is row-major cell order — and let a `Grid` sit
+  in a `Set` or be sorted. `Hashable (Grid cs a)` (boxed, given `Hashable a`)
+  is a strict left fold over the cells, salted with the cell count, and lets a
+  `Grid` be a `HashMap`/`HashSet` key — a transposition table or a hash-consed
+  quadtree node. None of the three carries an `IsCoordList` or `AllSizedKnown`
+  constraint: they touch only the flat vector, so no existing signature
+  widened (sized-grid-g4xz).
+
 * **Bug fix, and a widening.** Checked movement works on an `Ordinal` axis,
   so a window is a grid you can move around inside (sized-grid-i0ob.2).
   `offsetCoord`, `coordRay`, `offsetCoordUpTo`, `Path`, `walkPath`,

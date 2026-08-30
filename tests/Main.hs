@@ -538,6 +538,13 @@ main =
                          genericLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int)),
                        eq1Laws (Proxy @(Grid '[Periodic 10, Periodic 20]))
                      ]
+                  ++ [ lawsToTest $
+                         eqLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int)),
+                       lawsToTest $
+                         ordLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int)),
+                       lawsToTest $
+                         hashableLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int))
+                     ]
                   ++ [ semigroupLaws @(Grid '[Periodic 10, Periodic 11] (Sum Int)),
                        monoidLaws @(Grid '[Periodic 10, Periodic 11] (Sum Int)),
                        lawsToTest $
