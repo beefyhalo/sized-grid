@@ -272,12 +272,11 @@ clampInterval = max 0.01 . min 2
 tileSize :: Float
 tileSize = 30
 
--- | Screen position of the centre of a cell. Row-major, so the flat position
--- divides into the two axis indices; taking them that way rather than
--- through @('.-.')@ keeps this working whatever the axis types are.
+-- | Screen position of the centre of a cell, from its two axis indices ---
+-- rather than through @('.-.')@, which is a displacement and not a position.
 cellCentre :: Coord Cs -> (Float, Float)
 cellCentre c =
-    let (i, j) = coordPosition c `divMod` axisSize @(Clamped 28)
+    let (i, j) = coordIndices2 c
     in ( tileSize * (fromIntegral i - 13.5)
        , tileSize * (fromIntegral j - 13.5) - 100
        )

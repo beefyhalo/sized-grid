@@ -65,11 +65,6 @@ neighbourhood = vonNeumannStencil 1
 gridSize :: Integer
 gridSize = GHC.natVal (Proxy :: Proxy (MaxCoordSize GridType))
 
--- | The length of one axis, for turning a site's row-major position back into
--- the pair of indices a picture needs.
-gridWidth :: Integer
-gridWidth = GHC.natVal (Proxy :: Proxy (CoordNat (Periodic 60)))
-
 randomGrid ::
      (MonadRandom m, AllSizedKnown cs)
   => m (Grid cs Spin)
@@ -167,7 +162,7 @@ displaySimulation po startSimulationState =
                 -- the picture ends up centred on site zero, and most of it
                 -- lands outside the window. Correct for a torus, wrong for a
                 -- picture, which wants an index and not a displacement.
-                (x, y) = coordPosition p `divMod` fromIntegral gridWidth
+                (x, y) = coordIndices2 p
             in translate
                    (8 * fromIntegral x)
                    (8 * fromIntegral y)

@@ -9,6 +9,22 @@ part of this release. The dated 0.1.x sections beneath those are upstream
 `sized-grid`'s published history, kept for provenance — they name modules as
 `SizedGrid.*` because that is what those modules were called at the time.
 
+* **New.** `coordIndices` and `coordIndices2` ask a coordinate where it is:
+  one `Int` per axis, first axis first (sized-grid-bzzy). `coordIndices` is a
+  new `IsCoordList` method, `posIndices`, wrapped -- the same stride decode
+  `npFromPosition` performs, stopping at the index instead of rebuilding an
+  axis value from it -- and `coordIndices2` is the two-axis case as a pair,
+  one `quotRem` with no list built.
+
+  There was no such function, so every consumer wrote its own and the four in
+  this repository did not agree: two matched `(:|)` and unwrapped the boundary
+  policy by hand, one divided by a hardcoded axis size, and two more had used
+  `p .-. mempty` and were wrong (sized-grid-23y3) -- on a `Periodic` axis that
+  is the shortest *signed route* and not a position, so cell 59 of 60 came
+  back as `-1` and half the board drew off-window. All five now call
+  `coordIndices2`, and `Data.Grid.Sized.Coord`'s header says outright that
+  `(.-.)` is a displacement and not a way to ask where a cell is.
+
 * **Behaviour change, `Reflect101` only.** `axisFrameFlips` no longer reports
   a frame flip for a step that lands exactly on a mirror cell
   (sized-grid-c0s9). `Reflect101`'s mirrors sit *on* lattice points rather

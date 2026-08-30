@@ -9,6 +9,7 @@ import           Test.Axis
 import           Test.Boundary
 import           Test.CompileFail
 import           Test.Focused
+import           Test.Indices
 import           Test.Invariant
 import           Test.Neighbours
 import           Test.Ordinal
@@ -608,6 +609,7 @@ main =
        , windowTests
        , neighbourTests
        , boundaryTests
+       , indicesTests
        , rayTests
        , pathTests
        , focusedTests

@@ -25,6 +25,13 @@
 -- displacement is unbounded and signed and so cannot be a position. See
 -- "Data.Grid.Sized.Coord.Delta", which this module re-exports.
 --
+-- The distinction is not pedantry, and @('Data.AffineSpace..-.')@ is not a way
+-- to ask where a cell is. @c '.-.' 'zeroCoord'@ is the /route/ from the origin
+-- to @c@, by the shortest signed way each axis offers, which on a
+-- 'Data.Grid.Sized.Coord.Periodic.Periodic' axis of 60 makes cell 59 into
+-- @-1@. To ask where a cell is, ask 'coordIndices' (or 'coordIndices2' at two
+-- axes), which reports each axis's own index and never a negative number.
+--
 -- == Where the pieces live
 --
 -- This module is a facade. Nothing is defined here; each group below is
@@ -64,6 +71,8 @@ module Data.Grid.Sized.Coord
   , zeroCoord
   , allCoord
   , coordPosition
+  , coordIndices
+  , coordIndices2
   , coordFromPosition
   , unsafeCoordFromPosition
   , coordSpaceSize

@@ -2,12 +2,12 @@
 
 -- | The row-major fold over a list of axes.
 --
--- 'IsCoordList' is one class whose twelve methods are the whole of
+-- 'IsCoordList' is one class whose thirteen methods are the whole of
 -- 'Data.Grid.Sized.Coord.Coord'\'s arithmetic: build a position from a list of
--- axis values, take one apart again, offset it, enumerate what is within a
--- radius, report which edges it touches, measure two of them. They are class
--- methods rather than a self-recursive function for a measured reason, stated
--- on the class.
+-- axis values, take one apart again, read off its per-axis indices, offset it,
+-- enumerate what is within a radius, report which edges it touches, measure
+-- two of them. They are class methods rather than a self-recursive function
+-- for a measured reason, stated on the class.
 --
 -- Everything per-axis that these methods call -- 'IsCoord', 'IsCoordLifted',
 -- 'toAxisIndex', 'unsafeFromAxisIndex', 'axisStepsIx', 'Extremum' -- lives in
@@ -141,6 +141,18 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
     -- one.
     npFromPosition :: Int -> NP I cs
 
+    -- | Each axis's own index, first axis first: the same decode as
+    -- 'npFromPosition' stopping one step short, at the 'Int' each axis's
+    -- 'quotRem' hands over rather than at the axis value
+    -- 'unsafeFromAxisIndex' would rebuild from it. The fold behind
+    -- 'Data.Grid.Sized.Coord.coordIndices'.
+    --
+    -- A method of its own rather than @'map' 'toAxisIndex' . 'npFromPosition'@
+    -- for the reason the rest of them are: that route needs an
+    -- @'All' 'IsCoordLifted' cs@ fold to reach 'toAxisIndex' per axis, and
+    -- builds a value of every axis type on the way to taking its index again.
+    posIndices :: Int -> [Int]
+
     -- | Offset each axis by its own displacement, or 'Nothing' if any axis
     -- refuses. The fold behind 'Data.Grid.Sized.Coord.offsetCoord'.
     --
@@ -204,6 +216,7 @@ instance IsCoordList '[] where
     -- 'Data.Grid.Sized.Coord.coordFromPosition' does the checking on the way
     -- in, where a bad position can still be rejected.
     npFromPosition _ = Nil
+    posIndices _ = []
     posOffset p Nil = Just p
     -- One way to take no steps at all, at a distance of zero. This is what
     -- makes the centre the only entry whose total is zero, which is how both
@@ -219,6 +232,7 @@ instance IsCoordList '[] where
     {-# INLINE coordListLength #-}
     {-# INLINE npToPosition #-}
     {-# INLINE npFromPosition #-}
+    {-# INLINE posIndices #-}
     {-# INLINE posOffset #-}
     {-# INLINE posStepsWithin #-}
     {-# INLINE posBoundaries #-}
@@ -243,6 +257,10 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     npFromPosition p =
         case p `quotRem` coordListSize @xs of
             (i, r) -> I (unsafeFromAxisIndex @x i) :* npFromPosition r
+
+    posIndices p =
+        case p `quotRem` coordListSize @xs of
+            (i, r) -> i : posIndices @xs r
 
     -- The displacement drives the match: ':*' on it is what refines @xs@ far
     -- enough for 'MapDiff' to reduce, the job the coord's own ':*' used to do
@@ -321,6 +339,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
     {-# INLINE coordListLength #-}
     {-# INLINE npToPosition #-}
     {-# INLINE npFromPosition #-}
+    {-# INLINE posIndices #-}
     {-# INLINE posOffset #-}
     {-# INLINE posStepsWithin #-}
     {-# INLINE posBoundaries #-}

@@ -364,7 +364,6 @@ gridPositionFromScreenCoord DisplayInfo{..} x y =
 drawWorld :: forall cs a b.
        ( cs ~ '[ a, b]
        , IsCoordList cs
-       , IsCoordLifted b
        )
     => DisplayInfo
     -> WorldState cs
@@ -385,7 +384,7 @@ drawWorld DisplayInfo{..} ws =
             -- zero and spanning -29..+30 tiles, and most of it falls outside
             -- the window. That is the correct answer for a torus and the wrong
             -- one for a picture, which wants an index and not a displacement.
-            let (i, j) = coordPosition p `divMod` axisSize @b
+            let (i, j) = coordIndices2 p
             in translate (originX + tileSize * fromIntegral i)
                          (originY + tileSize * fromIntegral j) $
                image a

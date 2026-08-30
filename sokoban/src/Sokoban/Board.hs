@@ -107,8 +107,13 @@ spotAt x y = do
     pure (minBound, Clamped u :| Clamped v :| EmptyCoord)
 
 -- | A cell as @(column, row)@ --- around the strip first, across it second.
+--
+-- The chart component carries nothing at @k = 1@, so this is 'coordIndices2'
+-- of the chart-local coordinate: no unwrapping of 'Clamped' to
+-- 'Data.Grid.Sized.Ordinal.Ordinal' to 'Int' to ask where a cell is
+-- (sized-grid-bzzy).
 spotXY :: KnownStrip w h => Spot w h -> (Int, Int)
-spotXY (_, u :| v :| EmptyCoord) = (ordinalToInt (unClamped u), ordinalToInt (unClamped v))
+spotXY = coordIndices2 . spotCoord
 
 -- | The chart-local coordinate, which is all of a 'Spot' that distinguishes
 -- one cell from another at @k = 1@. What crate sets and goal sets are keyed

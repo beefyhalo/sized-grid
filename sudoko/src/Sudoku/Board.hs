@@ -65,9 +65,10 @@ type Cs = '[ Ordinal 9, Ordinal 9]
 type Board = Grid Cs (Maybe Symbol)
 
 -- | A coordinate as @(row, column)@. The first axis is the row, which is what
--- 'collapseGrid' and 'rows' below already assume.
+-- 'collapseGrid' and 'rows' below already assume; naming the two axes is all
+-- this adds to 'coordIndices2'.
 coordRowCol :: Coord Cs -> (Int, Int)
-coordRowCol (r :| c :| EmptyCoord) = (ordinalToInt r, ordinalToInt c)
+coordRowCol = coordIndices2
 
 rows :: Board -> [Grid '[ Ordinal 1, Ordinal 9] (Maybe Symbol)]
 rows = gridTiles

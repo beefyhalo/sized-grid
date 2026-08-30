@@ -127,7 +127,9 @@ run t rate =
         Walls  -> go @'[ Clamped 101, Clamped 101]
         Mirror -> go @'[ Reflective 101, Reflective 101]
   where
-    go :: forall cs. Ant cs => IO ()
+    -- The two axes are named so that 'draw' can ask a coordinate for its
+    -- pair of indices; the three arms below determine them.
+    go :: forall cs a b. (Ant cs, cs ~ '[ a, b]) => IO ()
     go =
         play
             (InWindow "Langton's ant -- grid-sized" defaultWindow (20, 20))
@@ -161,26 +163,25 @@ onKey k w
     | k `elem` ("-_" :: String) = w {worldRate = max 1 (worldRate w / 2)}
     | otherwise = w
 
--- | The side of every board 'run' offers. One number rather than a size read
--- back off the axis type, because the three topologies differ in their axis
--- /types/ and agree on their extent --- which is the point being made.
-side :: Int
-side = 101
-
 tileSize :: Float
 tileSize = 8
 
--- | Screen position of the centre of a cell, taken from the flat row-major
--- position rather than through @('.-.')@. Nothing here reads the axis types,
--- which is what lets one drawing function serve all three topologies.
-cellCentre :: Coord cs -> (Float, Float)
+-- | Screen position of the centre of a cell, taken from its two axis indices
+-- rather than through @('.-.')@, which is a displacement and would put the far
+-- half of a 'Periodic' board off the left of the window.
+--
+-- 'coordIndices2' reads the divisor off the axis type, so this no longer needs
+-- the board's side as a literal of its own to agree with three type-level
+-- @101@s by hand (sized-grid-bzzy). It still reads no axis /type/, which is
+-- what lets one drawing function serve all three topologies.
+cellCentre :: IsCoordList '[ a, b] => Coord '[ a, b] -> (Float, Float)
 cellCentre c =
-    let (i, j) = coordPosition c `divMod` side
+    let (i, j) = coordIndices2 c
     in ( tileSize * (fromIntegral i - 50)
        , tileSize * (fromIntegral j - 50) - 80
        )
 
-draw :: forall cs. Ant cs => World cs -> Picture
+draw :: forall cs a b. (Ant cs, cs ~ '[ a, b]) => World cs -> Picture
 draw w = fitTo (worldWin w) $ pictures (blacks ++ [ant, hud w])
   where
     fg = walkerGrid (worldAnt w)

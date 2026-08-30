@@ -284,6 +284,7 @@ test-suite tests
     Test.Boundary
     Test.CompileFail
     Test.Focused
+    Test.Indices
     Test.Invariant
     Test.Neighbours
     Test.Ordinal

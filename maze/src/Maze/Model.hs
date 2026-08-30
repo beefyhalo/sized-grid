@@ -58,9 +58,13 @@ coordAt cx cy =
     numToOrdinal cx <*>
     numToOrdinal cy
 
--- | A coordinate as its two axis indices. Row-major, so this is one division.
+-- | A coordinate as its two axis indices.
+--
+-- 'coordIndices2' reads the divisor off the axis type, where this used to
+-- divide by 'side' and so was correct only while that literal and @Cs@ agreed
+-- (sized-grid-bzzy).
 coordXY :: Coord Cs -> (Int, Int)
-coordXY c = coordPosition c `divMod` side
+coordXY = coordIndices2
 
 -- | The corner cells the maze runs between. Both are odd, so both are cells
 -- rather than walls, and the generator starts at the first.

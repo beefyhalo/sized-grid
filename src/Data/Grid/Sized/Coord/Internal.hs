@@ -28,6 +28,8 @@ module Data.Grid.Sized.Coord.Internal
   , zeroCoord
   , allCoord
   , coordPosition
+  , coordIndices
+  , coordIndices2
   , coordFromPosition
   , unsafeCoordFromPosition
   , coordSpaceSize
@@ -461,6 +463,49 @@ type family MaxCoordSize (cs :: [k]) :: GHC.Nat where
 coordPosition :: Coord cs -> Int
 coordPosition (Coord p) = p
 {-# INLINE coordPosition #-}
+
+-- | Each axis's index as a plain 'Int', first axis first: /where/ this cell
+-- is, one number per axis.
+--
+-- This is the answer to \"which row and which column is this\", and it is
+-- here rather than left to each caller because every obvious alternative is
+-- either wrong or fragile (sized-grid-bzzy):
+--
+--   * @c '.-.' 'zeroCoord'@ is a 'Delta' --- a /displacement/, not a
+--     position. On a 'Data.Grid.Sized.Coord.Periodic.Periodic' axis the
+--     shortest signed route from the origin to cell 59 of 60 is @-1@, so the
+--     two demos that reached for it drew half their board off-window
+--     (sized-grid-23y3). @('.-.')@ answers \"how do I get there from here\";
+--     this answers \"where is here\".
+--   * @'coordPosition' c \`divMod\` side@ is right only while the literal
+--     @side@ and the axis type agree, and nothing makes them.
+--   * Matching @(':|')@ and unwrapping the boundary policy by hand is
+--     correct, but it is a detour through the policy --- @Clamped@ to
+--     'Data.Grid.Sized.Ordinal.Ordinal' to 'Int' --- to answer a question
+--     about position, and it is three lines where this is one.
+--
+-- A list rather than a heterogeneous n-ary structure because every entry is
+-- an 'Int': there is nothing a type could say about the @k@-th entry beyond
+-- what @'axisCount' \@cs@ already says about the length. Where there are two
+-- axes --- which is every consumer in this repository --- 'coordIndices2'
+-- gives the same numbers as a pair.
+coordIndices :: forall cs. IsCoordList cs => Coord cs -> [Int]
+coordIndices (Coord p) = posIndices @cs p
+{-# INLINE coordIndices #-}
+
+-- | 'coordIndices' at two axes, as a pair: one 'quotRem' by the second axis's
+-- size, with no list built and no length to case on.
+--
+-- First axis first, as everywhere else --- row-major, so on a grid drawn with
+-- the first axis down the page this is @(row, column)@, and on one drawn with
+-- it across the page it is @(x, y)@. The library does not name the axes; the
+-- order is all it promises.
+coordIndices2 ::
+       forall a b. IsCoordList '[ a, b]
+    => Coord '[ a, b]
+    -> (Int, Int)
+coordIndices2 (Coord p) = p `quotRem` coordListSize @'[ b]
+{-# INLINE coordIndices2 #-}
 
 -- | The product of axis sizes: the length of the vector inside a @'Grid' cs@.
 -- Needs only 'IsCoordList', not @KnownNat@, so it works in the indexed
