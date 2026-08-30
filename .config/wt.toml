@@ -1,0 +1,16 @@
+# worktrunk project config — https://worktrunk.dev/hook/
+#
+# Lifecycle hooks for `wt` worktrees. pre-* hooks block (failure aborts the op);
+# post-* run in the background with output logged. A project hook prompts for
+# approval on first run (cached in ~/.config/worktrunk/approvals.toml); pass
+# `wt --yes` when driving it non-interactively.
+
+# After a worktree is created: whitelist direnv so `.envrc` (`use flake`, already
+# tracked so it's present in the new tree) loads the dev shell — GHC, cabal, HLS,
+# and the git-hooks.nix pre-commit install — on the first cd into it.
+post-start = "direnv allow {{ worktree_path }}"
+
+# Optional: pre-build so an agent landing in the worktree isn't blocked on a cold
+# `cabal build`. Heavy for this many packages — uncomment if you want it.
+# [[post-start]]
+# warm = "cd {{ worktree_path }} && nix develop --command cabal build all"

@@ -144,6 +144,54 @@ refFoldCube2 f z g =
   tabulateGrid $ \(i :| j :| _) ->
     foldl' f z [indexGrid g (i :| j :| k' :| EmptyCoord) | k' <- axisValues]
 
+-- | References for foldAxis': fold each fibre and return a lower-dimensional grid
+--
+-- These fold along one axis and produce a grid with that axis removed.
+refFoldFlat0 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Flat Int ->
+  Grid '[Ordinal 5] Int
+refFoldFlat0 f z g =
+  tabulateGrid $ \(j :| _) ->
+    foldl' f z [indexGrid g (i' :| j :| EmptyCoord) | i' <- axisValues]
+
+refFoldFlat1 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Flat Int ->
+  Grid '[Ordinal 3] Int
+refFoldFlat1 f z g =
+  tabulateGrid $ \(i :| _) ->
+    foldl' f z [indexGrid g (i :| j' :| EmptyCoord) | j' <- axisValues]
+
+refFoldCube0 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Cube Int ->
+  Grid '[Ordinal 3, Ordinal 4] Int
+refFoldCube0 f z g =
+  tabulateGrid $ \(j :| k :| _) ->
+    foldl' f z [indexGrid g (i' :| j :| k :| EmptyCoord) | i' <- axisValues]
+
+refFoldCube1 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Cube Int ->
+  Grid '[Ordinal 2, Ordinal 4] Int
+refFoldCube1 f z g =
+  tabulateGrid $ \(i :| k :| _) ->
+    foldl' f z [indexGrid g (i :| j' :| k :| EmptyCoord) | j' <- axisValues]
+
+refFoldCube2 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Cube Int ->
+  Grid '[Ordinal 2, Ordinal 3] Int
+refFoldCube2 f z g =
+  tabulateGrid $ \(i :| j :| _) ->
+    foldl' f z [indexGrid g (i :| j :| k' :| EmptyCoord) | k' <- axisValues]
+
 refReduceFlat0 :: (Int -> Int -> Int) -> Grid Flat Int -> Grid '[Ordinal 5] Int
 refReduceFlat0 f g =
   tabulateGrid $ \(j :| _) ->
@@ -241,26 +289,6 @@ axisTests =
           testProperty "2D, axis 0, against the coordinate reference" $ \(g :: Grid Flat Int) ->
             conjoin
               [scanAxis 0 op g === refFlat0 (scanl1Grid op) g | op <- ops]
-        ],
-      testGroup
-        "the identities that hold for every axis"
-        [ testProperty "mapAxis n id == id, 3D" $ \(g :: Grid Cube Int) ->
-            conjoin
-              [ mapAxis 0 id g === g,
-                mapAxis 1 id g === g,
-                mapAxis 2 id g === g
-              ],
-          -- Reversing twice is the identity fibre by fibre, so it is also the
-          -- identity on the grid -- unless the gather and the scatter
-          -- disagree about which fibre is which.
-          testProperty "reversing each fibre twice is the identity, 3D" $ \(g :: Grid Cube Int) ->
-            conjoin
-              [ mapAxis 0 reverseFibre (mapAxis 0 reverseFibre g) === g,
-                mapAxis 1 reverseFibre (mapAxis 1 reverseFibre g) === g,
-                mapAxis 2 reverseFibre (mapAxis 2 reverseFibre g) === g
-              ],
-          testProperty "acting on one axis leaves the row sums of the others alone, 3D" $ \(g :: Grid Cube Int) ->
-            sum (mapAxis 1 reverseFibre g) === sum g
         ],
       testGroup
         "the identities that hold for every axis"
