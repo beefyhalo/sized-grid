@@ -61,6 +61,11 @@ usage prog =
       "",
       "keys, in the window: arrows or wasd / hjkl move, u undo, r restart,",
       "      n / p change level, v change view, f change frame",
+      "",
+      "  v cycles three views: the strip flat with the far side of each edge",
+      "  drawn past it, the same surface centred on the player, and the strip",
+      "  as the band it is. Only the first is meant to be played in.",
+      "",
       "keys, in the terminal: h j k l or w a s d move, u undo, r restart,",
       "      n next level, f change frame, q quit"
     ]

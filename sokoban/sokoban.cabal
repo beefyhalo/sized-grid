@@ -19,6 +19,12 @@ description:
   in the row the seam sends it to. The consequence of a push through the seam
   is on screen before the push is made.
   .
+  The window has two more ways of looking at it, neither of them for playing
+  in. One draws the surface in the player's own frame, where crossing the seam
+  looks like nothing at all. The other draws the strip as the band it is, twist
+  and all, with its single edge in a single colour --- the one view that does
+  not ask the player to take the surface on trust.
+  .
   Every level ships with a proof that it needs the surface it is on. @sokoban
   --check@ solves each one three times -- on the strip, on a cylinder of the
   same shape, and on a plain rectangle of the same shape -- and reports which
@@ -65,6 +71,7 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
+    Sokoban.Band
     Sokoban.Board
     Sokoban.Flat
     Sokoban.Level
@@ -110,6 +117,7 @@ test-suite tests
   hs-source-dirs:  tests
   main-is:         Main.hs
   other-modules:
+    Test.Band
     Test.Levels
     Test.Rules
     Test.Seam

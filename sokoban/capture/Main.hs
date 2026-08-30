@@ -26,6 +26,9 @@ import Foreign.Ptr (castPtr)
 import Graphics.Gloss.Interface.IO.Game qualified as G
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.Rendering.OpenGL qualified as GL
+-- Not @Sokoban.Band (..)@: that module's own constructor is called Band too,
+-- and so is the view that draws one.
+import Sokoban.Band (Band, bandDistance, bandGirth, bandSpin, bandTilt, defaultBand)
 import Sokoban.Level
 import Sokoban.Render
 import System.Environment (getArgs)
@@ -38,12 +41,24 @@ data Options = Options
     optView :: View,
     -- | Whether to switch to the player frame.
     optFrame :: Bool,
+    -- | The band, for the view that draws one. Its proportions are here and
+    -- not only in 'defaultBand' because choosing them is what this harness is
+    -- for: a band is a picture, and picking a picture's proportions by
+    -- rebuilding between guesses is how sized-grid-23y3 went wrong.
+    optBand :: Band,
     optKeys :: String
   }
 
 defaults :: Options
 defaults =
-  Options {optOut = "shot.ppm", optLevel = 1, optView = Flat, optFrame = False, optKeys = ""}
+  Options
+    { optOut = "shot.ppm",
+      optLevel = 1,
+      optView = Flat,
+      optFrame = False,
+      optBand = defaultBand,
+      optKeys = ""
+    }
 
 parse :: [String] -> Options -> Either String Options
 parse [] o = Right o
@@ -54,10 +69,22 @@ parse ("--level" : v : as) o =
     _ -> Left ("--level wants a number, got " ++ v)
 parse ("--view" : "flat" : as) o = parse as o {optView = Flat}
 parse ("--view" : "centred" : as) o = parse as o {optView = Centred}
+parse ("--view" : "band" : as) o = parse as o {optView = Band}
+parse ("--spin" : v : as) o = number "--spin" v as o (\x b -> b {bandSpin = x})
+parse ("--girth" : v : as) o = number "--girth" v as o (\x b -> b {bandGirth = x})
+parse ("--tilt" : v : as) o = number "--tilt" v as o (\x b -> b {bandTilt = x})
+parse ("--dist" : v : as) o = number "--dist" v as o (\x b -> b {bandDistance = x})
 parse ("--frame" : "player" : as) o = parse as o {optFrame = True}
 parse ("--frame" : "chart" : as) o = parse as o {optFrame = False}
 parse ("--keys" : v : as) o = parse as o {optKeys = v}
 parse (a : _) _ = Left ("unknown argument " ++ a)
+
+-- | One of the band's numbers, off the command line and into it.
+number :: String -> String -> [String] -> Options -> (Float -> Band -> Band) -> Either String Options
+number flag v as o set =
+  case reads v of
+    [(x, "")] -> parse as o {optBand = set x (optBand o)}
+    _ -> Left (flag ++ " wants a number, got " ++ v)
 
 main :: IO ()
 main = do
@@ -65,7 +92,7 @@ main = do
   case parse args defaults of
     Left err -> hPutStrLn stderr err >> exitFailure
     Right o -> do
-      let app0 = newApp defaultWindow builtinLevels
+      let app0 = (newApp defaultWindow builtinLevels) {appBand = optBand o}
           app1 = feed (levelKeys (optLevel o) ++ viewKeys o ++ optKeys o) app0
       frames <- newIORef (0 :: Int)
       G.playIO
@@ -83,12 +110,12 @@ main = do
 levelKeys :: Int -> String
 levelKeys n = replicate (max 0 (n - 1)) 'n'
 
+-- | The view key cycles, and the app starts on the first view, so asking for
+-- the @n@th one is @n@ presses. Written off the 'Enum' rather than case by
+-- case so that a fourth view does not need a line here.
 viewKeys :: Options -> String
 viewKeys o =
-  ( case optView o of
-      Flat -> ""
-      Centred -> "v"
-  )
+  replicate (fromEnum (optView o)) 'v'
     ++ ( if optFrame o
            then "f"
            else ""

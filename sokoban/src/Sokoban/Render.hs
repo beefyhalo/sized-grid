@@ -20,6 +20,11 @@
 --     exactly the difficulty: crossing the seam looks like nothing at all,
 --     because in the player's frame nothing happened.
 --
+--   * 'Band' draws the strip as the band it is, twist and all, and is the one
+--     view that does not ask the player to take the surface on trust. It is
+--     also the one view nobody can play in: half the board is round the back.
+--     See "Sokoban.Band", and sized-grid-lopy.6.
+--
 -- The layout is written in a fixed design space and the whole picture scaled
 -- to the window, rather than laid out against the window's real size. See the
 -- note on @Maze.Render.fitTo@: a hardcoded window can be taller than the
@@ -41,19 +46,22 @@ where
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Graphics.Gloss.Interface.Pure.Game
+import Sokoban.Band (Band, bandExtent, bandPicture, bandSpin, defaultBand)
 import Sokoban.Board
 import Sokoban.Level
 import Sokoban.Rules
 
--- | Which of the two candidate views is on screen.
+-- | Which view is on screen.
 data View
   = Flat
   | Centred
-  deriving (Eq, Show)
+  | Band
+  deriving (Eq, Show, Enum, Bounded)
 
 viewName :: View -> String
 viewName Flat = "flat, with the far side of each edge drawn past it"
 viewName Centred = "centred, in the player's own frame"
+viewName Band = "the band itself, one edge and no ends"
 
 -- | A game whose board size is known only at run time. gloss's state is one
 -- type and a list of levels is a list of sizes, so the size is packed away
@@ -67,6 +75,14 @@ data App = App
     appGame :: Session,
     appView :: View,
     appFrame :: Frame,
+    -- | How the band is drawn and how far round it has turned, which is the
+    -- only thing in this game that moves without a key being pressed.
+    --
+    -- State rather than a function of a clock, so that a picture of the game
+    -- is a function of the game: that is what lets @sokoban-shot@ photograph
+    -- the band from a chosen angle, and it is what a title screen will want
+    -- when it turns the band at its own rate (sized-grid-lopy.8).
+    appBand :: !Band,
     -- | The window's real size, from 'EventResize'.
     appWin :: (Int, Int),
     appOutcome :: Outcome
@@ -80,6 +96,7 @@ newApp win levels =
       appGame = sessionAt levels 0,
       appView = Flat,
       appFrame = ChartFrame,
+      appBand = defaultBand,
       appWin = win,
       appOutcome = Walked
     }
@@ -104,7 +121,15 @@ run levels =
     (newApp defaultWindow levels)
     drawApp
     onEvent
-    (const id)
+    step
+
+-- | Turn the band. A revolution every half minute --- slow on purpose, since
+-- the point of the view is that the surface comes back to itself the other way
+-- up, and a player who has to chase a cell round has not seen it happen.
+step :: Float -> App -> App
+step dt app = app {appBand = band {bandSpin = bandSpin band + dt / 30}}
+  where
+    band = appBand app
 
 -- * Input
 
@@ -132,12 +157,13 @@ onKey (Char c) app =
     'r' -> onSession restart app
     'n' -> goTo (appIndex app + 1) app
     'p' -> goTo (appIndex app - 1) app
-    'v' -> app {appView = flipView (appView app)}
+    'v' -> app {appView = nextView (appView app)}
     'f' -> app {appFrame = flipFrame (appFrame app)}
     _ -> app
   where
-    flipView Flat = Centred
-    flipView Centred = Flat
+    nextView v
+      | v == maxBound = minBound
+      | otherwise = succ v
     flipFrame ChartFrame = PlayerFrame
     flipFrame PlayerFrame = ChartFrame
 onKey _ app = app
@@ -353,26 +379,32 @@ drawCentred frame game = pictures (cells ++ [horizon])
 drawApp :: App -> Picture
 drawApp app = fitTo (appWin app) (pictures [hud app, board])
   where
+    band = appBand app
     board =
       case appGame app of
         Session g ->
           case appView app of
-            Flat -> fitBoard (flatSize g) (drawFlat (appFrame app) g)
-            Centred -> fitBoard centredSize (drawCentred (appFrame app) g)
+            Flat -> fitBoard 2.2 (flatSize g) (drawFlat (appFrame app) g)
+            Centred -> fitBoard 2.2 centredSize (drawCentred (appFrame app) g)
+            -- A band is drawn at whatever size its own geometry comes out,
+            -- and that is a long way under the box for a short strip, so it
+            -- is allowed to be blown up much further than a board of cells
+            -- would want to be. Nothing in it is a fixed number of pixels.
+            Band -> fitBoard 6 (bandSize band g) (drawBand band g)
 
 -- | The area the board is drawn into, between the readout above and the keys
 -- below.
 boardBox :: (Float, Float)
 boardBox = (860, 470)
 
--- | Scale a board picture to fill 'boardBox', within reason. A one-row strip
--- would otherwise be drawn at the height of the window, and a wide one would
--- run off the sides.
-fitBoard :: (Float, Float) -> Picture -> Picture
-fitBoard (w, h) = translate 0 (-20) . scale k k
+-- | Scale a board picture to fill 'boardBox', up to a limit the caller sets.
+-- A one-row strip would otherwise be drawn at the height of the window, and a
+-- wide one would run off the sides.
+fitBoard :: Float -> (Float, Float) -> Picture -> Picture
+fitBoard most (w, h) = translate 0 (-20) . scale k k
   where
     (boxW, boxH) = boardBox
-    k = min 2.2 (min (boxW / w) (boxH / h))
+    k = min most (min (boxW / w) (boxH / h))
 
 flatSize :: forall w h. (KnownStrip w h) => Game w h -> (Float, Float)
 flatSize _ = (fromIntegral (around + 2 * min 3 around) * tile, fromIntegral across * tile)
@@ -383,6 +415,41 @@ centredSize :: (Float, Float)
 centredSize = (side, side)
   where
     side = tile * fromIntegral (2 * radius + 1)
+
+-- * The band
+
+-- | The strip as a band, with every cell reduced to the one colour a facet
+-- has room for.
+drawBand :: forall w h. (KnownStrip w h) => Band -> Game w h -> Picture
+drawBand band game = bandPicture band around across paint
+  where
+    (around, across) = stripSize @w @h
+    paint x y = maybe voidColour (cellColour game) (spotAt @w @h x y)
+
+bandSize :: forall w h. (KnownStrip w h) => Band -> Game w h -> (Float, Float)
+bandSize band _ = bandExtent band around across
+  where
+    (around, across) = stripSize @w @h
+
+-- | A cell as a single colour.
+--
+-- 'cellPicture' draws a goal as a ring inside its cell and a crate as a
+-- square inside that, which is how a player tells a covered goal from an
+-- uncovered one at a glance. None of that survives being wrapped round a
+-- band at this size, so the order here is by what matters: whoever is
+-- standing on the cell first, then the crate, then the terrain.
+cellColour :: (KnownStrip w h) => Game w h -> Spot w h -> Color
+cellColour game s
+  | spotCoord s == spotCoord (playPlayer now) = playerColour
+  | crateAt now s = if onGoal then doneColour else crateColour
+  | otherwise =
+      case tileAt game s of
+        Wall -> wallColour
+        Goal -> goalColour
+        Floor -> floorColour
+  where
+    now = gamePlay game
+    onGoal = Set.member (spotCoord s) (levelGoals (gameLevel game))
 
 hud :: App -> Picture
 hud app =
@@ -406,6 +473,8 @@ hud app =
             "the coloured tabs pair the edges: leave one row and you arrive at the tab of the same colour"
           Centred ->
             "drawn in the player's frame, so crossing the seam looks like nothing at all"
+          Band ->
+            "the pink line is the edge of the strip: one line, twice round, and there is only the one"
       ]
     legend =
       [ "arrows or wasd / hjkl move    u undo    r restart    n / p level    v view    f frame"
