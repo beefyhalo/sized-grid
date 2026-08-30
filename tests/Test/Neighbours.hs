@@ -59,6 +59,32 @@ offsetIsCoordTests =
           (offsetIsCoord (pe 1) (5 ^ (20 :: Int)))
     ]
 
+axisOffsetTests :: TestTree
+axisOffsetTests =
+  testGroup
+    "axisOffset is the lifted wrapper over offsetIsCoord"
+    [ -- Checked exhaustively rather than by QuickCheck: also covers
+      -- 'Ordinal', which has no 'Arbitrary' instance.
+      testCase "agrees with offsetIsCoord for every value and step" $ do
+        assertBool "Clamped 5" (agreesEverywhere @Clamped @5 5)
+        assertBool "Periodic 5" (agreesEverywhere @Periodic @5 5)
+        assertBool "Ordinal 5" (agreesEverywhere @Ordinal @5 5),
+      testCase "a bounded axis refuses a step off the edge" $ do
+        assertEqual "low" Nothing (axisOffset (hw 0) (-1))
+        assertEqual "high" Nothing (axisOffset (hw 4) 1),
+      testCase "a torus axis wraps" $
+        assertEqual "" (Just (pe 0)) (axisOffset (pe 4) 1)
+    ]
+  where
+    agreesEverywhere ::
+      forall c n. (IsCoord c, Eq (c n), KnownNat n, 1 <= n) => Int -> Bool
+    agreesEverywhere r =
+      and
+        [ axisOffset c s == offsetIsCoord c s
+        | c <- allCoordLike @n @c,
+          s <- [-r .. r]
+        ]
+
 hwc :: Int -> Int -> Coord '[Clamped 5, Clamped 5]
 hwc r c = hw r :| hw c :| EmptyCoord
 
@@ -530,6 +556,7 @@ neighbourTests =
   testGroup
     "Neighbours"
     [ offsetIsCoordTests,
+      axisOffsetTests,
       offsetCoordTests,
       arityTests,
       tupleBridgeTests,

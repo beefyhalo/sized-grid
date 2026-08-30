@@ -111,6 +111,7 @@ module Data.Grid.Sized.Coord
 
     -- * Neighbourhoods
     offsetCoord,
+    axisOffset,
     neighbours,
     mooreNeighbours,
     vonNeumannNeighbours,

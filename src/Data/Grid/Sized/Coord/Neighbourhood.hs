@@ -6,6 +6,7 @@
 -- working on the flat position rather than rebuilding a coordinate per axis.
 module Data.Grid.Sized.Coord.Neighbourhood
   ( offsetCoord,
+    axisOffset,
     stepsWithin,
     neighbours,
     mooreNeighbours,
@@ -35,6 +36,13 @@ offsetCoord ::
   Delta (MapStep cs) ->
   Maybe (Coord cs)
 offsetCoord (Coord p) (Delta d) = Coord <$> posOffset @cs p d
+
+-- | Offset one axis value by a signed step count, or 'Nothing' if that leaves
+-- the axis. The single-axis, one-step counterpart of 'offsetCoord': the lifted
+-- wrapper over 'offsetIsCoord', so a caller holding a @Type@-kinded axis value
+-- need not spell out the two type applications by hand.
+axisOffset :: forall x. (IsCoordLifted x) => x -> Int -> Maybe x
+axisOffset = offsetIsCoord @(CoordContainer x) @(CoordNat x)
 
 -- | Every coordinate within @r@ steps on each axis, paired with its total step count; the centre is the only entry with total zero.
 stepsWithin ::
