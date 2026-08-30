@@ -39,6 +39,10 @@ module Data.Grid.Sized.Internal.Grid
     zipWithGrid,
     foldlGrid',
     scanl1Grid,
+    mapMaybeGrid,
+    filterGrid,
+    catMaybesGrid,
+    witherGrid,
 
     -- * Type-level machinery
     CollapseGrid,
