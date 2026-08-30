@@ -41,6 +41,7 @@ module Sudoku.Board
   )
 where
 
+import Control.Lens (set)
 import Data.Foldable (toList)
 import Data.Grid.Sized hiding (All, Compose)
 import Data.List (intercalate)
@@ -141,10 +142,7 @@ candidateAllowed point board symbol =
 
 placeSymbol :: Coord Cs -> Maybe Symbol -> Board -> Board
 placeSymbol point symbol =
-  imapGrid
-    ( \currentPoint value ->
-        if currentPoint == point then symbol else value
-    )
+  set (cell point) symbol
 
 -- * Reading and writing
 

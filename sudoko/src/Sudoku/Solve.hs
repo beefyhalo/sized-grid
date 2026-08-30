@@ -81,7 +81,7 @@ solveTrace board0
                       : go board' (\() -> Undo point board : tryAll ss)
            in tryAll
                 [ s
-                | s <- indexGrid (allValues board) point,
+                | s <- [minBound .. maxBound],
                   candidateAllowed point board s
                 ]
     findEmpty :: Board -> Maybe (Coord Cs)

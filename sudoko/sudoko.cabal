@@ -33,7 +33,25 @@ executable sudoko
     , base       >=4.19 && <5
     , gloss      >=1.13 && <1.14
     , grid-sized
+    , lens       >=5.2  && <5.4
   hs-source-dirs:      src
+  default-language:    GHC2024
+  ghc-options: -O2 -threaded
+    -Wall -Wcompat -Widentities -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
+    -Wredundant-constraints -Werror
+
+test-suite sudoko-test
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  other-modules:
+    Sudoku.Board
+    Sudoku.Solve
+  build-depends:
+      base       >=4.19 && <5
+    , grid-sized
+    , lens       >=5.2  && <5.4
+  hs-source-dirs:      tests, src
   default-language:    GHC2024
   ghc-options: -O2 -threaded
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
