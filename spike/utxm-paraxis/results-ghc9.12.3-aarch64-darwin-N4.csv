@@ -1,0 +1,288 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+"All.00,012 cells (Tiny) axis0 boxed  map.mapAxis (library)",152726,13116,1768,2,82837504
+"All.00,012 cells (Tiny) axis0 boxed  map.mapSeq",151453,13936,1768,2,82837504
+"All.00,012 cells (Tiny) axis0 boxed  map.mapPar",7930322,431900,9350,12,82837504
+"All.00,012 cells (Tiny) axis0 boxed  map.mapParSpark",642765,53532,6884,11,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanAxis (library)",58338,3656,336,0,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanSeq",58012,3242,336,0,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanSeqMut",58572,3354,336,0,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanSeqFreeze",58590,3238,336,0,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanSeqFibre",76882,6596,584,0,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanSeqStrip",279547,26866,2352,3,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanParFibre",7473718,614850,8036,8,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanParStrip",7536460,539260,7955,9,82837504
+"All.00,012 cells (Tiny) axis0 boxed  scan.scanParSpark",556424,32770,5632,8,82837504
+"All.00,400 cells (Small20) axis0 boxed  map.mapAxis (library)",4308697,215424,49352,280,82837504
+"All.00,400 cells (Small20) axis0 boxed  map.mapSeq",4311302,261936,49352,280,82837504
+"All.00,400 cells (Small20) axis0 boxed  map.mapPar",16876745,979698,64245,133,82837504
+"All.00,400 cells (Small20) axis0 boxed  map.mapParSpark",6228234,452548,64562,174,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanAxis (library)",1874506,110014,9392,25,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanSeq",1887416,144302,9392,25,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanSeqMut",1868678,118832,9392,25,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanSeqFreeze",1875596,114502,9392,25,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanSeqFibre",2032713,154910,9640,14,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanSeqStrip",2430436,204936,13232,29,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanParFibre",14647039,898520,24485,49,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanParStrip",12698321,887274,24351,62,82837504
+"All.00,400 cells (Small20) axis0 boxed  scan.scanParSpark",4409379,254374,28051,90,82837504
+"All.01,024 cells (Small32) axis0 boxed  map.mapAxis (library)",11049700,836722,125001,1305,82837504
+"All.01,024 cells (Small32) axis0 boxed  map.mapSeq",10987609,929282,125001,1304,82837504
+"All.01,024 cells (Small32) axis0 boxed  map.mapPar",25598291,1725692,139875,274,82837504
+"All.01,024 cells (Small32) axis0 boxed  map.mapParSpark",14236273,1002244,148224,573,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanAxis (library)",4776013,428638,24176,50,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanSeq",4757305,445984,24176,49,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanSeqMut",4706387,410008,24176,49,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanSeqFreeze",4722311,454078,24176,49,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanSeqFibre",4724679,416860,24424,79,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanSeqStrip",5475445,446530,28016,58,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanParFibre",21118676,2025672,39282,55,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanParStrip",18887646,1787434,39136,69,82837504
+"All.01,024 cells (Small32) axis0 boxed  scan.scanParSpark",9860650,843492,55104,160,82837504
+"All.02,500 cells (Step) axis0 boxed  map.mapAxis (library)",29009350,2322158,303291,7386,82837504
+"All.02,500 cells (Step) axis0 boxed  map.mapSeq",29157751,2269422,303291,7385,82837504
+"All.02,500 cells (Step) axis0 boxed  map.mapPar",55584936,3845642,318185,1857,82837504
+"All.02,500 cells (Step) axis0 boxed  map.mapParSpark",33311645,1914524,346562,2231,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanAxis (library)",12572760,861508,59329,205,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanSeq",12638848,840926,59329,205,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanSeqMut",12608459,904308,59329,205,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanSeqFreeze",12658404,1061558,59329,205,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanSeqFibre",11818188,841008,59577,235,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanSeqStrip",14077362,1312378,63169,59,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanParFibre",48549951,3574432,74440,99,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanParStrip",45277783,3752510,74311,110,82837504
+"All.02,500 cells (Step) axis0 boxed  scan.scanParSpark",22526965,1650682,117938,375,82837504
+"All.02,500 cells (Step) axis0 unboxed  map.mapAxis (library)",4661560,456656,61656,63,82837504
+"All.02,500 cells (Step) axis0 unboxed  map.mapSeq",4670732,341346,61656,63,82837504
+"All.02,500 cells (Step) axis0 unboxed  map.mapPar",12204357,850288,76513,28,82837504
+"All.02,500 cells (Step) axis0 unboxed  map.mapParSpark",7279855,613936,98248,154,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanAxis (library)",2109245,146970,20096,26,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanSeq",2094301,104698,20096,26,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanSeqMut",2083617,133124,20096,26,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanSeqFreeze",2110238,116538,20096,26,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanSeqFibre",2175104,114900,20344,26,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanSeqStrip",2998066,234578,23936,26,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanParFibre",9832180,543634,35160,28,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanParStrip",10716699,888284,35020,28,82837504
+"All.02,500 cells (Step) axis0 unboxed  scan.scanParSpark",5644793,513596,77233,106,82837504
+"All.02,500 cells (Step) axis1 unboxed  map.mapAxis (library)",2942616,210716,54448,153,82837504
+"All.02,500 cells (Step) axis1 unboxed  map.mapSeq",2667993,221422,47640,126,82837504
+"All.02,500 cells (Step) axis1 unboxed  map.mapPar",10506994,1001016,53078,32,82837504
+"All.02,500 cells (Step) axis1 unboxed  map.mapParSpark",3501322,253228,48926,117,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanAxis (library)",2976402,272854,54448,153,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanSeq",2588598,232982,47640,125,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanSeqMut",1501643,104620,20016,25,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanSeqFreeze",1648376,102358,20016,25,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanSeqFibre",2852915,255856,32880,25,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanSeqStrip",1275581,115988,21480,25,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanParFibre",10712493,719992,45518,27,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanParStrip",9665789,818980,32280,44,82837504
+"All.02,500 cells (Step) axis1 unboxed  scan.scanParSpark",3534587,242290,48929,116,82837504
+"All.10,000 cells (Mid) axis0 boxed  map.mapAxis (library)",139538281,13868862,1206572,115789,82837504
+"All.10,000 cells (Mid) axis0 boxed  map.mapSeq",140952294,7493010,1206557,115796,82837504
+"All.10,000 cells (Mid) axis0 boxed  map.mapPar",203354882,13906856,1221470,37083,82837504
+"All.10,000 cells (Mid) axis0 boxed  map.mapParSpark",133794970,8156406,1386395,23605,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanAxis (library)",47765380,3700212,238590,3101,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanSeq",48681762,3706762,238590,3101,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanSeqMut",49085498,3662106,238590,3101,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanSeqFreeze",48828466,3738206,238591,3100,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanSeqFibre",52514697,3395700,238838,3151,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanSeqStrip",57668261,3339798,242431,3155,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanParFibre",189382421,16834708,253721,109,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanParStrip",187594726,14047484,253625,109,82837504
+"All.10,000 cells (Mid) axis0 boxed  scan.scanParSpark",86239331,3571812,430434,5594,82837504
+"All.10,000 cells (Mid) axis0 unboxed  map.mapAxis (library)",18678979,1676558,243259,222,82837504
+"All.10,000 cells (Mid) axis0 unboxed  map.mapSeq",18734826,1783558,243259,223,82837504
+"All.10,000 cells (Mid) axis0 unboxed  map.mapPar",16728369,1644076,258118,106,82837504
+"All.10,000 cells (Mid) axis0 unboxed  map.mapParSpark",24374291,1868174,350292,421,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanAxis (library)",8194631,454050,80096,98,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanSeq",8214181,492538,80096,97,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanSeqMut",8232836,505420,80096,97,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanSeqFreeze",8213467,512708,80096,97,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanSeqFibre",8686511,857194,80345,97,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanSeqStrip",9896722,913260,83937,97,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanParFibre",13947442,857822,95170,106,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanParStrip",13681561,1353296,95023,106,82837504
+"All.10,000 cells (Mid) axis0 unboxed  scan.scanParSpark",18423266,1647134,267321,227,82837504
+"All.10,000 cells (Mid) axis1 unboxed  map.mapAxis (library)",10543493,842974,188849,1257,82837504
+"All.10,000 cells (Mid) axis1 unboxed  map.mapSeq",9677661,914652,175241,1122,82837504
+"All.10,000 cells (Mid) axis1 unboxed  map.mapPar",14690783,844966,173887,103,82837504
+"All.10,000 cells (Mid) axis1 unboxed  map.mapParSpark",12732678,833448,178217,428,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanAxis (library)",10455102,893062,188849,1256,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanSeq",9684686,869424,175241,1122,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanSeqMut",6476617,551564,80016,95,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanSeqFreeze",6382827,435708,80016,95,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanSeqFibre",10092260,878186,105681,95,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanSeqStrip",4695523,211194,81480,95,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanParFibre",13708599,852418,118328,162,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanParStrip",12100628,971618,92286,162,82837504
+"All.10,000 cells (Mid) axis1 unboxed  scan.scanParSpark",12664337,928328,178211,437,82837504
+"All.40,000 cells (Wide) axis0 unboxed  map.mapAxis (library)",72772119,6984218,966470,1147,82837504
+"All.40,000 cells (Wide) axis0 unboxed  map.mapSeq",72829199,6723706,966470,1146,82837504
+"All.40,000 cells (Wide) axis0 unboxed  map.mapPar",34247656,3318834,981343,387,82837504
+"All.40,000 cells (Wide) axis0 unboxed  map.mapParSpark",92358447,6553600,1347876,5428,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanAxis (library)",32563903,1652484,320099,355,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanSeq",32706982,2106030,320099,355,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanSeqMut",32592175,1641184,320099,355,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanSeqFreeze",32536499,1730276,320099,353,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanSeqFibre",35056286,997140,320345,353,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanSeqStrip",35932202,3592776,323942,352,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanParFibre",22283239,2193814,335184,385,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanParStrip",24366113,2401970,335036,442,82837504
+"All.40,000 cells (Wide) axis0 unboxed  scan.scanParSpark",64765258,3344820,1019771,856,82837504
+"All.90,000 cells (Big) axis0 boxed  map.mapAxis (library)",4165648437,215081788,10820380,12243685,82837504
+"All.90,000 cells (Big) axis0 boxed  map.mapSeq",4163704687,227296308,10820397,12270339,82837504
+"All.90,000 cells (Big) axis0 boxed  map.mapPar",2247387500,223425116,10835250,3519895,82837504
+"All.90,000 cells (Big) axis0 boxed  map.mapParSpark",2128707812,163715114,14751597,2786066,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanAxis (library)",573625781,52942402,2156106,249179,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanSeq",568001953,53770446,2156106,249167,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanSeqMut",565425390,54422050,2156106,249164,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanSeqFreeze",566671093,52986076,2156106,249162,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanSeqFibre",588698437,58459202,2156354,250482,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanSeqStrip",627180859,55009018,2159946,252975,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanParFibre",1536861718,114427284,2171315,893,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanParStrip",1381772656,111936164,2171218,894,82837504
+"All.90,000 cells (Big) axis0 boxed  scan.scanParSpark",817681640,62732188,3848098,284614,82837504
+"All.90,000 cells (Big) axis0 unboxed  map.mapAxis (library)",164200878,14186802,2169681,3544,82837504
+"All.90,000 cells (Big) axis0 unboxed  map.mapSeq",164526269,13412914,2169682,3539,82837504
+"All.90,000 cells (Big) axis0 unboxed  map.mapPar",64759863,5178222,2184538,867,82837504
+"All.90,000 cells (Big) axis0 unboxed  map.mapParSpark",181841796,17373200,3050737,26734,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanAxis (library)",72838671,7001250,720109,792,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanSeq",73317773,6857566,720109,791,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanSeqMut",73090722,7265910,720109,790,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanSeqFreeze",73353320,6741612,720109,788,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanSeqFibre",75074267,7399986,720357,787,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanSeqStrip",79868066,7223328,723949,786,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanParFibre",34633642,3023494,735186,980,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanParStrip",40946777,3747160,735048,1456,82837504
+"All.90,000 cells (Big) axis0 unboxed  scan.scanParSpark",125331494,6965220,2221272,1981,82837504
+"All.90,000 cells (Big) axis1 boxed  map.mapAxis (library)",1040448828,54586262,5132070,1830327,82837504
+"All.90,000 cells (Big) axis1 boxed  map.mapSeq",1036943359,54792400,5091251,1809252,82837504
+"All.90,000 cells (Big) axis1 boxed  map.mapPar",965126953,64383034,5062754,818550,82837504
+"All.90,000 cells (Big) axis1 boxed  map.mapParSpark",1038256640,59743194,5481385,1665568,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanAxis (library)",626307812,53623704,2967273,718208,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanSeq",654673339,19939000,2926380,706679,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanSeqMut",507560351,30905778,2155984,247384,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanSeqFreeze",507380859,30946830,2155983,247382,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanSeqFibre",548480664,30228842,2232846,263131,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanSeqStrip",495664257,29556276,2157448,248347,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanParFibre",1058469140,52743252,2245554,841,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanParStrip",1015555078,64126236,2168322,833,82837504
+"All.90,000 cells (Big) axis1 boxed  scan.scanParSpark",581978906,56106090,3196373,340614,82837504
+"All.90,000 cells (Big) axis1 unboxed  map.mapAxis (library)",82301464,6937050,1526460,117643,82837504
+"All.90,000 cells (Big) axis1 unboxed  map.mapSeq",79982812,3411094,1485646,103284,82837504
+"All.90,000 cells (Big) axis1 unboxed  map.mapPar",44714355,2685628,1457100,822,82837504
+"All.90,000 cells (Big) axis1 unboxed  map.mapParSpark",101964160,7340810,1527259,109775,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanAxis (library)",83756005,7206296,1526461,117633,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanSeq",79932958,7001686,1485653,103257,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanSeqMut",52711499,3379650,720022,752,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanSeqFreeze",53186987,3367530,720022,751,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanSeqFibre",78985766,3435334,796886,751,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanSeqStrip",40095025,1188810,721481,748,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanParFibre",35479992,1827012,809571,929,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanParStrip",26332080,2083046,732294,1253,82837504
+"All.90,000 cells (Big) axis1 unboxed  scan.scanParSpark",102455859,8991874,1528410,104480,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  map.mapAxis (library)",228441796,13958828,2880080,2359,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  map.mapSeq",235990820,18939756,2880080,2354,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  map.mapPar",94898046,6932792,2894966,1254,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  map.mapParSpark",521375390,29753678,7849716,151401,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanAxis (library)",67690185,6615398,720108,738,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanSeq",67832861,6736808,720108,736,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanSeqMut",67824169,6642256,720108,735,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanSeqFreeze",67922851,4102004,720102,733,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanSeqFibre",82175244,6981598,720357,731,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanSeqStrip",65168237,3308462,723942,729,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanParFibre",39760571,1802446,735192,806,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanParStrip",35179956,3126236,735043,913,82837504
+"All.90,000 cells (Thin 4x22500) axis0 unboxed  scan.scanParSpark",456343750,28038196,6511986,151572,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  map.mapAxis (library)",67646484,3386856,1441206,1501,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  map.mapSeq",68017675,4276370,1440654,1477,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  map.mapPar",46956347,3703596,1446418,2537,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  map.mapParSpark",80321533,3747160,1497589,1527,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanAxis (library)",67529003,6665184,1441212,1491,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanSeq",68055712,3653918,1440654,1467,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanSeqMut",50818896,3277782,720022,716,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanSeqFreeze",50874877,3492764,720022,715,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanSeqFibre",73464306,6715410,721116,714,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanSeqStrip",38398657,3392534,720878,712,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanParFibre",35353442,3255126,727612,781,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanParStrip",25685852,1005302,726347,1279,82837504
+"All.90,000 cells (Thin 4x22500) axis1 unboxed  scan.scanParSpark",79898730,6706674,1502888,1502,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  map.mapAxis (library)",174155273,13117246,2256080,1623,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  map.mapSeq",174556250,13297180,2256080,1616,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  map.mapPar",73513647,5489394,2278074,774,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  map.mapParSpark",236498535,13746140,3535617,27861,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanAxis (library)",73057128,6888354,720108,700,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanSeq",72914746,6856256,720108,699,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanSeqMut",72932031,6955174,720108,700,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanSeqFreeze",72988427,6744452,720108,697,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanSeqFibre",78198291,6597272,727780,695,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanSeqStrip",78436816,6957576,731100,694,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanParFibre",36986633,3444450,742333,1170,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanParStrip",38560595,3345804,742191,870,82837504
+"All.90,000 cells (Cube 30x30x100) axis1 unboxed  scan.scanParSpark",158066845,7095366,2692396,1845,82837504
+"All.90,000 cells (Big) axis0 unboxed  map scanl1.mapAxis (library)",163912792,13758804,2169681,3159,82837504
+"All.90,000 cells (Big) axis0 unboxed  map scanl1.mapSeq",164160546,13297180,2169680,3149,82837504
+"All.90,000 cells (Big) axis0 unboxed  map scanl1.mapPar",67147485,5584492,2184538,759,82837504
+"All.90,000 cells (Big) axis0 unboxed  map scanl1.mapParSpark",180822656,13707708,3054240,26513,82837504
+"All.90,000 cells (Big) axis1 unboxed  map scanl1.mapAxis (library)",83348925,7009984,1526460,117493,82837504
+"All.90,000 cells (Big) axis1 unboxed  map scanl1.mapSeq",79898876,3821514,1485646,103139,82837504
+"All.90,000 cells (Big) axis1 unboxed  map scanl1.mapPar",45717065,2675038,1457099,742,82837504
+"All.90,000 cells (Big) axis1 unboxed  map scanl1.mapParSpark",101704101,6850140,1527452,109135,82837504
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapAxis (library)",29132887500,2352455314,96067137,1266072,222298112
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapSeq",29043387500,2005585270,96067237,1267392,222298112
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapPar",9868953125,361404486,96079313,1272276,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapParSpark",9390350000,889619644,128382466,3804520,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanAxis (library)",3030854687,223543908,32000487,4037,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeq",3049763281,165699624,32000292,4022,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqMut",3033932812,211021926,32000291,4014,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqFreeze",3035882421,52804394,32000194,4016,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqFibre",23038206250,1097518064,32001883,4044,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqStrip",7975950000,504470910,32004718,4002,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanParFibre",7008987500,694480786,32016093,7044,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanParStrip",1813066210,88025086,32015057,4451,223346688
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanParSpark",8282818750,505407264,96349317,3811117,223346688
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapAxis (library)",5698603125,461035290,64576830,2252781,228589568
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapSeq",5649235937,473089094,64304433,2261157,228589568
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapPar",2624550000,232313486,64044700,1255107,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapParSpark",4868756250,469238864,69638698,2521886,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanAxis (library)",5781953125,455878358,64576842,2274008,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeq",5773631250,516056538,64304811,2265111,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqMut",2042350000,122323398,32000211,3902,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqFreeze",2041617187,52827104,32000116,3891,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqFibre",3139953125,227065714,32512472,3893,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqStrip",1607046875,135614028,32001675,3878,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanParFibre",1077179687,73030328,32524831,4295,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanParStrip",871302734,69248230,32012384,4243,272629760
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanParSpark",4700862500,423832708,69581136,2507411,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanSeqStrip mult=1",80840673,6552290,722124,639,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanSeqStrip mult=2",79626953,7159128,723948,638,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanSeqStrip mult=8",91684716,6602078,734892,636,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanSeqStrip mult=32",119259521,6661254,778668,637,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParStrip mult=1",38760534,2049310,727729,714,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParStrip mult=2",43103735,4166204,735045,715,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParStrip mult=8",53407080,5139462,778874,798,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParStrip mult=32",111861572,6781356,954231,1141,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParFibre mult=1",37224475,2541944,727815,796,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParFibre mult=2",37834765,3652826,735186,705,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParFibre mult=8",45977392,4006796,779377,706,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.scanParFibre mult=32",95714501,7082482,956183,1144,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.mapPar mult=1",72490869,7066104,2177264,695,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.mapPar mult=2",71347216,7060208,2184543,694,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.mapPar mult=8",83565673,7745442,2228186,1135,272629760
+"All.chunks per capability, 90,000 (Big) axis0 unboxed.mapPar mult=32",143991406,13704214,2402652,1784,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanSeqStrip mult=1",40121533,3866606,720878,616,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanSeqStrip mult=2",40048754,3283568,721486,614,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanSeqStrip mult=8",40990405,3637540,725134,613,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanSeqStrip mult=32",44473852,3571702,739726,612,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParStrip mult=1",26266711,2099152,726347,674,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParStrip mult=2",27236853,1888100,732295,673,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParStrip mult=8",33397534,1876746,768035,672,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParStrip mult=32",78570898,7316134,911047,673,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParFibre mult=1",38592907,1922876,803387,676,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParFibre mult=2",39110253,3529122,809572,1009,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParFibre mult=8",45507324,3302240,846451,1074,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.scanParFibre mult=32",91206982,8189380,994085,779,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.mapPar mult=1",48579077,4637874,1451149,664,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.mapPar mult=2",49228247,3360324,1457098,663,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.mapPar mult=8",56553466,3858526,1492847,673,272629760
+"All.chunks per capability, 90,000 (Big) axis1 unboxed.mapPar mult=32",97945458,6761920,1635840,992,272629760

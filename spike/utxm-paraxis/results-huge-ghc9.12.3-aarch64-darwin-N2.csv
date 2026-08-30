@@ -1,0 +1,27 @@
+Name,Mean (ps),2*Stdev (ps),Allocated,Copied,Peak Memory
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapAxis (library)",28583300000,1985796068,96064895,631679,209715200
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapSeq",28235450000,2040523832,96064839,83073,209715200
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapPar",15562937500,850544356,96071965,93387,209715200
+"All.4,000,000 cells (Huge) axis0 unboxed  map.mapParSpark",8551321875,486680194,128374884,357744,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanAxis (library)",3003443750,216814740,32000205,1029,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeq",3007767187,210246290,32000193,1021,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqMut",3004037500,215836460,32000193,1013,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqFreeze",3004801562,217220028,32000192,1005,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqFibre",22854250000,992814182,32000551,1010,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanSeqStrip",4951832812,491927966,32002207,989,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanParFibre",12947987500,483381994,32008003,1570,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanParStrip",2337634375,146825812,32007748,1456,216006656
+"All.4,000,000 cells (Huge) axis0 unboxed  scan.scanParSpark",7040565625,558975068,96342848,392194,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapAxis (library)",4033029687,264261308,64576144,279442,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapSeq",4050260937,233885722,64304135,281052,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapPar",2481885937,211385288,64038413,101129,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  map.mapParSpark",5593596875,358721204,88212600,587163,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanAxis (library)",4044034375,210197376,64576143,287456,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeq",4033071875,220755810,64304137,289074,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqMut",2023433593,111314258,32000064,902,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqFreeze",2023463281,115510380,32000064,886,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqFibre",3104956250,226464772,32512183,885,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanSeqStrip",1468811718,106817666,32000923,870,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanParFibre",1668038281,150487374,32518580,1288,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanParStrip",1054000000,32117272,32006302,1234,216006656
+"All.4,000,000 cells (Huge) axis1 unboxed  scan.scanParSpark",5621229687,171296782,88007194,612576,216006656
