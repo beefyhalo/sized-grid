@@ -1,3 +1,6 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Data.Grid.Sized.Focused
   ( FocusedGrid (..),
     focusedAtZero,
@@ -5,6 +8,8 @@ module Data.Grid.Sized.Focused
     tracePath,
     walkEverywhere,
     Walker (..),
+    StepFrameFlips (..),
+    stepFrameFlips,
     stepWalker,
     partitionFocus,
   )
@@ -19,6 +24,7 @@ import Control.DeepSeq (NFData (..))
 import Data.AffineSpace (Diff)
 import Data.Functor.Rep
 import Data.Grid.Sized.Coord
+import Data.Grid.Sized.Coord.Class (IsCoordLifted, coordListSize, unsafeFromAxisIndex)
 import Data.Grid.Sized.Internal.Grid (Grid)
 import Generics.SOP
 
@@ -99,38 +105,75 @@ walkEverywhere ::
   FocusedGrid cs (Maybe a)
 walkEverywhere p = extend (tracePath p)
 
--- | A 'FocusedGrid' paired with a heading.
+-- | A 'FocusedGrid' paired with a heading and the frame-flip parity of the
+-- step that produced it.
 data Walker cs a = Walker
-  { walkerGrid :: FocusedGrid cs a,
-    walkerHeading :: Diff (Coord cs)
-  }
-  deriving stock (Functor)
+ { walkerGrid :: FocusedGrid cs a,
+   walkerHeading :: Diff (Coord cs),
+   walkerFrameFlips :: Bool
+ }
+ deriving stock (Functor)
 
 deriving stock instance (Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
 
 deriving stock instance
-  ( IsCoordList cs,
-    All Show cs,
-    Show a,
-    Show (Diff (Coord cs))
-  ) =>
-  Show (Walker cs a)
+ ( IsCoordList cs,
+   All Show cs,
+   Show a,
+   Show (Diff (Coord cs))
+ ) =>
+ Show (Walker cs a)
+
+-- | Whether a step reversed the walker's own sense of direction. Reflective
+-- axes turn a walker's frame around at the wall, and a diagonal bounce on two
+-- axes flips both of them at once, so the parity matters rather than the raw
+-- heading comparison.
+class StepFrameFlips cs where
+ stepFrameFlipsNP :: Int -> NP I (MapDiff cs) -> Bool
+
+instance StepFrameFlips '[] where
+ stepFrameFlipsNP _ Nil = False
+ {-# INLINE stepFrameFlipsNP #-}
+
+instance
+ ( IsCoordLifted x,
+   IsCoordList xs,
+   StepFrameFlips xs,
+   AllDiffSame Int (x ': xs)
+ ) =>
+ StepFrameFlips (x ': xs)
+ where
+ stepFrameFlipsNP p (I d :* ds) =
+   case p `quotRem` coordListSize @xs of
+     (i, r) ->
+       let x = unsafeFromAxisIndex @x i
+        in axisFrameFlips x d /= stepFrameFlipsNP @xs r ds
+ {-# INLINE stepFrameFlipsNP #-}
+
+stepFrameFlips ::
+ forall cs.
+ (StepFrameFlips cs) =>
+ Coord cs ->
+ Diff (Coord cs) ->
+ Bool
+stepFrameFlips c d = stepFrameFlipsNP @cs (coordPosition c) (unDelta d)
 
 -- | Take one step in the walker's own heading, transporting the heading
 -- through 'transportCoord' so the boundary policy decides what the heading
 -- becomes when the walker crosses a seam.
 --
--- Total, unlike 'traceOffset'\/'tracePath': a walker with a heading always
+-- Total, unlike 'traceOffset'\/ 'tracePath': a walker with a heading always
 -- lands somewhere.
 stepWalker ::
-  ( TransportCoordList cs,
-    AllDiffSame Int cs
-  ) =>
-  Walker cs a ->
-  Walker cs a
-stepWalker (Walker (FocusedGrid g p) h) =
-  case transportCoord p h of
-    (p', h') -> Walker (FocusedGrid g p') h'
+ ( TransportCoordList cs,
+   AllDiffSame Int cs,
+   StepFrameFlips cs
+ ) =>
+ Walker cs a ->
+ Walker cs a
+stepWalker (Walker (FocusedGrid g p) h _) =
+ case transportCoord p h of
+   (p', h') -> Walker (FocusedGrid g p') h' (stepFrameFlips p h)
 
 -- | Split a self-contained window into its centre value and a function
 -- naming every other cell's value.

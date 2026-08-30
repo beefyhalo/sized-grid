@@ -59,6 +59,7 @@ type Ant cs =
     AllSizedKnown cs,
     SListI cs,
     TransportCoordList cs,
+    StepFrameFlips cs,
     AllDiffSame Int cs,
     All CentredAxis cs,
     MapDiff cs ~ '[Int, Int]
@@ -79,13 +80,13 @@ turnLeft (dx :^ dy :^ NoDelta) = negate dy :^ dx :^ NoDelta
 -- 'stepWalker' is the step. Nothing here mentions an index, a bound or an
 -- edge.
 stepAnt :: (Ant cs) => Walker cs Bool -> Walker cs Bool
-stepAnt (Walker fg heading) =
+stepAnt (Walker fg heading _) =
   let onBlack = extract fg
       heading'
         | onBlack = turnLeft heading
         | otherwise = turnRight heading
       fg' = fg & gridIndex (pos fg) %~ not
-   in stepWalker (Walker fg' heading')
+   in stepWalker (Walker fg' heading' False)
 
 -- * The window
 
@@ -109,7 +110,8 @@ startWorld win rate name =
           (FocusedGrid (tabulateGrid (const False)) centreCoord)
           -- Heading @(0, 1)@: along the second axis, which is the one
           -- drawn upwards.
-          (0 :^ 1 :^ NoDelta),
+          (0 :^ 1 :^ NoDelta)
+          False,
       worldSteps = 0,
       worldRunning = True,
       worldRate = rate,
