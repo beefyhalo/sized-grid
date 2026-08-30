@@ -50,20 +50,95 @@ bd close <id>         # Complete work
 <!-- END BEADS INTEGRATION -->
 
 
-## Build & Test
+## Environment & Toolchain
 
-_Add your build and test commands here_
+The toolchain comes from the Nix flake dev shell, loaded automatically by direnv
+(`.envrc` is `use flake`). Outside direnv, run commands under `nix develop -c …`.
 
-```bash
-# Example:
-# npm install
-# npm test
-```
+- Default compiler is **GHC 9.12** (`devShells.default`), matching `../aoc` so the
+  shared `cabal.project` does not recompile the world. GHC 9.14 is kept building:
+  `nix develop .#ghc914`, `packages.grid-sized-ghc914`.
+- The shell provides `cabal`, `haskell-language-server`, `ormolu`, `hlint`, and
+  installs the git pre-commit hook (hlint + ormolu) on first entry.
+- Type-checker plugins (`ghc-typelits-natnormalise`, `ghc-typelits-knownnat`) are
+  pinned from Hackage in `flake.nix` — read the comments there before bumping.
+
+## Worktrees
+
+This repo uses **worktrunk (`wt`)**. Project config is `.config/wt.toml`; its
+`post-start` hook runs `direnv allow` on the new tree so the flake shell and
+pre-commit hook load on first `cd`.
+
+- Create/switch with the `wt-switch-create` skill, or `wt add <name>` / `wt <name>`.
+  Pass `wt --yes` when driving it non-interactively (the project hook prompts for
+  approval on first run).
+- **Do not use the built-in `EnterWorktree` tool.** It makes a bare `git worktree`
+  outside worktrunk's tracking with no `direnv allow`, so the flake shell is absent
+  and the pre-commit config is missing (commits then need
+  `PRE_COMMIT_ALLOW_NO_CONFIG=1`).
+- If your cwd is already a `wt` worktree you are isolated — do not nest another.
+- Commit and push the worktree branch; let a human merge to master. When pushing,
+  fast-forward — do **not** `git pull --rebase` when master carries merge commits,
+  it rewrites history.
+
+## Build, Test & Lint
+
+`just` recipes (run from any subdir):
+
+| Recipe | Runs |
+| --- | --- |
+| `just build` | `cabal build all` |
+| `just test` | `cabal test all` — suites `tests`, `downstream`, `readme` (README.lhs doctest) |
+| `just bench` | `cabal bench all` (`benchmark benchmarks`) |
+| `just repl [pkg]` | `cabal repl` (default `grid-sized`) |
+| `just fmt` | ormolu, in place — same build as the hook |
+| `just lint` | `hlint .` (reads `.hlint.yaml` at the root) |
+| `just check` | `nix flake check` — hlint + ormolu + build on GHC 9.12 and 9.14 |
+| `just watch` | re-run tests on every `.hs` change |
+| `just clean` | `cabal clean` |
+
+`nix flake check` builds only the `grid-sized` library and its suites on both
+compilers; the example packages are covered by the CI cabal matrix, not by the
+flake checks.
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+- `src/` — the `grid-sized` library, `Data.Grid.Sized.*`: N-dimensional grids with
+  every dimension's size fixed at compile time.
+  - `Data.Grid.Sized.Internal.Grid.*` — the representation (`Core`, `Shape`,
+    `Axis`, `Nest`, `Windows`).
+  - `Data.Grid.Sized.Coord.*` — coordinates and per-axis boundary policies:
+    `Clamped`, `Periodic` / `Torus`, `Reflective`, `Reflect101`, `Ordinal`. The
+    class pair is `IsCoord` (kind `Nat -> Type`) and `IsCoordLifted` (kind `Type`);
+    `IsCoordList` is the row-major fold over an axis list. `Coord.hs` re-exports the
+    lifted `axis*` wrappers.
+  - `Optics.*`, `Stencil`, `Focused`, `Unboxed`, `Unsafe`.
+- `tests/` — tasty. `tests-downstream/` and the `readme` doctest are separate suites.
+- `bench/` — benchmarks.
+- Example apps are listed in `cabal.project` (`sudoko`, `gameOfLife`,
+  `ising-example`, `automata`, `maze`, `sokoban`, `grid-atlas`, `atlas-topology`) so
+  `cabal build all` covers them; they use gloss — see the `cabal.project` notes on
+  the GLUT backend and the stale `containers` bound.
+- `spike/` — frozen ADR spikes. Excluded from hlint; do not edit.
+- The real downstream consumer is `../aoc`. It shares this `cabal.project` and pins
+  GHC 9.12, so keep the default toolchain at 9.12 and let its call sites drive API
+  changes.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- Formatting is **ormolu**, non-negotiable — the whole tree was reformatted in
+  `a597a4b` (listed in `.git-blame-ignore-revs`). Do not hand-format or reformat
+  code you did not otherwise touch.
+- Nat-indexed class recursion: use a functional dependency, not an associated type
+  family — GHC rejects the overlap otherwise.
+- Every `IsCoord` method with a `Type`-kinded use gets a one-line lifted `axis*`
+  wrapper in `Data.Grid.Sized.Coord.*`, re-exported from `Data.Grid.Sized.Coord`
+  (e.g. `axisDistance`, `axisBoundary`, `axisFrameFlips`, `axisOffset`).
+- Do not defer a design just because no current consumer needs it.
+- Commit subjects end with the beads id in parens: `… (sized-grid-xxxx)`.
+
+## Repomix
+
+`repomix` packs the tree into `repomix-output.xml` (config: `repomix.config.json`)
+for feeding the repo to external review tools. It ignores `.beads/`, `ChangeLog.md`,
+and golden files; regenerate before sharing.
