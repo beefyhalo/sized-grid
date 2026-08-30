@@ -29,43 +29,43 @@
 -- it and the strip ever disagree about a level that should be flat-solvable,
 -- one of them is wrong and it is worth finding out which.
 module Sokoban.Flat
-  ( Surface(..)
-  , surfaceName
-  , solvableOn
-  , Verdict(..)
-  , verdict
-  , verdictLine
-  ) where
+  ( Surface (..),
+    surfaceName,
+    solvableOn,
+    Verdict (..),
+    verdict,
+    verdictLine,
+  )
+where
 
-import           Sokoban.Level (Layout (..))
-
-import qualified Data.Set      as Set
+import Data.Set qualified as Set
+import Sokoban.Level (Layout (..))
 
 -- | A surface of the same shape as the level's strip that is not a Mobius
 -- strip.
 data Surface
-    = Rectangle
-    -- ^ No wrap at all: the left and right columns have walls beyond them.
-    | Cylinder
-    -- ^ Wrapped around, no half turn: leaving the right of row @y@ arrives at
+  = -- | No wrap at all: the left and right columns have walls beyond them.
+    Rectangle
+  | -- | Wrapped around, no half turn: leaving the right of row @y@ arrives at
     -- the left of row @y@.
-    deriving (Eq, Show, Enum, Bounded)
+    Cylinder
+  deriving (Eq, Show, Enum, Bounded)
 
 surfaceName :: Surface -> String
 surfaceName Rectangle = "a plain rectangle"
-surfaceName Cylinder  = "a cylinder"
+surfaceName Cylinder = "a cylinder"
 
 -- | Where a step from @(x, y)@ lands, or 'Nothing' if it leaves the surface.
 step :: Surface -> Int -> Int -> (Int, Int) -> (Int, Int) -> Maybe (Int, Int)
 step surface w h (dx, dy) (x, y)
-    | y' < 0 || y' >= h = Nothing
-    | dx == 0 = Just (x, y')
-    | otherwise =
-        case surface of
-            Rectangle
-                | x' < 0 || x' >= w -> Nothing
-                | otherwise -> Just (x', y')
-            Cylinder -> Just (x' `mod` w, y')
+  | y' < 0 || y' >= h = Nothing
+  | dx == 0 = Just (x, y')
+  | otherwise =
+      case surface of
+        Rectangle
+          | x' < 0 || x' >= w -> Nothing
+          | otherwise -> Just (x', y')
+        Cylinder -> Just (x' `mod` w, y')
   where
     x' = x + dx
     y' = y + dy
@@ -78,8 +78,8 @@ step surface w h (dx, dy) (x, y)
 -- the move counts are not the same question.
 solvableOn :: Surface -> Int -> Layout -> Maybe Int
 solvableOn surface budget lay
-    | won crates0 = Just 0
-    | otherwise = bfs budget (Set.singleton (player0, crates0)) [(player0, crates0, 0)]
+  | won crates0 = Just 0
+  | otherwise = bfs budget (Set.singleton (player0, crates0)) [(player0, crates0, 0)]
   where
     w = layoutWidth lay
     h = layoutHeight lay
@@ -91,60 +91,64 @@ solvableOn surface budget lay
     free crates c = not (Set.member c walls) && not (Set.member c crates)
     dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
     bfs left seen frontier
-        | left <= 0 || null frontier = Nothing
-        | otherwise =
-            case found of
-                Just n  -> Just n
-                Nothing -> bfs (left - length frontier) seen' (reverse next)
+      | left <= 0 || null frontier = Nothing
+      | otherwise =
+          case found of
+            Just n -> Just n
+            Nothing -> bfs (left - length frontier) seen' (reverse next)
       where
         (seen', next, found) = foldl' fromState (seen, [], Nothing) frontier
         fromState acc st = foldl' (try st) acc dirs
         try (p, crates, pushes) acc d =
-            case step surface w h d p of
-                Nothing -> acc
-                Just ahead
-                    | Set.member ahead walls -> acc
-                    | Set.member ahead crates ->
-                        case step surface w h d ahead of
-                            Nothing -> acc
-                            Just beyond
-                                | not (free crates beyond) -> acc
-                                | otherwise ->
-                                    visit
-                                        acc
-                                        ( ahead
-                                        , Set.insert beyond (Set.delete ahead crates)
-                                        , pushes + 1)
-                    | otherwise -> visit acc (ahead, crates, pushes)
+          case step surface w h d p of
+            Nothing -> acc
+            Just ahead
+              | Set.member ahead walls -> acc
+              | Set.member ahead crates ->
+                  case step surface w h d ahead of
+                    Nothing -> acc
+                    Just beyond
+                      | not (free crates beyond) -> acc
+                      | otherwise ->
+                          visit
+                            acc
+                            ( ahead,
+                              Set.insert beyond (Set.delete ahead crates),
+                              pushes + 1
+                            )
+              | otherwise -> visit acc (ahead, crates, pushes)
           where
             visit (s0, acc0, hit0) st@(p', crates', pushes')
-                | Set.member (p', crates') s0 = (s0, acc0, hit0)
-                | won crates' =
-                    (Set.insert (p', crates') s0, acc0, maybe (Just pushes') Just hit0)
-                | otherwise = (Set.insert (p', crates') s0, st : acc0, hit0)
+              | Set.member (p', crates') s0 = (s0, acc0, hit0)
+              | won crates' =
+                  (Set.insert (p', crates') s0, acc0, maybe (Just pushes') Just hit0)
+              | otherwise = (Set.insert (p', crates') s0, st : acc0, hit0)
 
 -- | What kind of level this is: which of the flat surfaces of the same shape
 -- can also solve it.
 data Verdict = Verdict
-    { verdictOnRectangle :: Maybe Int
-    , verdictOnCylinder  :: Maybe Int
-    } deriving (Eq, Show)
+  { verdictOnRectangle :: Maybe Int,
+    verdictOnCylinder :: Maybe Int
+  }
+  deriving (Eq, Show)
 
 verdict :: Int -> Layout -> Verdict
 verdict budget lay =
-    Verdict
-    { verdictOnRectangle = solvableOn Rectangle budget lay
-    , verdictOnCylinder = solvableOn Cylinder budget lay
+  Verdict
+    { verdictOnRectangle = solvableOn Rectangle budget lay,
+      verdictOnCylinder = solvableOn Cylinder budget lay
     }
 
 -- | The verdict as a sentence, strongest claim first.
 verdictLine :: Verdict -> String
 verdictLine (Verdict rect cyl) =
-    case (rect, cyl) of
-        (Just n, _) ->
-            "flat: solvable on a plain rectangle in " ++ show n ++
-            " pushes -- neither the wrap nor the twist is doing anything"
-        (Nothing, Just n) ->
-            "cylinder: solvable wrapped without the twist in " ++ show n ++
-            " pushes -- the wrap is load bearing, the twist is not"
-        (Nothing, Nothing) -> "MOBIUS: no solution on a rectangle or a cylinder"
+  case (rect, cyl) of
+    (Just n, _) ->
+      "flat: solvable on a plain rectangle in "
+        ++ show n
+        ++ " pushes -- neither the wrap nor the twist is doing anything"
+    (Nothing, Just n) ->
+      "cylinder: solvable wrapped without the twist in "
+        ++ show n
+        ++ " pushes -- the wrap is load bearing, the twist is not"
+    (Nothing, Nothing) -> "MOBIUS: no solution on a rectangle or a cylinder"

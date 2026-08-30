@@ -18,54 +18,62 @@
 -- why that matters.
 module Data.Grid.Sized.Internal.Grid
   ( -- * Representation
-    GridOf(..)
-  , Grid
-  , unsafeGridFromVector
-    -- * Construction and access
-  , gridVector
-  , gridFromVector
-  , gridFromList
-  , collapseGrid
-    -- * Single-cell access
-  , cellLens
-    -- * Bulk operations
-  , tabulateGrid
-  , indexGrid
-  , mapGrid
-  , imapGrid
-  , zipWithGrid
-  , foldlGrid'
-  , scanl1Grid
-    -- * Type-level machinery
-  , CollapseGrid
-    -- * Rearranging
-  , permuteGrid
-  , transposeGrid
-  , splitGrid
-  , combineGrid
-  , combineHigherDim
-  , splitHigherDim
-  , dropGrid
-  , takeGrid
-  , sliceGrid
-  , mapLowerDim
-  , zipLowerDim
-  , MapAxis(..)
-  , mapAxis
-  , axisFibres
-  , axis
-  , scanAxis
-    -- * Windows and tiles
-  , ShrinkableGrid(..)
-  , gridTiles
-  , tiles
-  , gridWindows
-  , windows
-    -- * Vector helpers
-  , splitVectorBySize
-  ) where
+    GridOf (..),
+    Grid,
+    unsafeGridFromVector,
 
-import           Data.Grid.Sized.Internal.Grid.Axis
-import           Data.Grid.Sized.Internal.Grid.Core
-import           Data.Grid.Sized.Internal.Grid.Shape
-import           Data.Grid.Sized.Internal.Grid.Windows
+    -- * Construction and access
+    gridVector,
+    gridFromVector,
+    gridFromList,
+    collapseGrid,
+
+    -- * Single-cell access
+    cellLens,
+
+    -- * Bulk operations
+    tabulateGrid,
+    indexGrid,
+    mapGrid,
+    imapGrid,
+    zipWithGrid,
+    foldlGrid',
+    scanl1Grid,
+
+    -- * Type-level machinery
+    CollapseGrid,
+
+    -- * Rearranging
+    permuteGrid,
+    transposeGrid,
+    splitGrid,
+    combineGrid,
+    combineHigherDim,
+    splitHigherDim,
+    dropGrid,
+    takeGrid,
+    sliceGrid,
+    mapLowerDim,
+    zipLowerDim,
+    MapAxis (..),
+    mapAxis,
+    axisFibres,
+    axis,
+    scanAxis,
+
+    -- * Windows and tiles
+    ShrinkableGrid (..),
+    gridTiles,
+    tiles,
+    gridWindows,
+    windows,
+
+    -- * Vector helpers
+    splitVectorBySize,
+  )
+where
+
+import Data.Grid.Sized.Internal.Grid.Axis
+import Data.Grid.Sized.Internal.Grid.Core
+import Data.Grid.Sized.Internal.Grid.Shape
+import Data.Grid.Sized.Internal.Grid.Windows

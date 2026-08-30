@@ -30,34 +30,36 @@
 -- the twist. There is no case for it.
 module Sokoban.Rules
   ( -- * A level
-    Level(..)
-  , levelPlay
+    Level (..),
+    levelPlay,
+
     -- * A game in progress
-  , Play(..)
-  , Game(..)
-  , newGame
-  , restart
+    Play (..),
+    Game (..),
+    newGame,
+    restart,
+
     -- * Playing
-  , Outcome(..)
-  , outcomeMoved
-  , outcomeName
-  , move
-  , replay
-  , undo
-  , solved
+    Outcome (..),
+    outcomeMoved,
+    outcomeName,
+    move,
+    replay,
+    undo,
+    solved,
+
     -- * Asking about the board
-  , tileAt
-  , crateAt
-  , occupied
-  , goalsLeft
-  ) where
+    tileAt,
+    crateAt,
+    occupied,
+    goalsLeft,
+  )
+where
 
-import           Sokoban.Board
-
-import           Data.Grid.Sized
-
-import           Data.Set               (Set)
-import qualified Data.Set               as Set
+import Data.Grid.Sized
+import Data.Set (Set)
+import Data.Set qualified as Set
+import Sokoban.Board
 
 -- | A level: its terrain, its goals, and where everything starts.
 --
@@ -67,14 +69,14 @@ import qualified Data.Set               as Set
 -- covered, for winning, and that is a subset test rather than a sweep of the
 -- grid.
 data Level w h = Level
-    { levelName   :: String
-    , levelNote   :: String
-    -- ^ The one thing this level is teaching. Empty for a level that is
+  { levelName :: String,
+    -- | The one thing this level is teaching. Empty for a level that is
     -- teaching nothing, which is a level that should probably not ship.
-    , levelBoard  :: Board w h
-    , levelGoals  :: Set (Coord (Strip w h))
-    , levelStart  :: Play w h
-    }
+    levelNote :: String,
+    levelBoard :: Board w h,
+    levelGoals :: Set (Coord (Strip w h)),
+    levelStart :: Play w h
+  }
 
 -- | The part of a game that changes: everything a move rewrites and an undo
 -- puts back.
@@ -84,14 +86,13 @@ data Level w h = Level
 -- is a different kind of number from the one the player is trying to make
 -- small.
 data Play w h = Play
-    { playPlayer  :: !(Spot w h)
-    , playFlipped :: !Bool
-    -- ^ Whether the player has crossed the seam an odd number of times, and
+  { playPlayer :: !(Spot w h),
+    -- | Whether the player has crossed the seam an odd number of times, and
     -- so is upside down with respect to the chart. Only 'PlayerFrame' reads
     -- it, but it is state of the game and not of the view: it is a fact about
     -- where the player has been, and undo has to put it back.
-    , playFacing  :: !Heading
-    -- ^ Which way the last move pointed, for drawing. Not consulted by any
+    playFlipped :: !Bool,
+    -- | Which way the last move pointed, for drawing. Not consulted by any
     -- rule --- a Sokoban pushes by walking into a crate, so facing is never
     -- an input --- but on this surface the player needs to see which way they
     -- are about to go, because it decides whether the next step is through
@@ -101,15 +102,17 @@ data Play w h = Play
     -- an axis of the chart and a key press does not: the same key means
     -- different headings on the two sides of the seam. A view that wants the
     -- key back asks 'dirOf' for it, in the frame it is drawing in.
-    , playCrates  :: !(Set (Coord (Strip w h)))
-    , playMoves   :: !Int
-    , playPushes  :: !Int
-    } deriving (Eq)
+    playFacing :: !Heading,
+    playCrates :: !(Set (Coord (Strip w h))),
+    playMoves :: !Int,
+    playPushes :: !Int
+  }
+  deriving (Eq)
 
 -- | Standalone, because 'Show' for a coordinate wants to know the axis sizes
 -- and 'Eq' does not: a coordinate is its row-major position, so equality is
 -- an 'Int' comparison, and printing one is not.
-deriving instance KnownStrip w h => Show (Play w h)
+deriving instance (KnownStrip w h) => Show (Play w h)
 
 -- | A level being played: the level itself, the current state, and every
 -- state before it.
@@ -120,10 +123,10 @@ deriving instance KnownStrip w h => Show (Play w h)
 -- direction nothing ever walks. Keeping the old state costs a few words and
 -- cannot be wrong.
 data Game w h = Game
-    { gameLevel :: Level w h
-    , gamePlay  :: !(Play w h)
-    , gamePast  :: [Play w h]
-    }
+  { gameLevel :: Level w h,
+    gamePlay :: !(Play w h),
+    gamePast :: [Play w h]
+  }
 
 levelPlay :: Level w h -> Play w h
 levelPlay = levelStart
@@ -145,40 +148,40 @@ restart = newGame . gameLevel
 -- what makes the strip legible: the left and right edges are not edges at
 -- all, and the top and bottom are.
 data Outcome
-    = Walked
-    | Pushed
-    | BlockedByWall
-    | BlockedByCrate
-    | OffTheStrip
-    deriving (Eq, Show)
+  = Walked
+  | Pushed
+  | BlockedByWall
+  | BlockedByCrate
+  | OffTheStrip
+  deriving (Eq, Show)
 
 -- | Did this outcome change the game?
 outcomeMoved :: Outcome -> Bool
 outcomeMoved Walked = True
 outcomeMoved Pushed = True
-outcomeMoved _      = False
+outcomeMoved _ = False
 
 outcomeName :: Outcome -> String
-outcomeName Walked         = "walked"
-outcomeName Pushed         = "pushed"
-outcomeName BlockedByWall  = "a wall"
+outcomeName Walked = "walked"
+outcomeName Pushed = "pushed"
+outcomeName BlockedByWall = "a wall"
 outcomeName BlockedByCrate = "a crate with no room behind it"
-outcomeName OffTheStrip    = "the edge of the strip"
+outcomeName OffTheStrip = "the edge of the strip"
 
-tileAt :: KnownStrip w h => Game w h -> Spot w h -> Tile
+tileAt :: (KnownStrip w h) => Game w h -> Spot w h -> Tile
 tileAt g = boardTile (levelBoard (gameLevel g))
 
 crateAt :: Play w h -> Spot w h -> Bool
 crateAt p s = Set.member (spotCoord s) (playCrates p)
 
 -- | Is there anything in this cell that stops a crate entering it?
-occupied :: KnownStrip w h => Game w h -> Play w h -> Spot w h -> Bool
+occupied :: (KnownStrip w h) => Game w h -> Play w h -> Spot w h -> Bool
 occupied g p s = not (walkable (tileAt g s)) || crateAt p s
 
 -- | Goals with no crate on them.
 goalsLeft :: Game w h -> Int
 goalsLeft g =
-    Set.size (levelGoals (gameLevel g) `Set.difference` playCrates (gamePlay g))
+  Set.size (levelGoals (gameLevel g) `Set.difference` playCrates (gamePlay g))
 
 solved :: Game w h -> Bool
 solved g = levelGoals (gameLevel g) `Set.isSubsetOf` playCrates (gamePlay g)
@@ -188,29 +191,31 @@ solved g = levelGoals (gameLevel g) `Set.isSubsetOf` playCrates (gamePlay g)
 -- The game comes back changed only if the move happened; the outcome says
 -- what happened either way, so a refusal can be shown as the reason it was
 -- refused rather than as nothing at all.
-move :: KnownStrip w h => Frame -> Dir -> Game w h -> (Game w h, Outcome)
+move :: (KnownStrip w h) => Frame -> Dir -> Game w h -> (Game w h, Outcome)
 move frame dir g =
-    case stepSpot here heading of
-        Nothing -> (g, OffTheStrip)
-        Just (ahead, ahead', crossing)
-            | not (walkable (tileAt g ahead)) -> (g, BlockedByWall)
-            | crateAt play ahead ->
-                case stepSpot ahead ahead' of
-                    Nothing -> (g, BlockedByCrate)
-                    Just (beyond, _, _)
-                        | occupied g play beyond -> (g, BlockedByCrate)
-                        | otherwise ->
-                            ( commit
-                                  crossing
-                                  play
-                                  { playCrates =
-                                        Set.insert (spotCoord beyond)
-                                            (Set.delete (spotCoord ahead) (playCrates play))
-                                  , playPushes = playPushes play + 1
-                                  }
-                                  ahead
-                            , Pushed)
-            | otherwise -> (commit crossing play ahead, Walked)
+  case stepSpot here heading of
+    Nothing -> (g, OffTheStrip)
+    Just (ahead, ahead', crossing)
+      | not (walkable (tileAt g ahead)) -> (g, BlockedByWall)
+      | crateAt play ahead ->
+          case stepSpot ahead ahead' of
+            Nothing -> (g, BlockedByCrate)
+            Just (beyond, _, _)
+              | occupied g play beyond -> (g, BlockedByCrate)
+              | otherwise ->
+                  ( commit
+                      crossing
+                      play
+                        { playCrates =
+                            Set.insert
+                              (spotCoord beyond)
+                              (Set.delete (spotCoord ahead) (playCrates play)),
+                          playPushes = playPushes play + 1
+                        }
+                      ahead,
+                    Pushed
+                  )
+      | otherwise -> (commit crossing play ahead, Walked)
   where
     play = gamePlay g
     here = playPlayer play
@@ -220,33 +225,35 @@ move frame dir g =
     -- so the only parity in the game is the player's, and it comes from the
     -- player's own step.
     commit crossing p landed =
-        g { gamePlay =
-                p { playPlayer = landed
-                  , playFlipped = playFlipped p /= reversedFrame crossing
-                  , playFacing = heading
-                  , playMoves = playMoves p + 1
-                  }
-          , gamePast = play : gamePast g
-          }
+      g
+        { gamePlay =
+            p
+              { playPlayer = landed,
+                playFlipped = playFlipped p /= reversedFrame crossing,
+                playFacing = heading,
+                playMoves = playMoves p + 1
+              },
+          gamePast = play : gamePast g
+        }
 
 -- | Press a run of keys, and say what each one did. What a solver's answer
 -- is checked with, and what a recorded solution is played back through.
 replay ::
-       KnownStrip w h
-    => Frame
-    -> [Dir]
-    -> Game w h
-    -> (Game w h, [Outcome])
+  (KnownStrip w h) =>
+  Frame ->
+  [Dir] ->
+  Game w h ->
+  (Game w h, [Outcome])
 replay frame dirs g0 = fmap reverse (foldl' one (g0, []) dirs)
   where
     one (g, outs) dir =
-        let (g', o) = move frame dir g
-        in (g', o : outs)
+      let (g', o) = move frame dir g
+       in (g', o : outs)
 
 -- | Take back one move. 'Nothing' at the start of the level, so a caller can
 -- say so rather than silently doing nothing.
 undo :: Game w h -> Maybe (Game w h)
 undo g =
-    case gamePast g of
-        []     -> Nothing
-        (p:ps) -> Just g {gamePlay = p, gamePast = ps}
+  case gamePast g of
+    [] -> Nothing
+    (p : ps) -> Just g {gamePlay = p, gamePast = ps}

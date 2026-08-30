@@ -1,29 +1,29 @@
-{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 -- | A Mobius strip: a single-chart 'Atlas' glued to itself along its
 -- 'Wrapped' axis, reflecting 'Straight' on crossing.
 module Data.Grid.Atlas.Mobius
-  ( Axis(..)
-  , pattern Wrapped
-  , pattern Straight
-  , Heading(..)
-  , Crossing(..)
-  , crossedSeam
-  , reversedFrame
-  , mobiusAtlas
-  , mobiusSeam
-  , mobiusStep
-  ) where
+  ( Axis (..),
+    pattern Wrapped,
+    pattern Straight,
+    Heading (..),
+    Crossing (..),
+    crossedSeam,
+    reversedFrame,
+    mobiusAtlas,
+    mobiusSeam,
+    mobiusStep,
+  )
+where
 
-import           Data.Atlas.Topology.Seam (SeamTable (..), crossSeam)
-import           Data.Grid.Atlas
-import           Data.Grid.Atlas.Rect
-import           Data.Grid.Sized
-
-import           Data.Maybe  (fromMaybe)
-import qualified Data.Vector as V
-import           GHC.TypeLits
+import Data.Atlas.Topology.Seam (SeamTable (..), crossSeam)
+import Data.Grid.Atlas
+import Data.Grid.Atlas.Rect
+import Data.Grid.Sized
+import Data.Maybe (fromMaybe)
+import Data.Vector qualified as V
+import GHC.TypeLits
 
 -- | The strip's two axes, named for what happens at their ends: 'Wrapped'
 -- is glued to itself, 'Straight' has a genuine 'Clamped' edge with nothing
@@ -42,10 +42,11 @@ pattern Straight = V
 {-# COMPLETE Wrapped, Straight #-}
 
 mobiusAtlas ::
-       forall w h a. Grid '[ Clamped w, Clamped h] a
-    -> Atlas '[ Clamped w, Clamped h] 1 a
+  forall w h a.
+  Grid '[Clamped w, Clamped h] a ->
+  Atlas '[Clamped w, Clamped h] 1 a
 mobiusAtlas g =
-    fromMaybe (error "mobiusAtlas: impossible, one chart always matches k = 1") $
+  fromMaybe (error "mobiusAtlas: impossible, one chart always matches k = 1") $
     atlasFromVector (V.singleton g)
 
 mobiusSeam :: SeamTable () (Axis, Extremum)
@@ -69,29 +70,33 @@ crossMobiusEdge () (Straight, side) = ((), (Straight, side), False)
 -- the seam arrives at the mirrored row facing the way it already faced. Every
 -- 'Wrapped' crossing here is a 'MirroredSeam'. See 'reversedFrame'.
 mobiusStep ::
-       forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
-    => AtlasCoord '[ Clamped w, Clamped h] 1
-    -> Heading
-    -> Maybe (AtlasCoord '[ Clamped w, Clamped h] 1, Heading, Crossing)
+  forall w h.
+  (KnownNat w, KnownNat h, 1 <= w, 1 <= h) =>
+  AtlasCoord '[Clamped w, Clamped h] 1 ->
+  Heading ->
+  Maybe (AtlasCoord '[Clamped w, Clamped h] 1, Heading, Crossing)
 mobiusStep (chart, u :| v :| EmptyCoord) heading = do
-    Landing () (ui, vi) heading' crossing <-
-        rectStep
-            axisSize
-            glued
-            ()
-            (ordinalToInt (unClamped u), ordinalToInt (unClamped v))
-            heading
-    pure
-        ( ( chart
-          , Clamped (unsafeOrdinal ui) :| Clamped (unsafeOrdinal vi) :|
-            EmptyCoord)
-        , heading'
-        , crossing)
+  Landing () (ui, vi) heading' crossing <-
+    rectStep
+      axisSize
+      glued
+      ()
+      (ordinalToInt (unClamped u), ordinalToInt (unClamped v))
+      heading
+  pure
+    ( ( chart,
+        Clamped (unsafeOrdinal ui)
+          :| Clamped (unsafeOrdinal vi)
+          :| EmptyCoord
+      ),
+      heading',
+      crossing
+    )
   where
-    axisSize Wrapped  = ordinalSize @w
+    axisSize Wrapped = ordinalSize @w
     axisSize Straight = ordinalSize @h
     -- 'mobiusSeam' has entries for the 'Straight' edges only because a
     -- 'SeamTable' is total; they are the identity, and this is where the
     -- honest answer -- that edge is glued to nothing -- is given instead.
     glued () (Straight, _) = Nothing
-    glued () edge          = Just (crossSeam mobiusSeam () edge)
+    glued () edge = Just (crossSeam mobiusSeam () edge)

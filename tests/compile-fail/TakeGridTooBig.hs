@@ -4,5 +4,5 @@ module TakeGridTooBig where
 
 import Data.Grid.Sized
 
-bad :: Grid '[ Ordinal 3] Int -> Grid '[ Ordinal 9] Int
+bad :: Grid '[Ordinal 3] Int -> Grid '[Ordinal 9] Int
 bad = takeGrid 9

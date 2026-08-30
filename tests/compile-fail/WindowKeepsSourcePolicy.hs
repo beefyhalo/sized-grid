@@ -12,5 +12,5 @@ module WindowKeepsSourcePolicy where
 
 import Data.Grid.Sized
 
-bad :: Grid '[ Periodic 9] Int -> [Grid '[ Periodic 3] Int]
+bad :: Grid '[Periodic 9] Int -> [Grid '[Periodic 3] Int]
 bad = gridWindows @3

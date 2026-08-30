@@ -9,47 +9,51 @@
 --   * "Data.Grid.Sized.Optics.FocusedGrid" --- focused grids.
 module Data.Grid.Sized.Optics
   ( -- * Coordinates
-    _CoordAxes
-  , _TransposedCoord
-  , _CoordTuple
-  , _CoordCons
-  , _SingleCoord
-  , _EmptyCoord
-  , _Position
-  , _Strengthened
-  , _Weakened
-  , _WeakenedCoord
-  , translated
-  , coordHead
-  , coordTail
-  , _WrappedDelta
-  , _DeltaTuple
-  , _DeltaCons
-  , deltaHead
-  , deltaTail
-    -- * Ordinals
-  , _Ordinal
-    -- * Grids
-  , _GridVector
-  , permuted
-  , _Transposed
-  , _SplitGrid
-  , _SplitHigherDim
-  , _CollapsedGrid
-  , cell
-  , gridIndex
-  , asGrid
-  , slice
-  , prefix
-  , suffix
-  , lowerDim
-  , axisFold
-    -- * Focused grids
-  , _FocusedGrid
-  , focus
-  , unfocused
-  ) where
+    _CoordAxes,
+    _TransposedCoord,
+    _CoordTuple,
+    _CoordCons,
+    _SingleCoord,
+    _EmptyCoord,
+    _Position,
+    _Strengthened,
+    _Weakened,
+    _WeakenedCoord,
+    translated,
+    coordHead,
+    coordTail,
+    _WrappedDelta,
+    _DeltaTuple,
+    _DeltaCons,
+    deltaHead,
+    deltaTail,
 
-import           Data.Grid.Sized.Optics.Coordinate
-import           Data.Grid.Sized.Optics.FocusedGrid
-import           Data.Grid.Sized.Optics.Grid
+    -- * Ordinals
+    _Ordinal,
+
+    -- * Grids
+    _GridVector,
+    permuted,
+    _Transposed,
+    _SplitGrid,
+    _SplitHigherDim,
+    _CollapsedGrid,
+    cell,
+    gridIndex,
+    asGrid,
+    slice,
+    prefix,
+    suffix,
+    lowerDim,
+    axisFold,
+
+    -- * Focused grids
+    _FocusedGrid,
+    focus,
+    unfocused,
+  )
+where
+
+import Data.Grid.Sized.Optics.Coordinate
+import Data.Grid.Sized.Optics.FocusedGrid
+import Data.Grid.Sized.Optics.Grid

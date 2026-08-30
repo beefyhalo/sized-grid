@@ -15,41 +15,41 @@
 -- does not mention; the dependency runs one way and there is no cycle.
 -- Both are re-exported from "Data.Grid.Sized.Coord.Class".
 module Data.Grid.Sized.Coord.Class.Axis
-  ( IsCoord(..)
-  , IsCoordLifted(..)
-  , Boundaryless
-  , Extremum(..)
-  , Even
-  , Odd
-  , OddC
-  , maxCoordSize
-  , allCoordLike
-  , axisSteps
-  , axisStepsIx
-  , toAxisIndex
-  , unsafeFromAxisIndex
-  ) where
+  ( IsCoord (..),
+    IsCoordLifted (..),
+    Boundaryless,
+    Extremum (..),
+    Even,
+    Odd,
+    OddC,
+    maxCoordSize,
+    allCoordLike,
+    axisSteps,
+    axisStepsIx,
+    toAxisIndex,
+    unsafeFromAxisIndex,
+  )
+where
 
-import           Data.Grid.Sized.Internal.Error (type (?!))
-import           Data.Grid.Sized.Ordinal
+import Control.Lens
+import Data.AffineSpace (AffineSpace, Diff)
+import Data.Grid.Sized.Internal.Error (type (?!))
+import Data.Grid.Sized.Ordinal
+import Data.Group (Group)
+import Data.Kind (Type)
+import Data.Type.Bool (Not)
+import Data.Type.Equality (type (==))
+import GHC.TypeLits
 
-import           Control.Lens
-import           Data.AffineSpace   (AffineSpace, Diff)
-import           Data.Group         (Group)
-import           Data.Kind          (Type)
-import           Data.Type.Bool     (Not)
-import           Data.Type.Equality (type (==))
-import           GHC.TypeLits
-
-maxCoordSize :: forall n -> KnownNat n => Integer
+maxCoordSize :: forall n -> (KnownNat n) => Integer
 maxCoordSize n = fromIntegral (ordinalSize @n) - 1
 
 -- | Deliberately not a 'Bool': a caller that has to act on which edge was hit
 -- needs to know which end, not just that one was.
 data Extremum
-    = AtMin
-    | AtMax
-    deriving (Eq, Ord, Show, Enum, Bounded)
+  = AtMin
+  | AtMax
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | An axis coordinate and its boundary policy. The policies have a useful
 -- geometric correspondence: 'Periodic' is the discrete analogue of the
@@ -64,7 +64,7 @@ class IsCoord (c :: Nat -> Type) where
 
   -- | The origin; if @c@ is a 'Monoid' this should be 'mempty'.
   zeroPosition :: (1 <= n, KnownNat n) => c n
-  default zeroPosition :: Monoid (c n) => c n
+  default zeroPosition :: (Monoid (c n)) => c n
   zeroPosition = mempty
 
   -- | @1 <= n@ is required because a @c 0@ has no inhabitants.
@@ -75,10 +75,10 @@ class IsCoord (c :: Nat -> Type) where
   -- it is in range, and hand it to the continuation as a required type
   -- argument.
   reifyCoord ::
-         KnownNat n
-      => c n
-      -> (forall m -> (KnownNat m, m + 1 <= n) => x)
-      -> x
+    (KnownNat n) =>
+    c n ->
+    (forall m -> (KnownNat m, m + 1 <= n) => x) ->
+    x
   reifyCoord c = reifyCoord (view asOrdinal c)
 
   -- | Offset by a signed displacement, or 'Nothing' if that leaves the space.
@@ -92,14 +92,14 @@ class IsCoord (c :: Nat -> Type) where
   axisDistanceIsCoord :: (KnownNat n, 1 <= n) => c n -> c n -> Int
   {-# INLINE axisDistanceIsCoord #-}
   axisDistanceIsCoord a b =
-      abs (ordinalToInt (a ^. asOrdinal) - ordinalToInt (b ^. asOrdinal))
+    abs (ordinalToInt (a ^. asOrdinal) - ordinalToInt (b ^. asOrdinal))
 
   -- | Which end of the axis this value sits at, or 'Nothing' if it is in the
   -- interior.
-  axisBoundaryIsCoord :: KnownNat n => c n -> Maybe Extremum
+  axisBoundaryIsCoord :: (KnownNat n) => c n -> Maybe Extremum
   axisBoundaryIsCoord = axisBoundaryByPosition
 
-  weakenIsCoord :: KnownNat m => c n -> Maybe (c m)
+  weakenIsCoord :: (KnownNat m) => c n -> Maybe (c m)
   weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
 
   strengthenIsCoord :: (KnownNat m, (n <= m)) => c n -> c m
@@ -132,43 +132,46 @@ class IsCoord (c :: Nat -> Type) where
 
 -- | The bounds check that 'offsetIsCoord' takes as its default.
 offsetByPosition ::
-       forall c n. (IsCoord c, KnownNat n)
-    => c n
-    -> Int
-    -> Maybe (c n)
+  forall c n.
+  (IsCoord c, KnownNat n) =>
+  c n ->
+  Int ->
+  Maybe (c n)
 {-# INLINE offsetByPosition #-}
 offsetByPosition c d
-    | d > hi - i = Nothing
-    | d < negate i = Nothing
-    | otherwise = Just $ review asOrdinal $ unsafeOrdinal $ i + d
+  | d > hi - i = Nothing
+  | d < negate i = Nothing
+  | otherwise = Just $ review asOrdinal $ unsafeOrdinal $ i + d
   where
     i = ordinalToInt (c ^. asOrdinal)
     hi = ordinalSize @n - 1
 
 -- | The bounds check that 'axisBoundaryIsCoord' takes as its default.
 axisBoundaryByPosition ::
-       forall c n. (IsCoord c, KnownNat n)
-    => c n
-    -> Maybe Extremum
+  forall c n.
+  (IsCoord c, KnownNat n) =>
+  c n ->
+  Maybe Extremum
 {-# INLINE axisBoundaryByPosition #-}
 axisBoundaryByPosition c
-    -- Order matters: a one-cell axis is both ends, so this reports 'AtMin'.
-    | i == 0 = Just AtMin
-    | i == ordinalSize @n - 1 = Just AtMax
-    | otherwise = Nothing
+  -- Order matters: a one-cell axis is both ends, so this reports 'AtMin'.
+  | i == 0 = Just AtMin
+  | i == ordinalSize @n - 1 = Just AtMax
+  | otherwise = Nothing
   where
     i = ordinalToInt (c ^. asOrdinal)
 
 -- | 'IsCoord' lifted to a concrete coord type (kind @Type@) rather than @Nat -> Type@.
-class ( x ~ (CoordContainer x) (CoordNat x)
-      , 1 <= CoordNat x
-      , IsCoord (CoordContainer x)
-      , KnownNat (CoordNat x)
-      ) =>
-      IsCoordLifted x
-    where
-    type CoordContainer x :: Nat -> Type
-    type CoordNat x :: Nat
+class
+  ( x ~ (CoordContainer x) (CoordNat x),
+    1 <= CoordNat x,
+    IsCoord (CoordContainer x),
+    KnownNat (CoordNat x)
+  ) =>
+  IsCoordLifted x
+  where
+  type CoordContainer x :: Nat -> Type
+  type CoordNat x :: Nat
 
 instance (KnownNat n, 1 <= n, IsCoord c) => IsCoordLifted (c n) where
   type CoordContainer (c n) = c
@@ -199,9 +202,11 @@ type Odd (n :: Nat) = Not (Even n)
 
 -- | 'Odd', turned into a readable compile error naming the offending axis size.
 type OddC (x :: Type) =
-    Odd (CoordNat x) ?!
-    ('Text "Dimension '" ':<>: 'ShowType (CoordNat x) ':<>:
-     'Text "' must be odd to have a centre coordinate")
+  Odd (CoordNat x)
+    ?! ( 'Text "Dimension '"
+           ':<>: 'ShowType (CoordNat x)
+           ':<>: 'Text "' must be odd to have a centre coordinate"
+       )
 
 -- | The values one axis can reach within @r@ steps of @c@, paired with the
 -- number of steps it actually takes to get there.
@@ -215,10 +220,10 @@ type OddC (x :: Type) =
 -- @INLINE@: at a concrete axis this unrolls into unboxed comparisons with
 -- no dictionary passing, which was the whole remaining cost of neighbour
 -- enumeration -- measured, not assumed.
-axisSteps :: forall x. IsCoordLifted x => Int -> x -> [(Int, x)]
+axisSteps :: forall x. (IsCoordLifted x) => Int -> x -> [(Int, x)]
 {-# INLINE axisSteps #-}
 axisSteps r c =
-    [(d, unsafeFromAxisIndex v) | (d, v) <- axisStepsIx @x r (toAxisIndex c)]
+  [(d, unsafeFromAxisIndex v) | (d, v) <- axisStepsIx @x r (toAxisIndex c)]
 
 -- | 'axisSteps' on the axis's index rather than on a value of the axis type:
 -- the form the row-major fold needs, since after sized-grid-adr.16 all it has
@@ -229,10 +234,10 @@ axisSteps r c =
 -- neighbourhood enumeration reaches this once per axis per cell, and going
 -- via 'axisSteps' would build an axis value per reachable offset only for the
 -- caller to take its index again.
-axisStepsIx :: forall x. IsCoordLifted x => Int -> Int -> [(Int, Int)]
+axisStepsIx :: forall x. (IsCoordLifted x) => Int -> Int -> [(Int, Int)]
 {-# INLINE axisStepsIx #-}
 axisStepsIx r i =
-    [(abs d, v) | (d, v) <- reachable, not (any (beats (d, v)) reachable)]
+  [(abs d, v) | (d, v) <- reachable, not (any (beats (d, v)) reachable)]
   where
     -- Hoisted out of the comprehension: one axis value per call, not one per
     -- offset tried.
@@ -241,7 +246,7 @@ axisStepsIx r i =
     -- Already an 'Int', so -- as before -- no 'Eq' is needed on the axis type.
     reachable :: [(Int, Int)]
     reachable =
-        [(d, toAxisIndex v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
+      [(d, toAxisIndex v) | d <- [-r .. r], Just v <- [offsetIsCoord c d]]
     -- Fewer steps wins; an exact tie in distance goes to the lower offset, so
     -- the choice is total and the result does not depend on list order.
     beats :: (Int, Int) -> (Int, Int) -> Bool
@@ -258,7 +263,7 @@ axisStepsIx r i =
 -- These two are what let sized-grid-adr.16 change 'Coord'\'s representation
 -- without touching 'IsCoord' at all: a boundary policy still says what it
 -- means in terms of its own axis type, and the fold converts at the edges.
-toAxisIndex :: forall x. IsCoordLifted x => x -> Int
+toAxisIndex :: forall x. (IsCoordLifted x) => x -> Int
 toAxisIndex x = ordinalToInt (x ^. asOrdinal)
 {-# INLINE toAxisIndex #-}
 
@@ -267,15 +272,15 @@ toAxisIndex x = ordinalToInt (x ^. asOrdinal)
 -- construction of an axis value still is. Every caller in this library
 -- obtains @i@ by dividing an in-range position, which establishes the bound
 -- by arithmetic.
-unsafeFromAxisIndex :: forall x. IsCoordLifted x => Int -> x
+unsafeFromAxisIndex :: forall x. (IsCoordLifted x) => Int -> x
 unsafeFromAxisIndex i = review asOrdinal (unsafeOrdinalUnchecked i)
 {-# INLINE unsafeFromAxisIndex #-}
 
 instance IsCoord Ordinal where
-    asOrdinal = id
-    zeroPosition = minBound
-    reifyCoord = reifyOrdinal
-    maxCoord = maxBound
+  asOrdinal = id
+  zeroPosition = minBound
+  reifyCoord = reifyOrdinal
+  maxCoord = maxBound
 
 -- | Enumerate all possible values of a coord, in order
 allCoordLike :: (1 <= n, IsCoord c, KnownNat n) => [c n]

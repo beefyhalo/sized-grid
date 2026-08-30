@@ -1,48 +1,51 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | A number in @[0, m)@, where @m@ is a type-level 'Nat'.
 module Data.Grid.Sized.Ordinal
-    ( Ordinal
-      -- * Conversion
-    , ordinalToInt
-    , ordinalToNum
-    , numToOrdinal
-    , unsafeOrdinal
-    , unsafeOrdinalUnchecked
-      -- * Sizes and evidence
-    , ordinalSize
-    , reifyOrdinal
-    , strengthenOrdinal
-    , weakenOrdinal
-    ) where
+  ( Ordinal,
 
-import           Data.Grid.Sized.Internal.Type (requiring)
+    -- * Conversion
+    ordinalToInt,
+    ordinalToNum,
+    numToOrdinal,
+    unsafeOrdinal,
+    unsafeOrdinalUnchecked,
 
-import           Control.DeepSeq         (NFData (..))
-import           Control.Monad           (unless)
-import           Data.Aeson
-import           Data.Hashable          (Hashable)
-import           Data.Ix                (Ix)
-import           Data.Primitive.Types    (Prim)
-import           Data.Proxy
-import           Data.Universe.Class (universe, universeF)
-import qualified Data.Universe.Class as U
-import qualified Data.Vector.Generic as VG
-import qualified Data.Vector.Generic.Mutable as VGM
-import qualified Data.Vector.Unboxed as VU
-import           GHC.TypeLits
-import           GHC.Natural             (naturalToWord)
-import qualified GHC.TypeNats            as TN
-import           System.Random
+    -- * Sizes and evidence
+    ordinalSize,
+    reifyOrdinal,
+    strengthenOrdinal,
+    weakenOrdinal,
+  )
+where
+
+import Control.DeepSeq (NFData (..))
+import Control.Monad (unless)
+import Data.Aeson
+import Data.Grid.Sized.Internal.Type (requiring)
+import Data.Hashable (Hashable)
+import Data.Ix (Ix)
+import Data.Primitive.Types (Prim)
+import Data.Proxy
+import Data.Universe.Class (universe, universeF)
+import Data.Universe.Class qualified as U
+import Data.Vector.Generic qualified as VG
+import Data.Vector.Generic.Mutable qualified as VGM
+import Data.Vector.Unboxed qualified as VU
+import GHC.Natural (naturalToWord)
+import GHC.TypeLits
+import GHC.TypeNats qualified as TN
+import System.Random
 
 -- | 'Ordinal' is not an instance of 'Num': most of that class (negate, in
 -- particular) would only be partial.
 newtype Ordinal (m :: Nat) = UnsafeOrdinal
-    { ordinalToInt :: Int
-        } deriving stock (Eq, Ord)
-            deriving newtype (Ix, Hashable, Prim)
+  { ordinalToInt :: Int
+  }
+  deriving stock (Eq, Ord)
+  deriving newtype (Ix, Hashable, Prim)
 
 -- | Nominal, not the phantom role GHC would infer: a phantom role would let
 -- @coerce@ forge an out-of-range value.
@@ -62,7 +65,7 @@ type role Ordinal nominal
 -- The truncation 'naturalToWord' does above @maxBound :: Word@ is the same
 -- truncation 'fromInteger' was already doing into 'Int', on sizes no 'Ordinal'
 -- could be indexed by anyway.
-ordinalSize :: forall m. KnownNat m => Int
+ordinalSize :: forall m. (KnownNat m) => Int
 ordinalSize = fromIntegral $ naturalToWord $ TN.natVal (Proxy @m)
 {-# INLINE ordinalSize #-}
 
@@ -105,10 +108,10 @@ ordinalSize = fromIntegral $ naturalToWord $ TN.natVal (Proxy @m)
 -- by @-fignore-asserts@, so no optimisation flag -- on this library or
 -- appended by a consumer's @cabal.project@ -- can silently turn it off. See
 -- the notes in the .cabal and the check in @tests-downstream@.
-unsafeOrdinal :: forall m. KnownNat m => Int -> Ordinal m
+unsafeOrdinal :: forall m. (KnownNat m) => Int -> Ordinal m
 unsafeOrdinal i
-    | i < 0 || i >= sz = preconditionViolated
-    | otherwise = UnsafeOrdinal i
+  | i < 0 || i >= sz = preconditionViolated
+  | otherwise = UnsafeOrdinal i
   where
     sz = ordinalSize @m
 {-# INLINE unsafeOrdinal #-}
@@ -146,44 +149,46 @@ unsafeOrdinalUnchecked = UnsafeOrdinal
 {-# INLINE unsafeOrdinalUnchecked #-}
 
 numToOrdinal ::
-       forall a m. (KnownNat m, Integral a)
-    => a
-    -> Maybe (Ordinal m)
+  forall a m.
+  (KnownNat m, Integral a) =>
+  a ->
+  Maybe (Ordinal m)
 numToOrdinal n
-    | i >= 0 && i < natVal (Proxy @m) = Just $ UnsafeOrdinal $ fromInteger i
-    | otherwise = Nothing
+  | i >= 0 && i < natVal (Proxy @m) = Just $ UnsafeOrdinal $ fromInteger i
+  | otherwise = Nothing
   where
     -- Via 'Integer' rather than 'fromIntegral' straight to 'Int': @a@ may be
     -- wider than 'Int', and a wrapping conversion would turn an out-of-range
     -- input into an in-range one.
     i = toInteger n
 
-ordinalToNum :: Num a => Ordinal m -> a
+ordinalToNum :: (Num a) => Ordinal m -> a
 ordinalToNum = fromIntegral . ordinalToInt
 {-# INLINE ordinalToNum #-}
 
 -- | The value is handed to the continuation as a required type argument, so
 -- the caller writes @reifyOrdinal o $ \\m -> ...@ and @m@ is a type.
 reifyOrdinal ::
-       forall n x. KnownNat n
-    => Ordinal n
-    -> (forall m -> (KnownNat m, m + 1 <= n) => x)
-    -> x
+  forall n x.
+  (KnownNat n) =>
+  Ordinal n ->
+  (forall m -> (KnownNat m, m + 1 <= n) => x) ->
+  x
 reifyOrdinal (UnsafeOrdinal i) func =
-    case someNatVal (toInteger i) of
-        Nothing -> invariantViolated i (ordinalSize @n)
-        Just (SomeNat (_ :: Proxy k)) ->
-            case cmpNat (Proxy @(k + 1)) (Proxy @n) of
-                LTI -> func k
-                EQI -> func k
-                GTI -> invariantViolated i (ordinalSize @n)
+  case someNatVal (toInteger i) of
+    Nothing -> invariantViolated i (ordinalSize @n)
+    Just (SomeNat (_ :: Proxy k)) ->
+      case cmpNat (Proxy @(k + 1)) (Proxy @n) of
+        LTI -> func k
+        EQI -> func k
+        GTI -> invariantViolated i (ordinalSize @n)
 
 -- | The 'unsafeOrdinal' failure branch. Nullary on purpose: see the note
 -- there. It cannot name the index or the size, and that is the price.
 preconditionViolated :: a
 preconditionViolated =
-    errorWithoutStackTrace
-        "Data.Grid.Sized.Ordinal: unsafeOrdinal was called with its precondition violated. Ordinals must satisfy 0 <= i < m."
+  errorWithoutStackTrace
+    "Data.Grid.Sized.Ordinal: unsafeOrdinal was called with its precondition violated. Ordinals must satisfy 0 <= i < m."
 {-# NOINLINE preconditionViolated #-}
 
 -- | An 'Ordinal' that is already out of range, discovered later by
@@ -193,106 +198,112 @@ preconditionViolated =
 -- values: 'reifyOrdinal' is not on any hot path.
 invariantViolated :: Int -> Int -> a
 invariantViolated i m =
-    error $
-    "Data.Grid.Sized.Ordinal: " ++
-    show i ++
-    " is not a valid Ordinal " ++
-    show m ++
-    ". Ordinals must satisfy 0 <= i < m; this one was built by unsafeOrdinal " ++
-    "with its precondition violated."
+  error $
+    "Data.Grid.Sized.Ordinal: "
+      ++ show i
+      ++ " is not a valid Ordinal "
+      ++ show m
+      ++ ". Ordinals must satisfy 0 <= i < m; this one was built by unsafeOrdinal "
+      ++ "with its precondition violated."
 {-# NOINLINE invariantViolated #-}
 
 -- | Always succeeds: @i < n@ and @n <= m@ give @i < m@.
 strengthenOrdinal :: forall n m. (KnownNat m, n <= m) => Ordinal n -> Ordinal m
 strengthenOrdinal (UnsafeOrdinal i) =
-    requiring @(KnownNat m, n <= m) $ UnsafeOrdinal i
+  requiring @(KnownNat m, n <= m) $ UnsafeOrdinal i
 
-weakenOrdinal :: KnownNat m => Ordinal n -> Maybe (Ordinal m)
+weakenOrdinal :: (KnownNat m) => Ordinal n -> Maybe (Ordinal m)
 weakenOrdinal = numToOrdinal . ordinalToInt
 
 instance NFData (Ordinal m) where
-    rnf = rnf . ordinalToInt
+  rnf = rnf . ordinalToInt
 
-instance KnownNat m => Show (Ordinal m) where
-    show o =
-        "Ordinal (" ++
-        show (ordinalToInt o) ++ "/" ++ show (natVal (Proxy @m)) ++ ")"
+instance (KnownNat m) => Show (Ordinal m) where
+  show o =
+    "Ordinal ("
+      ++ show (ordinalToInt o)
+      ++ "/"
+      ++ show (natVal (Proxy @m))
+      ++ ")"
 
 instance (1 <= m, KnownNat m) => Random (Ordinal m) where
-    randomR (mi, ma) g =
-        let (n, g') = randomR (ordinalToInt mi, ordinalToInt ma) g
-        in (unsafeOrdinal n, g')
-    random = randomR (minBound, maxBound)
+  randomR (mi, ma) g =
+    let (n, g') = randomR (ordinalToInt mi, ordinalToInt ma) g
+     in (unsafeOrdinal n, g')
+  random = randomR (minBound, maxBound)
 
 instance (1 <= m, KnownNat m) => Bounded (Ordinal m) where
-    minBound = requiring @(1 <= m) $ UnsafeOrdinal 0
-    maxBound = UnsafeOrdinal $ ordinalSize @m - 1
+  minBound = requiring @(1 <= m) $ UnsafeOrdinal 0
+  maxBound = UnsafeOrdinal $ ordinalSize @m - 1
 
 instance (1 <= m, KnownNat m) => Enum (Ordinal m) where
-    toEnum n =
-        case numToOrdinal n of
-            Just o -> o
-            Nothing ->
-                error $
-                "toEnum: " ++
-                show n ++
-                " is out of range for Ordinal " ++ show (natVal (Proxy @m))
-    fromEnum = ordinalToInt
-    -- Overridden because the default 'enumFrom' counts up from @fromEnum x@
-    -- forever, walking off the end and calling 'error'.
-    enumFromTo a b = map UnsafeOrdinal [ordinalToInt a .. ordinalToInt b]
-    enumFromThenTo a b c =
-        map UnsafeOrdinal [ordinalToInt a,ordinalToInt b .. ordinalToInt c]
-    enumFrom a = enumFromTo a maxBound
-    enumFromThen a b
-        | ordinalToInt b >= ordinalToInt a = enumFromThenTo a b maxBound
-        | otherwise = enumFromThenTo a b minBound
+  toEnum n =
+    case numToOrdinal n of
+      Just o -> o
+      Nothing ->
+        error $
+          "toEnum: "
+            ++ show n
+            ++ " is out of range for Ordinal "
+            ++ show (natVal (Proxy @m))
+  fromEnum = ordinalToInt
+
+  -- Overridden because the default 'enumFrom' counts up from @fromEnum x@
+  -- forever, walking off the end and calling 'error'.
+  enumFromTo a b = map UnsafeOrdinal [ordinalToInt a .. ordinalToInt b]
+  enumFromThenTo a b c =
+    map UnsafeOrdinal [ordinalToInt a, ordinalToInt b .. ordinalToInt c]
+  enumFrom a = enumFromTo a maxBound
+  enumFromThen a b
+    | ordinalToInt b >= ordinalToInt a = enumFromThenTo a b maxBound
+    | otherwise = enumFromThenTo a b minBound
 
 instance (1 <= m, KnownNat m) => U.Universe (Ordinal m) where
-    universe = [minBound .. maxBound]
+  universe = [minBound .. maxBound]
 
 instance (1 <= m, KnownNat m) => U.Finite (Ordinal m) where
-    universeF = [minBound .. maxBound]
+  universeF = [minBound .. maxBound]
 
-instance KnownNat m => ToJSON (Ordinal m) where
-    toJSON o = object ["size" .= natVal (Proxy @m), "value" .= ordinalToInt o]
+instance (KnownNat m) => ToJSON (Ordinal m) where
+  toJSON o = object ["size" .= natVal (Proxy @m), "value" .= ordinalToInt o]
 
 newtype instance VU.MVector s (Ordinal m) = MV_Ordinal (VU.MVector s Int)
+
 newtype instance VU.Vector (Ordinal m) = V_Ordinal (VU.Vector Int)
 
 instance VGM.MVector VU.MVector (Ordinal m) where
-    basicLength (MV_Ordinal v) = VGM.basicLength v
-    {-# INLINE basicLength #-}
-    basicUnsafeSlice i n (MV_Ordinal v) = MV_Ordinal (VGM.basicUnsafeSlice i n v)
-    {-# INLINE basicUnsafeSlice #-}
-    basicOverlaps (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicOverlaps v1 v2
-    {-# INLINE basicOverlaps #-}
-    basicUnsafeNew n = MV_Ordinal <$> VGM.basicUnsafeNew n
-    {-# INLINE basicUnsafeNew #-}
-    basicUnsafeRead (MV_Ordinal v) i = UnsafeOrdinal <$> VGM.basicUnsafeRead v i
-    {-# INLINE basicUnsafeRead #-}
-    basicUnsafeWrite (MV_Ordinal v) i (UnsafeOrdinal x) = VGM.basicUnsafeWrite v i x
-    {-# INLINE basicUnsafeWrite #-}
-    basicClear (MV_Ordinal v) = VGM.basicClear v
-    {-# INLINE basicClear #-}
-    basicUnsafeCopy (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicUnsafeCopy v1 v2
-    {-# INLINE basicUnsafeCopy #-}
-    basicUnsafeMove (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicUnsafeMove v1 v2
-    {-# INLINE basicUnsafeMove #-}
-    basicInitialize (MV_Ordinal v) = VGM.basicInitialize v
-    {-# INLINE basicInitialize #-}
+  basicLength (MV_Ordinal v) = VGM.basicLength v
+  {-# INLINE basicLength #-}
+  basicUnsafeSlice i n (MV_Ordinal v) = MV_Ordinal (VGM.basicUnsafeSlice i n v)
+  {-# INLINE basicUnsafeSlice #-}
+  basicOverlaps (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicOverlaps v1 v2
+  {-# INLINE basicOverlaps #-}
+  basicUnsafeNew n = MV_Ordinal <$> VGM.basicUnsafeNew n
+  {-# INLINE basicUnsafeNew #-}
+  basicUnsafeRead (MV_Ordinal v) i = UnsafeOrdinal <$> VGM.basicUnsafeRead v i
+  {-# INLINE basicUnsafeRead #-}
+  basicUnsafeWrite (MV_Ordinal v) i (UnsafeOrdinal x) = VGM.basicUnsafeWrite v i x
+  {-# INLINE basicUnsafeWrite #-}
+  basicClear (MV_Ordinal v) = VGM.basicClear v
+  {-# INLINE basicClear #-}
+  basicUnsafeCopy (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicUnsafeCopy v1 v2
+  {-# INLINE basicUnsafeCopy #-}
+  basicUnsafeMove (MV_Ordinal v1) (MV_Ordinal v2) = VGM.basicUnsafeMove v1 v2
+  {-# INLINE basicUnsafeMove #-}
+  basicInitialize (MV_Ordinal v) = VGM.basicInitialize v
+  {-# INLINE basicInitialize #-}
 
 instance VG.Vector VU.Vector (Ordinal m) where
-    basicUnsafeFreeze (MV_Ordinal v) = V_Ordinal <$> VG.basicUnsafeFreeze v
-    {-# INLINE basicUnsafeFreeze #-}
-    basicUnsafeThaw (V_Ordinal v) = MV_Ordinal <$> VG.basicUnsafeThaw v
-    {-# INLINE basicUnsafeThaw #-}
-    basicLength (V_Ordinal v) = VG.basicLength v
-    {-# INLINE basicLength #-}
-    basicUnsafeSlice i n (V_Ordinal v) = V_Ordinal (VG.basicUnsafeSlice i n v)
-    {-# INLINE basicUnsafeSlice #-}
-    basicUnsafeIndexM (V_Ordinal v) i = UnsafeOrdinal <$> VG.basicUnsafeIndexM v i
-    {-# INLINE basicUnsafeIndexM #-}
+  basicUnsafeFreeze (MV_Ordinal v) = V_Ordinal <$> VG.basicUnsafeFreeze v
+  {-# INLINE basicUnsafeFreeze #-}
+  basicUnsafeThaw (V_Ordinal v) = MV_Ordinal <$> VG.basicUnsafeThaw v
+  {-# INLINE basicUnsafeThaw #-}
+  basicLength (V_Ordinal v) = VG.basicLength v
+  {-# INLINE basicLength #-}
+  basicUnsafeSlice i n (V_Ordinal v) = V_Ordinal (VG.basicUnsafeSlice i n v)
+  {-# INLINE basicUnsafeSlice #-}
+  basicUnsafeIndexM (V_Ordinal v) i = UnsafeOrdinal <$> VG.basicUnsafeIndexM v i
+  {-# INLINE basicUnsafeIndexM #-}
 
 -- | Unbox instance for storing 'Ordinal' in unboxed vectors.
 -- 'Ordinal' is a newtype over 'Int', which is already 'Unbox', so no new
@@ -312,22 +323,25 @@ instance VU.Unbox (Ordinal m)
 -- type-level size @m@ is still nominal ('Data.Primitive.Types.readByteArray
 -- (arr :: ByteArray) (i :: Int) :: Ordinal m' does not change the stored
 -- integer), so only its own construction code can ensure the invariant.
-instance KnownNat m => FromJSON (Ordinal m) where
-    parseJSON =
-        withObject "Ordinal" $ \v -> do
-            size <- v .: "size"
-            let m = natVal (Proxy @m)
-            unless (size == m) $
-                fail $
-                "Ordinal: expected size " ++ show m ++ ", got " ++ show size
-            value <- v .: "value"
-            case numToOrdinal @Integer value of
-                Just o -> return o
-                Nothing ->
-                    fail $
-                    "Ordinal: value " ++
-                    show value ++ " is not in [0, " ++ show m ++ ")"
+instance (KnownNat m) => FromJSON (Ordinal m) where
+  parseJSON =
+    withObject "Ordinal" $ \v -> do
+      size <- v .: "size"
+      let m = natVal (Proxy @m)
+      unless (size == m) $
+        fail $
+          "Ordinal: expected size " ++ show m ++ ", got " ++ show size
+      value <- v .: "value"
+      case numToOrdinal @Integer value of
+        Just o -> return o
+        Nothing ->
+          fail $
+            "Ordinal: value "
+              ++ show value
+              ++ " is not in [0, "
+              ++ show m
+              ++ ")"
 
-instance KnownNat m => ToJSONKey (Ordinal m)
+instance (KnownNat m) => ToJSONKey (Ordinal m)
 
-instance KnownNat m => FromJSONKey (Ordinal m)
+instance (KnownNat m) => FromJSONKey (Ordinal m)

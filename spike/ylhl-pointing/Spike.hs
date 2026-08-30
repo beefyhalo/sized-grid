@@ -1,6 +1,13 @@
-{-# LANGUAGE AllowAmbiguousTypes, DataKinds, FlexibleContexts, FlexibleInstances,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeApplications,
-             TypeFamilies, TypeOperators, UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists -Wno-missing-signatures #-}
 
 -- | Spike for sized-grid-ylhl: does a /checked/ walker step exist, and does it
@@ -32,71 +39,78 @@
 -- how to state them.
 module Spike where
 
-import           Data.Grid.Sized
-import           Data.Grid.Sized.Unsafe (unsafeGridFromVector)
-
-import           Control.Lens           (review, view)
-import qualified Data.Vector            as V
-import           Generics.SOP           (NP (..))
-import           GHC.TypeLits           (KnownNat)
+import Control.Lens (review, view)
+import Data.Grid.Sized
+import Data.Grid.Sized.Unsafe (unsafeGridFromVector)
+import qualified Data.Vector as V
+import GHC.TypeLits (KnownNat)
+import Generics.SOP (NP (..))
 
 -- | sized-grid-i0ob.2's family: one signed step count per axis, no @Diff@
 -- anywhere, so it reduces on @Ordinal@.
 type family MapStep cs where
-  MapStep '[]       = '[]
+  MapStep '[] = '[]
   MapStep (x ': xs) = Int ': MapStep xs
 
 -- | What 'Data.Grid.Sized.Coord.Transform.TransportCoordList' would be if it
 -- were checked. Note the superclass: 'IsCoordList', not @AffineCoordList@.
-class IsCoordList cs => CheckedTransport cs where
-    posStepT :: Int -> NP I (MapStep cs) -> Maybe (Int, NP I (MapStep cs))
+class (IsCoordList cs) => CheckedTransport cs where
+  posStepT :: Int -> NP I (MapStep cs) -> Maybe (Int, NP I (MapStep cs))
 
 instance CheckedTransport '[] where
-    posStepT p Nil = Just (p, Nil)
+  posStepT p Nil = Just (p, Nil)
 
-instance (IsCoordLifted x, CheckedTransport xs, IsCoordList (x ': xs)) =>
-         CheckedTransport (x ': xs) where
-    posStepT p (I d :* ds) =
-        case p `quotRem` coordListSize @xs of
-            (i, r) -> do
-                let x = unsafeFromAxisIndex @x i
-                x' <- offsetIsCoord @(CoordContainer x) x d
-                (r', ds') <- posStepT @xs r ds
-                pure
-                    ( toAxisIndex x' * coordListSize @xs + r'
-                    , I (if axisFrameFlipsIsCoord @(CoordContainer x) x d
-                             then negate d
-                             else d) :* ds')
+instance
+  (IsCoordLifted x, CheckedTransport xs, IsCoordList (x ': xs)) =>
+  CheckedTransport (x ': xs)
+  where
+  posStepT p (I d :* ds) =
+    case p `quotRem` coordListSize @xs of
+      (i, r) -> do
+        let x = unsafeFromAxisIndex @x i
+        x' <- offsetIsCoord @(CoordContainer x) x d
+        (r', ds') <- posStepT @xs r ds
+        pure
+          ( toAxisIndex x' * coordListSize @xs + r',
+            I
+              ( if axisFrameFlipsIsCoord @(CoordContainer x) x d
+                  then negate d
+                  else d
+              )
+              :* ds'
+          )
 
 -- | The checked counterpart of 'Data.Grid.Sized.Coord.transportCoord'.
 transportCoordMaybe ::
-       forall cs. CheckedTransport cs
-    => Coord cs
-    -> Delta (MapStep cs)
-    -> Maybe (Coord cs, Delta (MapStep cs))
+  forall cs.
+  (CheckedTransport cs) =>
+  Coord cs ->
+  Delta (MapStep cs) ->
+  Maybe (Coord cs, Delta (MapStep cs))
 transportCoordMaybe c (Delta d) =
-    (\(p, d') -> (unsafeCoordFromPosition p, Delta d')) <$>
-    posStepT @cs (coordPosition c) d
+  (\(p, d') -> (unsafeCoordFromPosition p, Delta d'))
+    <$> posStepT @cs (coordPosition c) d
 
 -- | 'Data.Grid.Sized.Focused.Walker' with the heading indexed by 'MapStep'.
 data W cs a = W
-    { wGrid    :: FocusedGrid cs a
-    , wHeading :: Delta (MapStep cs)
-    }
+  { wGrid :: FocusedGrid cs a,
+    wHeading :: Delta (MapStep cs)
+  }
 
 -- | The checked counterpart of 'Data.Grid.Sized.Focused.stepWalker'.
-stepWithin :: CheckedTransport cs => W cs a -> Maybe (W cs a)
+stepWithin :: (CheckedTransport cs) => W cs a -> Maybe (W cs a)
 stepWithin (W (FocusedGrid g p) h) =
-    (\(p', h') -> W (FocusedGrid g p') h') <$> transportCoordMaybe p h
+  (\(p', h') -> W (FocusedGrid g p') h') <$> transportCoordMaybe p h
 
 mk :: (IsCoord c, KnownNat n) => Int -> c n
 mk = review asOrdinal . unsafeOrdinal
 
 -- | Row 1, column 0, heading @(0, 1)@ -- pointing along the second axis.
 atRow1 ::
-       forall c n. (IsCoord c, KnownNat n, CheckedTransport '[c n, c n])
-    => Grid '[c n, c n] Int
-    -> W '[c n, c n] Int
+  forall c n.
+  (IsCoord c, KnownNat n, CheckedTransport '[c n, c n]) =>
+  Grid '[c n, c n] Int ->
+  W '[c n, c n] Int
 atRow1 g = W (FocusedGrid g (mk 1 :| mk 0 :| EmptyCoord)) (0 :^ 1 :^ NoDelta)
 
 -- | Claim 2: this type is inhabited. @Walker '[Ordinal 3, Ordinal 3] Int@ is
@@ -111,7 +125,7 @@ ordinalWalk = map valueAt (trail (atRow1 board))
     board = unsafeGridFromVector (V.fromList [0 .. 8]) :: Grid '[Ordinal 3, Ordinal 3] Int
     valueAt (W (FocusedGrid g p) _) = indexGrid g p
 
-trail :: CheckedTransport cs => W cs a -> [W cs a]
+trail :: (CheckedTransport cs) => W cs a -> [W cs a]
 trail w = w : maybe [] trail (stepWithin w)
 
 -- | Claim 1, and the thing the spike found: what a checked step means on each
@@ -144,16 +158,16 @@ trail w = w : maybe [] trail (stepWithin w)
 -- real operation needs no fold of its own.
 policyWalks :: IO ()
 policyWalks = do
-    report "Ordinal   " (board :: Grid '[Ordinal 5, Ordinal 5] Int)
-    report "Clamped   " (board :: Grid '[Clamped 5, Clamped 5] Int)
-    report "Periodic  " (board :: Grid '[Periodic 5, Periodic 5] Int)
-    report "Reflective" (board :: Grid '[Reflective 5, Reflective 5] Int)
-    report "Reflect101" (board :: Grid '[Reflect101 5, Reflect101 5] Int)
+  report "Ordinal   " (board :: Grid '[Ordinal 5, Ordinal 5] Int)
+  report "Clamped   " (board :: Grid '[Clamped 5, Clamped 5] Int)
+  report "Periodic  " (board :: Grid '[Periodic 5, Periodic 5] Int)
+  report "Reflective" (board :: Grid '[Reflective 5, Reflective 5] Int)
+  report "Reflect101" (board :: Grid '[Reflect101 5, Reflect101 5] Int)
   where
     board :: Grid '[c 5, c 5] Int
     board = unsafeGridFromVector (V.fromList [0 .. 24])
     report name g =
-        putStrLn (name ++ ": " ++ show (take 9 (map step (trail (atRow1 g)))))
+      putStrLn (name ++ ": " ++ show (take 9 (map step (trail (atRow1 g)))))
     step w = (posOf w, let (_ :^ dy :^ NoDelta) = wHeading w in dy)
     posOf (W (FocusedGrid _ (a :| b :| EmptyCoord)) _) =
-        (ordinalToInt (view asOrdinal a), ordinalToInt (view asOrdinal b))
+      (ordinalToInt (view asOrdinal a), ordinalToInt (view asOrdinal b))

@@ -2,16 +2,16 @@
 -- deliberately ill-typed use of the API, and 'assertCompileFails' shells out
 -- to GHC to check that it is rejected with the expected diagnostic.
 module Test.CompileFail
-  ( compileFailTests
-  ) where
+  ( compileFailTests,
+  )
+where
 
-import           Control.Exception     (IOException, try)
-import           Data.List             (isInfixOf)
-import           System.Exit           (ExitCode (..))
-import           System.Process        (readProcessWithExitCode)
-
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import Control.Exception (IOException, try)
+import Data.List (isInfixOf)
+import System.Exit (ExitCode (..))
+import System.Process (readProcessWithExitCode)
+import Test.Tasty
+import Test.Tasty.HUnit
 
 -- | @-isrc@ compiles straight from source, bypassing cabal's own flag
 -- plumbing, so the extensions and plugins are spelled out explicitly here.
@@ -26,20 +26,20 @@ import           Test.Tasty.HUnit
 -- library, so this can't drift from build-depends again.
 ghcFlags :: [String]
 ghcFlags =
-  [ "-fno-code"
-  , "-isrc"
-  , "-fplugin=GHC.TypeLits.Normalise"
-  , "-fplugin=GHC.TypeLits.KnownNat.Solver"
-  , "-XGHC2024"
-  , "-XDefaultSignatures"
-  , "-XFunctionalDependencies"
-  , "-XPatternSynonyms"
-  , "-XRequiredTypeArguments"
-  , "-XTypeAbstractions"
-  , "-XTypeFamilies"
-  , "-XUndecidableInstances"
-  , "-XUndecidableSuperClasses"
-  , "-XViewPatterns"
+  [ "-fno-code",
+    "-isrc",
+    "-fplugin=GHC.TypeLits.Normalise",
+    "-fplugin=GHC.TypeLits.KnownNat.Solver",
+    "-XGHC2024",
+    "-XDefaultSignatures",
+    "-XFunctionalDependencies",
+    "-XPatternSynonyms",
+    "-XRequiredTypeArguments",
+    "-XTypeAbstractions",
+    "-XTypeFamilies",
+    "-XUndecidableInstances",
+    "-XUndecidableSuperClasses",
+    "-XViewPatterns"
   ]
 
 -- | @cabal exec@ re-solves rather than reading back the plan that built this
@@ -68,7 +68,10 @@ cabalFlags = ["--enable-tests", "--enable-benchmarks"]
 assertCompileFails :: FilePath -> String -> Assertion
 assertCompileFails file expectedSubstring = do
   let args =
-        ["exec"] ++ cabalFlags ++ ["ghc", "--"] ++ ghcFlags
+        ["exec"]
+          ++ cabalFlags
+          ++ ["ghc", "--"]
+          ++ ghcFlags
           ++ ["tests/compile-fail/" ++ file]
   cabalResult <- try (readProcessWithExitCode "cabal" args "")
   (code, _out, err) <- case cabalResult of
@@ -88,39 +91,39 @@ compileFailTests =
   testGroup
     "Misuse the compiler now rejects"
     [ testCase "takeGrid past the source length" $
-      assertCompileFails "TakeGridTooBig.hs" "Cannot satisfy: 9 <= 3"
-    , testCase "dropGrid past the source length" $
-      assertCompileFails "DropGridTooBig.hs" "Cannot satisfy: 9 <= 3"
-    , testCase "splitHigherDim remainder annotated as anything but x - y" $
-      assertCompileFails "SplitHigherDimWrongRemainder.hs" "Couldn't match"
-    , testCase "shrinkGrid with a window that does not fit" $
-      assertCompileFails "ShrinkGridWindowTooBig.hs" "Cannot satisfy: 6 <= 4"
+        assertCompileFails "TakeGridTooBig.hs" "Cannot satisfy: 9 <= 3",
+      testCase "dropGrid past the source length" $
+        assertCompileFails "DropGridTooBig.hs" "Cannot satisfy: 9 <= 3",
+      testCase "splitHigherDim remainder annotated as anything but x - y" $
+        assertCompileFails "SplitHigherDimWrongRemainder.hs" "Couldn't match",
+      testCase "shrinkGrid with a window that does not fit" $
+        assertCompileFails "ShrinkGridWindowTooBig.hs" "Cannot satisfy: 6 <= 4",
       -- sized-grid-mbh0: a restriction destroys the boundary policy, so a
       -- window is Ordinal-axed whatever the source's axis type was. The
       -- substring names both halves of the mismatch, because a regression
       -- that made the window's axis free again would let the snippet compile
       -- rather than fail differently.
-    , testCase "a window annotated with the source's boundary policy" $
-      assertCompileFails
-        "WindowKeepsSourcePolicy.hs"
-        "Couldn't match type: Ordinal 3"
+      testCase "a window annotated with the source's boundary policy" $
+        assertCompileFails
+          "WindowKeepsSourcePolicy.hs"
+          "Couldn't match type: Ordinal 3",
       -- sized-grid-pnws: the same rule over the narrowing half of the shape
       -- algebra. takeGrid stands in for dropGrid, sliceGrid and
       -- splitHigherDim, which share its result type by construction.
-    , testCase "takeGrid annotated with the source's boundary policy" $
-      assertCompileFails
-        "RestrictionKeepsSourcePolicy.hs"
-        "Couldn't match type: Ordinal 3"
-    , testCase "walkPathTotal on a coord with a walled axis" $
-      assertCompileFails
-        "WalkPathTotalNotBoundaryless.hs"
-        "No instance for \8216Boundaryless (Clamped 5)\8217"
+      testCase "takeGrid annotated with the source's boundary policy" $
+        assertCompileFails
+          "RestrictionKeepsSourcePolicy.hs"
+          "Couldn't match type: Ordinal 3",
+      testCase "walkPathTotal on a coord with a walled axis" $
+        assertCompileFails
+          "WalkPathTotalNotBoundaryless.hs"
+          "No instance for \8216Boundaryless (Clamped 5)\8217",
       -- sized-grid-adr.16: a 'Coord' is now a bare 'Int', so nothing in its
       -- representation mentions @cs@ and the role annotation is the only thing
       -- keeping @coerce@ from forging an out-of-range coordinate. The
       -- substring is deliberately the unquoted half of the diagnostic: the
       -- snippet has exactly one way to fail, and a role that regressed to
       -- phantom would compile cleanly rather than fail differently.
-    , testCase "coerce a Coord between axis sizes (the nominal role)" $
-      assertCompileFails "CoordCoerceAcrossSizes.hs" "Couldn't match type"
+      testCase "coerce a Coord between axis sizes (the nominal role)" $
+        assertCompileFails "CoordCoerceAcrossSizes.hs" "Couldn't match type"
     ]

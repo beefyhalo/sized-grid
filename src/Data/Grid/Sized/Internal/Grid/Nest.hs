@@ -32,21 +32,24 @@
 -- @splitVectorBySize@, brings the regression
 -- straight back.
 module Data.Grid.Sized.Internal.Grid.Nest
-  ( CollapseGrid
-  , nestByShape
-  , flattenByShape
-  , nestedToJSON
-  , nestedParseJSON
-  ) where
+  ( CollapseGrid,
+    nestByShape,
+    flattenByShape,
+    nestedToJSON,
+    nestedParseJSON,
+  )
+where
 
-import           Data.Grid.Sized.Coord (AllSizedKnown (..), MaxCoordSize,
-                                        SizeProof (..))
-
-import           Data.Aeson
-import           Data.Aeson.Types      (Parser)
-import           Data.Proxy            (Proxy (..))
-import qualified Data.Vector           as V
-import qualified GHC.TypeLits          as GHC
+import Data.Aeson
+import Data.Aeson.Types (Parser)
+import Data.Grid.Sized.Coord
+  ( AllSizedKnown (..),
+    MaxCoordSize,
+    SizeProof (..),
+  )
+import Data.Proxy (Proxy (..))
+import Data.Vector qualified as V
+import GHC.TypeLits qualified as GHC
 
 -- | Given a grid type, give back a series of nested lists repesenting the grid. The lists will have a number of layers equal to the dimensionality.
 type family CollapseGrid cs a where
@@ -63,26 +66,27 @@ type family CollapseGrid cs a where
 -- took @collapseGrid@ from 83% above baseline back to level.
 splitBoxedBySize :: Int -> V.Vector a -> [V.Vector a]
 splitBoxedBySize n v
-  | n <= 0    = error $ "splitBoxedBySize: chunk size must be positive, got " ++ show n
-  | otherwise = [ V.slice i (min n (len - i)) v | i <- [0, n .. len - 1] ]
+  | n <= 0 = error $ "splitBoxedBySize: chunk size must be positive, got " ++ show n
+  | otherwise = [V.slice i (min n (len - i)) v | i <- [0, n .. len - 1]]
   where
     len = V.length v
 
 -- | The axis-list recursion of @collapseGrid@, at a concrete boxed vector.
-nestByShape :: forall cs a. AllSizedKnown cs => V.Vector a -> CollapseGrid cs a
+nestByShape :: forall cs a. (AllSizedKnown cs) => V.Vector a -> CollapseGrid cs a
 nestByShape v =
   case sizeProof @cs of
     SizeNil -> v V.! 0
     SizeCons @_ @_ @rest ->
       map (nestByShape @rest) $
-      splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
+        splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
 
 -- | The axis-list recursion of @gridFromList@, flattening to row-major order
 -- and checking the length at every dimension on the way.
 flattenByShape ::
-     forall cs a. AllSizedKnown cs
-  => CollapseGrid cs a
-  -> Maybe (V.Vector a)
+  forall cs a.
+  (AllSizedKnown cs) =>
+  CollapseGrid cs a ->
+  Maybe (V.Vector a)
 flattenByShape cg =
   case sizeProof @cs of
     SizeNil -> Just $ V.singleton cg
@@ -95,9 +99,10 @@ flattenByShape cg =
 -- for the reason given under \"Recursing down the axis list\": the recursion
 -- must not carry the vector parameter.
 nestedToJSON ::
-     forall cs a. (AllSizedKnown cs, ToJSON a)
-  => V.Vector a
-  -> Value
+  forall cs a.
+  (AllSizedKnown cs, ToJSON a) =>
+  V.Vector a ->
+  Value
 -- The last axis is a case of its own, and that is sized-grid-adr.12: aeson's
 -- own @'ToJSON' ('V.Vector' a)@ turns the innermost row into an 'Array'
 -- directly. Without it the general branch reaches this row too, and splits it
@@ -112,18 +117,19 @@ nestedToJSON v =
     SizeCons @_ @_ @rest ->
       case sizeProof @rest of
         SizeNil -> toJSON v
-        SizeCons{} ->
+        SizeCons {} ->
           toJSON $
-          map (nestedToJSON @rest) $
-          splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
+            map (nestedToJSON @rest) $
+              splitBoxedBySize (fromIntegral $ GHC.natVal (Proxy @(MaxCoordSize rest))) v
 
 -- | 'parseJSON' for a grid, producing the flat row-major vector. Separate from
 -- the instance so the recursion does not carry the vector parameter; see
 -- \"Recursing down the axis list\".
 nestedParseJSON ::
-     forall cs a. (AllSizedKnown cs, FromJSON a)
-  => Value
-  -> Parser (V.Vector a)
+  forall cs a.
+  (AllSizedKnown cs, FromJSON a) =>
+  Value ->
+  Parser (V.Vector a)
 -- The last axis is a case of its own, for the reason given on 'nestedToJSON'
 -- and with the same measurement behind it (sized-grid-adr.12). At the
 -- innermost row aeson's own @'FromJSON' [a]@ parses the elements in one pass;
@@ -152,14 +158,14 @@ nestedParseJSON val =
           vals :: [Value] <- parseJSON val
           checkLength @n (length vals)
           V.fromList <$> traverse parseJSON vals
-        SizeCons{} -> do
+        SizeCons {} -> do
           vals :: [Value] <- parseJSON val
           checkLength @n (length vals)
           V.concat <$> traverse (nestedParseJSON @rest) vals
 
 -- | The per-dimension length check both branches of 'nestedParseJSON' share:
 -- @n@ elements at this axis, or a parse failure naming both counts.
-checkLength :: forall n. GHC.KnownNat n => Int -> Parser ()
+checkLength :: forall n. (GHC.KnownNat n) => Int -> Parser ()
 checkLength got
   | got == expected = pure ()
   | otherwise =

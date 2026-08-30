@@ -36,39 +36,49 @@
 -- copy for it; it is here so the API decision can see the price of purity.
 module ParExec
   ( -- * Gather-shaped, against 'Data.Grid.Sized.Stencil.stencilGrid'
-    gridSeq
-  , gridSeqInline
-  , gridSeqStrict
-  , gridPar
-  , gridParSpark
+    gridSeq,
+    gridSeqInline,
+    gridSeqStrict,
+    gridPar,
+    gridParSpark,
+
     -- * Fold-shaped, against 'Data.Grid.Sized.Stencil.stencilFoldGrid'
-  , foldSeq
-  , foldSeqInline
-  , foldSeqStrict
-  , foldPar
-  , foldParSpark
+    foldSeq,
+    foldSeqInline,
+    foldSeqStrict,
+    foldPar,
+    foldParSpark,
+
     -- * Shared plumbing
-  , chunkRanges
-  ) where
+    chunkRanges,
+  )
+where
 
-import           Data.Grid.Sized              (GridOf, gridVector)
-import           Data.Grid.Sized.Stencil      (Stencil, stencilPositions,
-                                               stencilWidth)
-import           Data.Grid.Sized.Unsafe       (unsafeGridFromVector)
-
-import           Control.Concurrent           (forkOn, getNumCapabilities)
-import           Control.Concurrent.MVar      (newEmptyMVar, putMVar, takeMVar)
-import           Control.Exception            (SomeException, evaluate, throwIO,
-                                               try)
-import           Control.Monad                (forM)
-import           Control.Monad.ST             (runST)
-import           GHC.Conc                     (numCapabilities, par, pseq)
-import qualified Data.Vector.Generic          as VG
-import qualified Data.Vector.Generic.Mutable  as VGM
-import qualified Data.Vector.Unboxed          as VU
-import           System.IO.Unsafe             (unsafePerformIO)
+import Control.Concurrent (forkOn, getNumCapabilities)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Exception
+  ( SomeException,
+    evaluate,
+    throwIO,
+    try,
+  )
+import Control.Monad (forM)
+import Control.Monad.ST (runST)
+import Data.Grid.Sized (GridOf, gridVector)
+import Data.Grid.Sized.Stencil
+  ( Stencil,
+    stencilPositions,
+    stencilWidth,
+  )
+import Data.Grid.Sized.Unsafe (unsafeGridFromVector)
+import Data.Vector.Generic qualified as VG
+import Data.Vector.Generic.Mutable qualified as VGM
+import Data.Vector.Unboxed qualified as VU
+import GHC.Conc (numCapabilities, par, pseq)
+import System.IO.Unsafe (unsafePerformIO)
 
 -- * Reading a row
+
 --
 -- Copied from "Data.Grid.Sized.Stencil" rather than imported: both are
 -- private to it, and a spike that reimplemented them differently would be
@@ -83,37 +93,37 @@ rowSpan w i = (i * w, (i + 1) * w)
 
 -- | Row @i@ of the table, as the elements it names. Lazy in the tail, ending
 -- at the first sentinel.
-gatherRow :: VG.Vector v a => VU.Vector Int -> Int -> v a -> Int -> [a]
+gatherRow :: (VG.Vector v a) => VU.Vector Int -> Int -> v a -> Int -> [a]
 gatherRow tbl w v i = go start
   where
     (start, end) = rowSpan w i
     go !j
-        | j >= end = []
-        | otherwise =
-            case VU.unsafeIndex tbl j of
-                -1 -> []
-                p  -> VG.unsafeIndex v p : go (j + 1)
+      | j >= end = []
+      | otherwise =
+          case VU.unsafeIndex tbl j of
+            -1 -> []
+            p -> VG.unsafeIndex v p : go (j + 1)
 {-# INLINE gatherRow #-}
 
 -- | Row @i@ of the table, folded left instead of gathered into a list.
 foldRow' ::
-       VG.Vector v a
-    => VU.Vector Int
-    -> Int
-    -> v a
-    -> Int
-    -> (b -> a -> b)
-    -> b
-    -> b
+  (VG.Vector v a) =>
+  VU.Vector Int ->
+  Int ->
+  v a ->
+  Int ->
+  (b -> a -> b) ->
+  b ->
+  b
 foldRow' tbl w v i step = go start
   where
     (start, end) = rowSpan w i
     go !j !acc
-        | j >= end = acc
-        | otherwise =
-            case VU.unsafeIndex tbl j of
-                -1 -> acc
-                p  -> go (j + 1) (step acc (VG.unsafeIndex v p))
+      | j >= end = acc
+      | otherwise =
+          case VU.unsafeIndex tbl j of
+            -1 -> acc
+            p -> go (j + 1) (step acc (VG.unsafeIndex v p))
 {-# INLINE foldRow' #-}
 
 -- * Splitting and joining
@@ -128,17 +138,17 @@ foldRow' tbl w v i step = go start
 -- cell on every grid.
 chunkRanges :: Int -> Int -> [(Int, Int)]
 chunkRanges k n
-    | k <= 1 || n <= 0 = [(0, n) | n > 0]
-    | otherwise = go 0 0
+  | k <= 1 || n <= 0 = [(0, n) | n > 0]
+  | otherwise = go 0 0
   where
     q = n `quot` k
     r = n `rem` k
     go !c !lo
-        | c >= k || lo >= n = []
-        | otherwise =
-            let len = q + (if c < r then 1 else 0)
-                hi = lo + len
-             in (lo, hi) : go (c + 1) hi
+      | c >= k || lo >= n = []
+      | otherwise =
+          let len = q + (if c < r then 1 else 0)
+              hi = lo + len
+           in (lo, hi) : go (c + 1) hi
 
 -- | Run the given actions on separate capabilities and wait for all of them.
 --
@@ -147,17 +157,18 @@ chunkRanges k n
 -- kb38's reasons.
 inParallel :: [IO a] -> IO [a]
 inParallel acts = do
-    caps <- getNumCapabilities
-    slots <-
-        forM (zip [0 :: Int ..] acts) $ \(i, act) -> do
-            slot <- newEmptyMVar
-            _ <- forkOn (i `mod` caps) (try (act >>= evaluate) >>= putMVar slot)
-            pure slot
-    results <- mapM takeMVar slots
-    forM results $ either (throwIO @SomeException) pure
+  caps <- getNumCapabilities
+  slots <-
+    forM (zip [0 :: Int ..] acts) $ \(i, act) -> do
+      slot <- newEmptyMVar
+      _ <- forkOn (i `mod` caps) (try (act >>= evaluate) >>= putMVar slot)
+      pure slot
+  results <- mapM takeMVar slots
+  forM results $ either (throwIO @SomeException) pure
 {-# INLINE inParallel #-}
 
 -- * The three fills
+
 --
 -- Each takes the length and a function from index to element, so the two
 -- kernels below differ only in that function and share every line of the
@@ -170,15 +181,15 @@ inParallel acts = do
 --
 -- The @SeqStrict@ arm. No threads, no 'unsafePerformIO'; the only thing that
 -- separates it from the library is when the rule runs.
-fillSeqStrict :: VG.Vector v b => Int -> (Int -> b) -> v b
+fillSeqStrict :: (VG.Vector v b) => Int -> (Int -> b) -> v b
 fillSeqStrict n at =
-    runST $ do
-        mv <- VGM.unsafeNew n
-        let go !i
-                | i >= n = pure ()
-                | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
-        go 0
-        VG.unsafeFreeze mv
+  runST $ do
+    mv <- VGM.unsafeNew n
+    let go !i
+          | i >= n = pure ()
+          | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
+    go 0
+    VG.unsafeFreeze mv
 {-# INLINE fillSeqStrict #-}
 
 -- | 'fillSeqStrict' split across capabilities: one mutable vector, one
@@ -187,19 +198,19 @@ fillSeqStrict n at =
 -- @mult@ is chunks per capability. kb38 found the number did not matter for
 -- the build (1 and 8 within 2%); whether that transfers to the run is one of
 -- the questions this spike is here to answer, so it is a parameter.
-fillPar :: VG.Vector v b => Int -> Int -> (Int -> b) -> v b
+fillPar :: (VG.Vector v b) => Int -> Int -> (Int -> b) -> v b
 fillPar mult n at =
-    unsafePerformIO $ do
-        caps <- getNumCapabilities
-        mv <- VGM.unsafeNew n
-        let ranges = chunkRanges (max 1 (caps * mult)) n
-            fill lo hi = go lo
-              where
-                go !i
-                    | i >= hi = pure ()
-                    | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
-        _ <- inParallel [fill lo hi | (lo, hi) <- ranges]
-        VG.unsafeFreeze mv
+  unsafePerformIO $ do
+    caps <- getNumCapabilities
+    mv <- VGM.unsafeNew n
+    let ranges = chunkRanges (max 1 (caps * mult)) n
+        fill lo hi = go lo
+          where
+            go !i
+              | i >= hi = pure ()
+              | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
+    _ <- inParallel [fill lo hi | (lo, hi) <- ranges]
+    VG.unsafeFreeze mv
 {-# INLINE fillPar #-}
 
 -- | The same split with no 'unsafePerformIO' in it: each chunk is its own
@@ -211,13 +222,13 @@ fillPar mult n at =
 -- carries: a spark may fizzle, in which case the main thread does that
 -- chunk itself, so this cannot be relied on to use the cores, only to be
 -- allowed to.
-fillSpark :: VG.Vector v b => Int -> Int -> (Int -> b) -> v b
+fillSpark :: (VG.Vector v b) => Int -> Int -> (Int -> b) -> v b
 fillSpark mult n at = VG.concat (sparked parts)
   where
     parts =
-        [ deep (VG.generate (hi - lo) (\k -> at (lo + k)))
-        | (lo, hi) <- chunkRanges (max 1 (numCapabilities * mult)) n
-        ]
+      [ deep (VG.generate (hi - lo) (\k -> at (lo + k)))
+      | (lo, hi) <- chunkRanges (max 1 (numCapabilities * mult)) n
+      ]
     -- What is sparked has to be what the consumer then demands, or the spark
     -- is unreachable the moment the consumer takes the other route and the
     -- RTS collects it: sparking @force c@ and handing on @c@ measured 6,185
@@ -226,7 +237,7 @@ fillSpark mult n at = VG.concat (sparked parts)
     -- into the list --- a spark the main thread beats to it fizzles, which
     -- costs nothing, rather than being collected.
     sparked [] = []
-    sparked (c:cs) = c `par` (let rest = sparked cs in rest `pseq` (c : rest))
+    sparked (c : cs) = c `par` (let rest = sparked cs in rest `pseq` (c : rest))
     -- A chunk in WHNF is not a chunk that has been computed: an unboxed
     -- vector materialises when it is forced, but a boxed one is a vector of
     -- thunks, and a spark that stopped at WHNF would leave a boxed variant
@@ -252,11 +263,12 @@ fillSpark mult n at = VG.concat (sparked parts)
 -- than the library it is a transliteration of, and allocated four times as
 -- much, until they were hoisted.
 gridSeq ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 gridSeq s f g = unsafeGridFromVector (VG.generate n at)
   where
     !w = stencilWidth s
@@ -265,7 +277,7 @@ gridSeq s f g = unsafeGridFromVector (VG.generate n at)
     n = VG.length v
     at i = f (VG.unsafeIndex v i) (gatherRow tbl w v i)
     {-# INLINE at #-}
-{-# INLINABLE gridSeq #-}
+{-# INLINEABLE gridSeq #-}
 
 -- | 'gridSeq' with nothing changed but the pragma: @INLINE@ where the library
 -- says @INLINABLE@.
@@ -278,11 +290,12 @@ gridSeq s f g = unsafeGridFromVector (VG.generate n at)
 -- rule known at the call site, and for the fold kernel that is worth about as
 -- much as four cores are --- see 'foldSeqInline'.
 gridSeqInline ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 gridSeqInline s f g = unsafeGridFromVector (VG.generate n at)
   where
     !w = stencilWidth s
@@ -296,11 +309,12 @@ gridSeqInline s f g = unsafeGridFromVector (VG.generate n at)
 -- | 'gridSeq' with the rule forced where it is computed, and @INLINE@ as
 -- 'gridSeqInline' explains.
 gridSeqStrict ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 gridSeqStrict s f g = unsafeGridFromVector (fillSeqStrict n at)
   where
     !w = stencilWidth s
@@ -313,12 +327,13 @@ gridSeqStrict s f g = unsafeGridFromVector (fillSeqStrict n at)
 
 -- | 'gridSeqStrict' across capabilities.
 gridPar ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Int
-    -> Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Int ->
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 gridPar mult s f g = unsafeGridFromVector (fillPar mult n at)
   where
     !w = stencilWidth s
@@ -331,12 +346,13 @@ gridPar mult s f g = unsafeGridFromVector (fillPar mult n at)
 
 -- | 'gridPar' without the 'unsafePerformIO', through sparked chunks.
 gridParSpark ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Int
-    -> Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Int ->
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 gridParSpark mult s f g = unsafeGridFromVector (fillSpark mult n at)
   where
     !w = stencilWidth s
@@ -352,12 +368,13 @@ gridParSpark mult s f g = unsafeGridFromVector (fillSpark mult n at)
 -- | The library's own path, transliterated. See 'gridSeq', including why the
 -- width and the table are bound where they are.
 foldSeq ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 foldSeq s step seed g = unsafeGridFromVector (VG.generate n at)
   where
     !w = stencilWidth s
@@ -366,7 +383,7 @@ foldSeq s step seed g = unsafeGridFromVector (VG.generate n at)
     n = VG.length v
     at i = foldRow' tbl w v i step (seed (VG.unsafeIndex v i))
     {-# INLINE at #-}
-{-# INLINABLE foldSeq #-}
+{-# INLINEABLE foldSeq #-}
 
 -- | 'foldSeq' with nothing changed but the pragma. See 'gridSeqInline'.
 --
@@ -376,12 +393,13 @@ foldSeq s step seed g = unsafeGridFromVector (VG.generate n at)
 -- the neighbour it folds in is boxed on the way out of the unboxed vector as
 -- well. Inlined, the whole row folds in registers.
 foldSeqInline ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 foldSeqInline s step seed g = unsafeGridFromVector (VG.generate n at)
   where
     !w = stencilWidth s
@@ -395,12 +413,13 @@ foldSeqInline s step seed g = unsafeGridFromVector (VG.generate n at)
 -- | 'foldSeq' with each cell's accumulator forced where it is computed, and
 -- @INLINE@ as 'foldSeqInline' explains.
 foldSeqStrict ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 foldSeqStrict s step seed g = unsafeGridFromVector (fillSeqStrict n at)
   where
     !w = stencilWidth s
@@ -413,13 +432,14 @@ foldSeqStrict s step seed g = unsafeGridFromVector (fillSeqStrict n at)
 
 -- | 'foldSeqStrict' across capabilities.
 foldPar ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Int
-    -> Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Int ->
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 foldPar mult s step seed g = unsafeGridFromVector (fillPar mult n at)
   where
     !w = stencilWidth s
@@ -432,13 +452,14 @@ foldPar mult s step seed g = unsafeGridFromVector (fillPar mult n at)
 
 -- | 'foldPar' without the 'unsafePerformIO', through sparked chunks.
 foldParSpark ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Int
-    -> Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Int ->
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 foldParSpark mult s step seed g = unsafeGridFromVector (fillSpark mult n at)
   where
     !w = stencilWidth s

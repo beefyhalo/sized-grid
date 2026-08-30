@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds       #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 -- | A Klein bottle: a single-chart 'Atlas' glued to itself along both axes,
@@ -6,27 +6,27 @@
 -- through. Gluing both pairs with a reflection would be the projective
 -- plane, not this.
 module Data.Grid.Atlas.Klein
-  ( Axis(..)
-  , pattern Twisted
-  , pattern Rolled
-  , Heading(..)
-  , Crossing(..)
-  , crossedSeam
-  , reversedFrame
-  , kleinAtlas
-  , kleinSeam
-  , kleinStep
-  ) where
+  ( Axis (..),
+    pattern Twisted,
+    pattern Rolled,
+    Heading (..),
+    Crossing (..),
+    crossedSeam,
+    reversedFrame,
+    kleinAtlas,
+    kleinSeam,
+    kleinStep,
+  )
+where
 
-import           Data.Atlas.Topology.Seam (SeamTable (..), crossSeam)
-import           Data.Grid.Atlas
-import           Data.Grid.Atlas.Rect
-import           Data.Grid.Sized
-
-import           Data.Functor.Identity (Identity (..))
-import           Data.Maybe            (fromMaybe)
-import qualified Data.Vector           as V
-import           GHC.TypeLits
+import Data.Atlas.Topology.Seam (SeamTable (..), crossSeam)
+import Data.Functor.Identity (Identity (..))
+import Data.Grid.Atlas
+import Data.Grid.Atlas.Rect
+import Data.Grid.Sized
+import Data.Maybe (fromMaybe)
+import Data.Vector qualified as V
+import GHC.TypeLits
 
 -- | The bottle's two axes, named for how each self-seam glues: 'Twisted'
 -- reflects its sibling on crossing, 'Rolled' glues straight through.
@@ -44,10 +44,11 @@ pattern Rolled = V
 {-# COMPLETE Twisted, Rolled #-}
 
 kleinAtlas ::
-       forall w h a. Grid '[ Clamped w, Clamped h] a
-    -> Atlas '[ Clamped w, Clamped h] 1 a
+  forall w h a.
+  Grid '[Clamped w, Clamped h] a ->
+  Atlas '[Clamped w, Clamped h] 1 a
 kleinAtlas g =
-    fromMaybe (error "kleinAtlas: impossible, one chart always matches k = 1") $
+  fromMaybe (error "kleinAtlas: impossible, one chart always matches k = 1") $
     atlasFromVector (V.singleton g)
 
 kleinSeam :: SeamTable () (Axis, Extremum)
@@ -56,8 +57,8 @@ kleinSeam = SeamTable crossKleinEdge
 crossKleinEdge :: () -> (Axis, Extremum) -> ((), (Axis, Extremum), Bool)
 crossKleinEdge () (Twisted, AtMin) = ((), (Twisted, AtMax), True)
 crossKleinEdge () (Twisted, AtMax) = ((), (Twisted, AtMin), True)
-crossKleinEdge () (Rolled, AtMin)  = ((), (Rolled, AtMax), False)
-crossKleinEdge () (Rolled, AtMax)  = ((), (Rolled, AtMin), False)
+crossKleinEdge () (Rolled, AtMin) = ((), (Rolled, AtMax), False)
+crossKleinEdge () (Rolled, AtMax) = ((), (Rolled, AtMin), False)
 
 -- | Total, unlike 'Data.Grid.Atlas.Mobius.mobiusStep': every half-edge here
 -- is glued to another, so no step can leave the surface --- which is why the
@@ -69,24 +70,28 @@ crossKleinEdge () (Rolled, AtMax)  = ((), (Rolled, AtMin), False)
 -- not. That difference is the whole of what makes this a bottle rather than a
 -- torus, and 'reversedFrame' is where a caller reads it.
 kleinStep ::
-       forall w h. (KnownNat w, KnownNat h, 1 <= w, 1 <= h)
-    => AtlasCoord '[ Clamped w, Clamped h] 1
-    -> Heading
-    -> (AtlasCoord '[ Clamped w, Clamped h] 1, Heading, Crossing)
+  forall w h.
+  (KnownNat w, KnownNat h, 1 <= w, 1 <= h) =>
+  AtlasCoord '[Clamped w, Clamped h] 1 ->
+  Heading ->
+  (AtlasCoord '[Clamped w, Clamped h] 1, Heading, Crossing)
 kleinStep (chart, u :| v :| EmptyCoord) heading =
-    let Landing () (ui, vi) heading' crossing =
-            runIdentity $
-            rectStep
-                axisSize
-                (\() edge -> Identity (crossSeam kleinSeam () edge))
-                ()
-                (ordinalToInt (unClamped u), ordinalToInt (unClamped v))
-                heading
-    in ( ( chart
-         , Clamped (unsafeOrdinal ui) :| Clamped (unsafeOrdinal vi) :|
-           EmptyCoord)
-       , heading'
-       , crossing)
+  let Landing () (ui, vi) heading' crossing =
+        runIdentity $
+          rectStep
+            axisSize
+            (\() edge -> Identity (crossSeam kleinSeam () edge))
+            ()
+            (ordinalToInt (unClamped u), ordinalToInt (unClamped v))
+            heading
+   in ( ( chart,
+          Clamped (unsafeOrdinal ui)
+            :| Clamped (unsafeOrdinal vi)
+            :| EmptyCoord
+        ),
+        heading',
+        crossing
+      )
   where
     axisSize Twisted = ordinalSize @w
-    axisSize Rolled  = ordinalSize @h
+    axisSize Rolled = ordinalSize @h

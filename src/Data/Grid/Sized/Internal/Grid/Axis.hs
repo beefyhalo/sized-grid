@@ -7,23 +7,23 @@
 -- here is the same loop over @(axisSize, stride)@ -- which 'MapAxis' computes
 -- from the axis list, and which is two literals once that list is concrete.
 module Data.Grid.Sized.Internal.Grid.Axis
-  ( MapAxis(..)
-  , mapAxis
-  , axisFibres
-  , axis
-  , scanAxis
-  ) where
+  ( MapAxis (..),
+    mapAxis,
+    axisFibres,
+    axis,
+    scanAxis,
+  )
+where
 
-import           Data.Grid.Sized.Coord
-import           Data.Grid.Sized.Internal.Grid.Core
-
-import           Control.Lens                       hiding (index)
-import           Data.Kind                          (Type)
-import           Data.Proxy                         (Proxy (..))
-import qualified Data.Vector.Generic                as VG
-import qualified Data.Vector.Generic.Mutable        as VGM
-import           GHC.TypeLits
-import qualified GHC.TypeLits                       as GHC
+import Control.Lens hiding (index)
+import Data.Grid.Sized.Coord
+import Data.Grid.Sized.Internal.Grid.Core
+import Data.Kind (Type)
+import Data.Proxy (Proxy (..))
+import Data.Vector.Generic qualified as VG
+import Data.Vector.Generic.Mutable qualified as VGM
+import GHC.TypeLits
+import GHC.TypeLits qualified as GHC
 
 -- | The geometry of one axis inside a flat row-major vector: how many
 -- elements the axis has, and how far apart consecutive ones are.
@@ -56,17 +56,21 @@ class MapAxis (n :: Nat) (cs :: [Type]) (c :: Type) | n cs -> c where
   axisSizeAndStride :: (Int, Int)
 
 -- | The target axis is the head, so the axes below it are all of @as@.
-instance {-# OVERLAPPING #-} (KnownNat n, AllSizedKnown as) =>
-         MapAxis 0 (c n ': as) (c n) where
+instance
+  {-# OVERLAPPING #-}
+  (KnownNat n, AllSizedKnown as) =>
+  MapAxis 0 (c n ': as) (c n)
+  where
   axisSizeAndStride =
-    ( fromIntegral (GHC.natVal (Proxy @n))
-    , fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as))))
+    ( fromIntegral (GHC.natVal (Proxy @n)),
+      fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))
+    )
   {-# INLINE axisSizeAndStride #-}
 
 -- | Peeling an axis off the front changes neither the target axis's size nor
 -- its stride: both are products over the axes at or below it, and the one
 -- being dropped is above.
-instance {-# OVERLAPPABLE #-} MapAxis (n - 1) as c => MapAxis n (c0 ': as) c where
+instance {-# OVERLAPPABLE #-} (MapAxis (n - 1) as c) => MapAxis n (c0 ': as) c where
   axisSizeAndStride = axisSizeAndStride @(n - 1) @as @c
   {-# INLINE axisSizeAndStride #-}
 
@@ -103,12 +107,17 @@ instance {-# OVERLAPPABLE #-} MapAxis (n - 1) as c => MapAxis n (c0 ': as) c whe
 -- library, and the numbers above were taken the way it says -- by rebuilding
 -- the benchmark component with @--ghc-options=-O2@ and comparing.
 fibreAt ::
-     forall v a. VG.Vector v a
-  => Int -- ^ The axis's size: how many elements the fibre has.
-  -> Int -- ^ The axis's stride: how far apart consecutive elements of it are.
-  -> v a -- ^ The whole flat row-major vector.
-  -> Int -- ^ Where the fibre starts.
-  -> v a
+  forall v a.
+  (VG.Vector v a) =>
+  -- | The axis's size: how many elements the fibre has.
+  Int ->
+  -- | The axis's stride: how far apart consecutive elements of it are.
+  Int ->
+  -- | The whole flat row-major vector.
+  v a ->
+  -- | Where the fibre starts.
+  Int ->
+  v a
 fibreAt axisSize stride v base =
   VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride))
 {-# INLINE fibreAt #-}
@@ -141,12 +150,15 @@ fibreAt axisSize stride v base =
 -- @INLINE@, not @INLINABLE@, and the difference is load-bearing -- see
 -- 'scanAxisStrided', where it is measured.
 mapAxisStrided ::
-     forall v x y. (VG.Vector v x, VG.Vector v y)
-  => Int -- ^ The axis's size: how many elements a fibre has.
-  -> Int -- ^ The axis's stride: how far apart consecutive elements of a fibre are.
-  -> (v x -> v y)
-  -> v x
-  -> v y
+  forall v x y.
+  (VG.Vector v x, VG.Vector v y) =>
+  -- | The axis's size: how many elements a fibre has.
+  Int ->
+  -- | The axis's stride: how far apart consecutive elements of a fibre are.
+  Int ->
+  (v x -> v y) ->
+  v x ->
+  v y
 mapAxisStrided axisSize stride f v
   | stride == 1 && axisSize > 0 = VG.concat (map f (splitVectorBySize axisSize v))
   | otherwise =
@@ -154,7 +166,7 @@ mapAxisStrided axisSize stride f v
         out <- VGM.unsafeNew len
         let scatterFrom base =
               VG.imapM_ (\k -> VGM.unsafeWrite out (base + k * stride)) $
-              f (fibreAt axisSize stride v base)
+                f (fibreAt axisSize stride v base)
             fibresOf blockStart base
               | base >= blockStart + stride = pure ()
               | otherwise = scatterFrom base >> fibresOf blockStart (base + 1)
@@ -199,12 +211,15 @@ mapAxisStrided axisSize stride f v
 -- site where @f@ is @(+)@, the accumulator unboxes and the whole scan
 -- allocates its result and nothing else: 703 KB for 90,000 'Int's.
 scanAxisStrided ::
-     forall v a. VG.Vector v a
-  => Int -- ^ The axis's size: how many elements a fibre has.
-  -> Int -- ^ The axis's stride: how far apart consecutive elements of a fibre are.
-  -> (a -> a -> a)
-  -> v a
-  -> v a
+  forall v a.
+  (VG.Vector v a) =>
+  -- | The axis's size: how many elements a fibre has.
+  Int ->
+  -- | The axis's stride: how far apart consecutive elements of a fibre are.
+  Int ->
+  (a -> a -> a) ->
+  v a ->
+  v a
 scanAxisStrided axisSize stride f v
   | stride == 1 && axisSize > 0 =
       VG.concat (map (VG.scanl1' f) (splitVectorBySize axisSize v))
@@ -250,34 +265,38 @@ scanAxisStrided axisSize stride f v
 --
 -- 'axis' is the same operation as a 'Setter'.
 mapAxis ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => (GridOf v '[c] x -> GridOf v '[c] y)
-  -> GridOf v cs x
-  -> GridOf v cs y
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  (GridOf v '[c] x -> GridOf v '[c] y) ->
+  GridOf v cs x ->
+  GridOf v cs y
 mapAxis n f (Grid v) =
-    let (axisSize, stride) = axisSizeAndStride @n @cs @c
-     in Grid (mapAxisStrided axisSize stride (unGrid . f . Grid) v)
+  let (axisSize, stride) = axisSizeAndStride @n @cs @c
+   in Grid (mapAxisStrided axisSize stride (unGrid . f . Grid) v)
 {-# INLINE mapAxis #-}
 
 -- | Enumerate the fibres along one named axis in row-major order.
 axisFibres ::
-     forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
-  => GridOf v cs a
-  -> [GridOf v '[c] a]
+  forall v cs a c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v a) =>
+  GridOf v cs a ->
+  [GridOf v '[c] a]
 axisFibres n (Grid v) =
-    let (axisSize, stride) = axisSizeAndStride @n @cs @c
-        block = axisSize * stride
-        len = VG.length v
-        fibre blockStart base
-          | base >= blockStart + stride = []
-          | otherwise =
-              Grid (fibreAt axisSize stride v base)
+  let (axisSize, stride) = axisSizeAndStride @n @cs @c
+      block = axisSize * stride
+      len = VG.length v
+      fibre blockStart base
+        | base >= blockStart + stride = []
+        | otherwise =
+            Grid (fibreAt axisSize stride v base)
               : fibre blockStart (base + 1)
-        blocks blockStart
-          | blockStart >= len = []
-          | otherwise = fibre blockStart blockStart ++ blocks (blockStart + block)
-     in blocks 0
-{-# INLINABLE axisFibres #-}
+      blocks blockStart
+        | blockStart >= len = []
+        | otherwise = fibre blockStart blockStart ++ blocks (blockStart + block)
+   in blocks 0
+{-# INLINEABLE axisFibres #-}
 
 -- | 'mapAxis' as an optic: a 'Setter' whose foci are the fibres along axis
 -- @n@, one for every combination of the other axes.
@@ -303,10 +322,12 @@ axisFibres n (Grid v) =
 -- where the loop below holds one, so @'over' ('axis' n)@ would pay for a
 -- generality it never uses. See sized-grid-0s1d.
 axis ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => Setter (GridOf v cs x) (GridOf v cs y) (GridOf v '[c] x) (GridOf v '[c] y)
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  Setter (GridOf v cs x) (GridOf v cs y) (GridOf v '[c] x) (GridOf v '[c] y)
 axis n = sets (mapAxis n)
-{-# INLINABLE axis #-}
+{-# INLINEABLE axis #-}
 
 -- | Prefix-scan one named axis of a grid, independently for every
 -- combination of the others.
@@ -326,11 +347,13 @@ axis n = sets (mapAxis n)
 -- where before the rewrite it was 2.8x and 3.2x /slower/ than the same
 -- pipeline.
 scanAxis ::
-     forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
-  => (a -> a -> a)
-  -> GridOf v cs a
-  -> GridOf v cs a
+  forall v cs a c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v a) =>
+  (a -> a -> a) ->
+  GridOf v cs a ->
+  GridOf v cs a
 scanAxis n f (Grid v) =
-    let (axisSize, stride) = axisSizeAndStride @n @cs @c
-     in Grid (scanAxisStrided axisSize stride f v)
+  let (axisSize, stride) = axisSizeAndStride @n @cs @c
+   in Grid (scanAxisStrided axisSize stride f v)
 {-# INLINE scanAxis #-}

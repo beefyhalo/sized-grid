@@ -5,7 +5,7 @@ module SplitHigherDimWrongRemainder where
 
 import Data.Grid.Sized
 
-bad :: Grid '[ Ordinal 3, Ordinal 3] Int -> Grid '[ Ordinal 7, Ordinal 3] Int
+bad :: Grid '[Ordinal 3, Ordinal 3] Int -> Grid '[Ordinal 7, Ordinal 3] Int
 bad g =
-  let (_ :: Grid '[ Ordinal 1, Ordinal 3] Int, b) = splitHigherDim g
+  let (_ :: Grid '[Ordinal 1, Ordinal 3] Int, b) = splitHigherDim g
    in b

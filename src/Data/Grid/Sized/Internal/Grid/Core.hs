@@ -10,62 +10,70 @@
 -- "Data.Grid.Sized.Internal.Grid.Windows".
 module Data.Grid.Sized.Internal.Grid.Core
   ( -- * Representation
-    GridOf(..)
-  , Grid
-  , unsafeGridFromVector
+    GridOf (..),
+    Grid,
+    unsafeGridFromVector,
+
     -- * Construction and access
-  , gridVector
-  , gridFromVector
-  , gridFromList
-  , collapseGrid
+    gridVector,
+    gridFromVector,
+    gridFromList,
+    collapseGrid,
+
     -- * Single-cell access
-  , cellLens
+    cellLens,
+
     -- * Bulk operations
+
     --
     -- $bulk
-  , tabulateGrid
-  , indexGrid
-  , mapGrid
-  , imapGrid
-  , zipWithGrid
-  , foldlGrid'
-  , scanl1Grid
+    tabulateGrid,
+    indexGrid,
+    mapGrid,
+    imapGrid,
+    zipWithGrid,
+    foldlGrid',
+    scanl1Grid,
+
     -- * Type-level machinery
-  , CollapseGrid
+    CollapseGrid,
+
     -- * Vector helpers
-  , splitVectorBySize
-  ) where
+    splitVectorBySize,
+  )
+where
 
-import           Data.Grid.Sized.Coord
-import           Data.Grid.Sized.Internal.Grid.Nest
-
-import           Control.DeepSeq               (NFData)
-import           Control.Lens                  hiding (index)
-import           Data.Aeson
-import           Data.Align                    (Semialign (..))
-import           Data.Distributive
-import           Data.Foldable1               (Foldable1 (..))
-import           Data.Functor.Bind             (Apply (..), Bind (..), liftF2)
-import           Data.Functor.Classes
-import           Data.Functor.Rep
-import           Data.Kind                     (Type)
-import qualified Data.List.NonEmpty            as NE
-import           Data.Proxy                    (Proxy (..))
-import           Data.These                    (These (..))
-import           Data.Zip                      (Unzip (..), Zip (..))
-import qualified Data.Vector                   as V
-import qualified Data.Vector.Generic           as VG
-import qualified GHC.Generics                  as GHC
-import qualified GHC.TypeLits                  as GHC
+import Control.DeepSeq (NFData)
+import Control.Lens hiding (index)
+import Data.Aeson
+import Data.Align (Semialign (..))
+import Data.Distributive
+import Data.Foldable1 (Foldable1 (..))
+import Data.Functor.Bind (Apply (..), Bind (..), liftF2)
+import Data.Functor.Classes
+import Data.Functor.Rep
+import Data.Grid.Sized.Coord
+import Data.Grid.Sized.Internal.Grid.Nest
+import Data.Kind (Type)
+import Data.List.NonEmpty qualified as NE
+import Data.Proxy (Proxy (..))
+import Data.These (These (..))
+import Data.Vector qualified as V
+import Data.Vector.Generic qualified as VG
+import Data.Zip (Unzip (..), Zip (..))
+import GHC.Generics qualified as GHC
+import GHC.TypeLits qualified as GHC
 
 -- | The @unGrid@ field is not exported: a record field in scope would permit
 -- record-update syntax, which could break the length invariant.
 newtype GridOf v (cs :: [Type]) a = Grid
   { unGrid :: v a
-  } deriving stock (GHC.Generic, Eq, Show)
-    deriving newtype (NFData, Eq1, Show1, Functor)
+  }
+  deriving stock (GHC.Generic, Eq, Show)
+  deriving newtype (NFData, Eq1, Show1, Functor)
 
 type instance Index (GridOf v cs a) = Coord cs
+
 type instance IxValue (GridOf v cs a) = a
 
 -- | @ix@ /is/ 'cellLens'. A @'Lens'' s a@ is a @'Traversal'' s a@, so the
@@ -119,14 +127,14 @@ type Grid = GridOf V.Vector
 --      so that a @length@ it never calls could be a literal. sized-grid-o9s
 --      had just finished taking `AllSizedKnown` off `Apply` and `Bind`;
 --      this would push a constraint back the other way to buy nothing.
-deriving newtype instance Foldable v => Foldable (GridOf v cs)
+deriving newtype instance (Foldable v) => Foldable (GridOf v cs)
 
 -- | Written by hand: @GeneralizedNewtypeDeriving@ can't coerce under the
 -- applicative parameter.
-instance Traversable v => Traversable (GridOf v cs) where
+instance (Traversable v) => Traversable (GridOf v cs) where
   traverse f (Grid v) = Grid <$> traverse f v
 
-instance IsCoordList cs => Each (Grid cs a) (Grid cs b) a b where
+instance (IsCoordList cs) => Each (Grid cs a) (Grid cs b) a b where
   each = traverse
 
 -- | Asserts, rather than checks, that the vector holds exactly
@@ -145,14 +153,15 @@ gridVector = unGrid
 {-# INLINE gridVector #-}
 
 gridFromVector ::
-       forall v cs a. (VG.Vector v a, AllSizedKnown cs)
-    => v a
-    -> Maybe (GridOf v cs a)
+  forall v cs a.
+  (VG.Vector v a, AllSizedKnown cs) =>
+  v a ->
+  Maybe (GridOf v cs a)
 gridFromVector v =
-    if VG.length v == fromIntegral (GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
-        then Just (Grid v)
-        else Nothing
-{-# INLINABLE gridFromVector #-}
+  if VG.length v == fromIntegral (GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
+    then Just (Grid v)
+    else Nothing
+{-# INLINEABLE gridFromVector #-}
 
 -- $bulk
 -- Operations that carry an element constraint and so cannot be class methods.
@@ -196,12 +205,13 @@ gridFromVector v =
 -- precondition is discharged by construction -- the same argument
 -- `indexGrid`\'s `VG.unsafeIndex` rests on.
 tabulateGrid ::
-       forall v cs a. (VG.Vector v a, IsCoordList cs)
-    => (Coord cs -> a)
-    -> GridOf v cs a
+  forall v cs a.
+  (VG.Vector v a, IsCoordList cs) =>
+  (Coord cs -> a) ->
+  GridOf v cs a
 tabulateGrid func =
-    Grid $ VG.generate (coordSpaceSize @cs) (func . unsafeCoordFromPosition)
-{-# INLINABLE tabulateGrid #-}
+  Grid $ VG.generate (coordSpaceSize @cs) (func . unsafeCoordFromPosition)
+{-# INLINEABLE tabulateGrid #-}
 
 -- | Read the element at a coordinate. `Data.Functor.Rep.index` for grids
 -- whose element type cannot support `Representable`. Uses 'VG.unsafeIndex':
@@ -213,10 +223,11 @@ tabulateGrid func =
 -- No @IsCoordList cs@ any more: after sized-grid-adr.16 a coordinate /is/ its
 -- position, so there is no fold left here to need the axis sizes.
 indexGrid ::
-       forall v cs a. VG.Vector v a
-    => GridOf v cs a
-    -> Coord cs
-    -> a
+  forall v cs a.
+  (VG.Vector v a) =>
+  GridOf v cs a ->
+  Coord cs ->
+  a
 indexGrid (Grid v) c = VG.unsafeIndex v (coordPosition c)
 {-# INLINE indexGrid #-}
 
@@ -236,9 +247,10 @@ indexGrid (Grid v) c = VG.unsafeIndex v (coordPosition c)
 -- here that needs the axis sizes. The call sites that still carry the
 -- constraint keep it as a published signature, not as a need.
 cellLens ::
-       forall v cs a. VG.Vector v a
-    => Coord cs
-    -> Lens' (GridOf v cs a) a
+  forall v cs a.
+  (VG.Vector v a) =>
+  Coord cs ->
+  Lens' (GridOf v cs a) a
 cellLens c = lens getter setter
   where
     position = coordPosition c
@@ -247,10 +259,10 @@ cellLens c = lens getter setter
 {-# INLINE cellLens #-}
 
 mapGrid ::
-       (VG.Vector v a, VG.Vector v b)
-    => (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  (VG.Vector v a, VG.Vector v b) =>
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 mapGrid f (Grid v) = Grid (VG.map f v)
 {-# INLINE mapGrid #-}
 
@@ -260,26 +272,27 @@ mapGrid f (Grid v) = Grid (VG.map f v)
 -- front and index into it, which was the cheaper of the two options while a
 -- coordinate was a spine of boxes; it is pure waste now.
 imapGrid ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => (Coord cs -> a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  (Coord cs -> a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 imapGrid f (Grid v) = Grid (VG.imap (f . unsafeCoordFromPosition) v)
-{-# INLINABLE imapGrid #-}
+{-# INLINEABLE imapGrid #-}
 
 -- | Pointwise combination of two grids of the same shape.
 zipWithGrid ::
-       (VG.Vector v a, VG.Vector v b, VG.Vector v c)
-    => (a -> b -> c)
-    -> GridOf v cs a
-    -> GridOf v cs b
-    -> GridOf v cs c
+  (VG.Vector v a, VG.Vector v b, VG.Vector v c) =>
+  (a -> b -> c) ->
+  GridOf v cs a ->
+  GridOf v cs b ->
+  GridOf v cs c
 zipWithGrid f (Grid a) (Grid b) = Grid (VG.zipWith f a b)
 {-# INLINE zipWithGrid #-}
 
 -- | Strict left fold in row-major order. `Data.Foldable.foldl'` for grids whose
 -- element type cannot support `Foldable`.
-foldlGrid' :: VG.Vector v a => (b -> a -> b) -> b -> GridOf v cs a -> b
+foldlGrid' :: (VG.Vector v a) => (b -> a -> b) -> b -> GridOf v cs a -> b
 foldlGrid' f z (Grid v) = VG.foldl' f z v
 {-# INLINE foldlGrid' #-}
 
@@ -296,7 +309,7 @@ foldlGrid' f z (Grid v) = VG.foldl' f z v
 -- This exists so that prefix sums -- the summed-area-table build-up being the
 -- common case -- do not need the escape hatch. Length preservation is
 -- guaranteed by 'VG.scanl1'', so no size constraint is needed.
-scanl1Grid :: VG.Vector v a => (a -> a -> a) -> GridOf v cs a -> GridOf v cs a
+scanl1Grid :: (VG.Vector v a) => (a -> a -> a) -> GridOf v cs a -> GridOf v cs a
 scanl1Grid f (Grid v) = Grid (VG.scanl1' f v)
 {-# INLINE scanl1Grid #-}
 
@@ -305,20 +318,20 @@ scanl1Grid f (Grid v) = Grid (VG.scanl1' f v)
 -- nothing. '(<.>)' is a zipWith and needs none of that -- so a grid
 -- polymorphic in @cs@ with no `KnownNat` evidence on every axis can still be
 -- `Apply`\'d, where it cannot be `Applicative`\'d (sized-grid-o9s).
-instance IsCoordList cs => Apply (Grid cs) where
+instance (IsCoordList cs) => Apply (Grid cs) where
   (<.>) = zipWithGrid ($)
 
 -- | As 'Apply' above: `Monad`\'s `AllSizedKnown` comes from `Representable`'s
 -- `index`, not from what a bind actually needs. `indexGrid` itself takes only
 -- `IsCoordList` (see its haddock), so `Bind` drops the constraint `Monad`
 -- cannot.
-instance IsCoordList cs => Bind (Grid cs) where
+instance (IsCoordList cs) => Bind (Grid cs) where
   g >>- f = imap (\p a -> indexGrid (f a) p) g
 
-instance IsCoordList cs => Semialign (Grid cs) where
+instance (IsCoordList cs) => Semialign (Grid cs) where
   alignWith f = zipWithGrid (\a b -> f (These a b))
 
-instance IsCoordList cs => Zip (Grid cs) where
+instance (IsCoordList cs) => Zip (Grid cs) where
   zipWith = zipWithGrid
 
 -- | Splitting a grid of pairs gives two grids of the same shape, so this needs
@@ -329,16 +342,16 @@ instance IsCoordList cs => Zip (Grid cs) where
 -- `Functor`, making it a superclass of `Semialign`; under 1.3 it sat above
 -- `Zip` instead. This instance satisfies either hierarchy, so the
 -- @>=1.3 && <1.5@ bound stays honest.
-instance IsCoordList cs => Unzip (Grid cs) where
+instance (IsCoordList cs) => Unzip (Grid cs) where
   unzip (Grid v) = let (as, bs) = V.unzip v in (Grid as, Grid bs)
 
 -- | Boxed only, and necessarily so: `pure` must produce a grid of /any/ element
 -- type, which no unboxed vector can hold. 'tabulateGrid' is the unboxed
 -- counterpart for the cases that have a concrete element type in hand.
-instance AllSizedKnown cs => Applicative (Grid cs) where
-    pure =
-        Grid . V.replicate (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
-    Grid fs <*> Grid as = Grid $ V.zipWith ($) fs as
+instance (AllSizedKnown cs) => Applicative (Grid cs) where
+  pure =
+    Grid . V.replicate (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
+  Grid fs <*> Grid as = Grid $ V.zipWith ($) fs as
 
 -- | A grid has no concatenation operation that preserves its shape, so the
 -- semigroup operation is pointwise. This is the same reading as for an array:
@@ -362,17 +375,24 @@ instance (AllSizedKnown cs, IsCoordList cs, Num a) => Num (Grid cs a) where
   fromInteger = pure . fromInteger
 
 -- | Defined via '(>>-)' so the two cannot drift.
-instance (AllSizedKnown cs, IsCoordList cs) =>
-         Monad (Grid cs) where
+instance
+  (AllSizedKnown cs, IsCoordList cs) =>
+  Monad (Grid cs)
+  where
   g >>= f = g >>- f
 
-instance (AllSizedKnown cs, IsCoordList cs) =>
-         Distributive (Grid cs) where
+instance
+  (AllSizedKnown cs, IsCoordList cs) =>
+  Distributive (Grid cs)
+  where
   distribute = distributeRep
 
-instance (IsCoordList cs, AllSizedKnown cs) =>
-         Representable (Grid cs) where
+instance
+  (IsCoordList cs, AllSizedKnown cs) =>
+  Representable (Grid cs)
+  where
   type Rep (Grid cs) = Coord cs
+
   -- The bodies are 'tabulateGrid' and 'indexGrid' at @v ~ V.Vector@, where the
   -- 'VG.Vector' constraint is discharged for every element type.
   tabulate = tabulateGrid
@@ -420,15 +440,15 @@ instance TraversableWithIndex (Coord cs) (Grid cs) where
 -- top of the coordinate-free traversal. 'head', 'last', 'maximum' and
 -- 'minimum' come straight from the vector's own O(1) access and fused stream
 -- reductions rather than through a fold.
-instance IsCoordList cs => Foldable1 (Grid cs) where
+instance (IsCoordList cs) => Foldable1 (Grid cs) where
   foldMap1 f (Grid v) =
     V.foldr (\x acc -> f x <> acc) (f (V.unsafeLast v)) (V.unsafeInit v)
   foldMap1' f (Grid v) =
     let z = f (V.unsafeHead v)
      in z `seq` V.foldl' (\acc x -> acc <> f x) z (V.unsafeTail v)
-  foldrMap1 g f (Grid v) = V.foldr  f (g (V.unsafeLast v)) (V.unsafeInit v)
+  foldrMap1 g f (Grid v) = V.foldr f (g (V.unsafeLast v)) (V.unsafeInit v)
   foldrMap1' g f (Grid v) = V.foldr' f (g (V.unsafeLast v)) (V.unsafeInit v)
-  foldlMap1 g f (Grid v) = V.foldl  f (g (V.unsafeHead v)) (V.unsafeTail v)
+  foldlMap1 g f (Grid v) = V.foldl f (g (V.unsafeHead v)) (V.unsafeTail v)
   foldlMap1' g f (Grid v) =
     let z = g (V.unsafeHead v) in z `seq` V.foldl' f z (V.unsafeTail v)
   toNonEmpty (Grid v) = V.unsafeHead v NE.:| V.toList (V.unsafeTail v)
@@ -446,13 +466,13 @@ instance IsCoordList cs => Foldable1 (Grid cs) where
 -- The class is in scope from @Control.Lens@'s re-export of it, the same route
 -- the 'FoldableWithIndex' \/ 'TraversableWithIndex' instances above take for
 -- theirs; 'Foldable1' has no such re-export and is imported directly.
-instance IsCoordList cs => Traversable1 (Grid cs) where
+instance (IsCoordList cs) => Traversable1 (Grid cs) where
   traverse1 f (Grid v) =
     Grid . V.fromListN (V.length v)
-      <$> V.foldr (liftF2 (:) . f)
-                  ((: []) <$> f (V.unsafeLast v))
-                  (V.unsafeInit v)
-
+      <$> V.foldr
+        (liftF2 (:) . f)
+        ((: []) <$> f (V.unsafeLast v))
+        (V.unsafeInit v)
 
 -- | Convert a vector into a list of `Data.Vector.Generic.Vector`s, where all the
 -- elements of the list have the given size.
@@ -463,21 +483,22 @@ instance IsCoordList cs => Traversable1 (Grid cs) where
 -- than a failure, so do not rely on it.
 --
 -- A size of zero would otherwise loop forever taking empty prefixes.
-splitVectorBySize :: VG.Vector v a => Int -> v a -> [v a]
+splitVectorBySize :: (VG.Vector v a) => Int -> v a -> [v a]
 splitVectorBySize n v
-  | n <= 0    = error $ "splitVectorBySize: chunk size must be positive, got " ++ show n
-  | otherwise = [ VG.slice i (min n (len - i)) v | i <- [0, n .. len - 1] ]
+  | n <= 0 = error $ "splitVectorBySize: chunk size must be positive, got " ++ show n
+  | otherwise = [VG.slice i (min n (len - i)) v | i <- [0, n .. len - 1]]
   where
     len = VG.length v
-{-# INLINABLE splitVectorBySize #-}
+{-# INLINEABLE splitVectorBySize #-}
 
 -- | Convert a grid to a series of nested lists. This removes type level information, but it is sometimes easier to work with lists
 collapseGrid ::
-     forall v cs a. (VG.Vector v a, AllSizedKnown cs)
-  => GridOf v cs a
-  -> CollapseGrid cs a
+  forall v cs a.
+  (VG.Vector v a, AllSizedKnown cs) =>
+  GridOf v cs a ->
+  CollapseGrid cs a
 collapseGrid (Grid v) = nestByShape @cs (VG.convert v)
-{-# INLINABLE [1] collapseGrid #-}
+{-# INLINEABLE [1] collapseGrid #-}
 
 -- | At a boxed grid, 'VG.convert' in 'collapseGrid' is a copy of a vector to
 -- itself; this rule bypasses it when GHC can see @v ~ V.Vector@ at the call
@@ -494,27 +515,32 @@ collapseGrid (Grid v) = nestByShape @cs (VG.convert v)
 -- rule does not match.
 {-# RULES
 "collapseGrid/boxed" [~1] forall (g :: GridOf V.Vector cs a).
-  collapseGrid g = nestByShape @cs (unGrid g)
+  collapseGrid g =
+    nestByShape @cs (unGrid g)
   #-}
 
 -- | Convert a series of nested lists to a grid. If the size of the grid does not match the size of lists this will be `Nothing`
 gridFromList ::
-     forall v cs a. (VG.Vector v a, AllSizedKnown cs)
-  => CollapseGrid cs a
-  -> Maybe (GridOf v cs a)
+  forall v cs a.
+  (VG.Vector v a, AllSizedKnown cs) =>
+  CollapseGrid cs a ->
+  Maybe (GridOf v cs a)
 gridFromList cg = Grid . VG.convert <$> flattenByShape @cs cg
-{-# INLINABLE [1] gridFromList #-}
+{-# INLINEABLE [1] gridFromList #-}
 
 -- | As 'collapseGrid/boxed', for the other direction. @v@ only appears in the
 -- /result/ here, so it is pinned with an explicit type application rather than
 -- an argument annotation.
 {-# RULES
 "gridFromList/boxed" [~1] forall (cg :: CollapseGrid cs a).
-  gridFromList @V.Vector @cs @a cg = Grid <$> flattenByShape @cs cg
+  gridFromList @V.Vector @cs @a cg =
+    Grid <$> flattenByShape @cs cg
   #-}
 
-instance (VG.Vector v a, AllSizedKnown cs, ToJSON a) =>
-         ToJSON (GridOf v cs a) where
+instance
+  (VG.Vector v a, AllSizedKnown cs, ToJSON a) =>
+  ToJSON (GridOf v cs a)
+  where
   toJSON (Grid v) = nestedToJSON @cs (VG.convert v)
 
 -- | Decoding validates the length at every dimension, so a successfully decoded
@@ -525,6 +551,8 @@ instance (VG.Vector v a, AllSizedKnown cs, ToJSON a) =>
 --
 -- The constraints match `ToJSON`\'s: the `KnownNat` evidence is what makes the
 -- check possible.
-instance (VG.Vector v a, AllSizedKnown cs, FromJSON a) =>
-         FromJSON (GridOf v cs a) where
+instance
+  (VG.Vector v a, AllSizedKnown cs, FromJSON a) =>
+  FromJSON (GridOf v cs a)
+  where
   parseJSON val = Grid . VG.convert <$> nestedParseJSON @cs val

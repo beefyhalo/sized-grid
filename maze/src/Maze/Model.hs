@@ -4,27 +4,29 @@
 -- events a viewer replays.
 module Maze.Model
   ( -- * The board
-    Cs
-  , Tile(..)
-  , side
-  , solidGrid
-  , coordAt
-  , coordXY
-  , startCell
-  , goalCell
+    Cs,
+    Tile (..),
+    side,
+    solidGrid,
+    coordAt,
+    coordXY,
+    startCell,
+    goalCell,
+
     -- * Moving on it
-  , directions
-  , twoSteps
-  , traceTo
+    directions,
+    twoSteps,
+    traceTo,
+
     -- * What the viewer replays
-  , Move(..)
-  ) where
+    Move (..),
+  )
+where
 
-import           Data.Grid.Sized
-
-import           Control.Comonad.Store (pos)
-import           Control.Lens          (review)
-import           Data.Maybe            (fromMaybe)
+import Control.Comonad.Store (pos)
+import Control.Lens (review)
+import Data.Grid.Sized
+import Data.Maybe (fromMaybe)
 
 -- | The board.
 --
@@ -39,24 +41,24 @@ import           Data.Maybe            (fromMaybe)
 -- the cells live at odd coordinates and the walls at even ones, so carving
 -- from one cell to the next is a two-step walk that opens what it passes
 -- through.
-type Cs = '[ Clamped 61, Clamped 61]
+type Cs = '[Clamped 61, Clamped 61]
 
 side :: Int
 side = 61
 
 data Tile
-    = Wall
-    | Floor
-    deriving (Eq, Show)
+  = Wall
+  | Floor
+  deriving (Eq, Show)
 
 solidGrid :: Grid Cs Tile
 solidGrid = tabulateGrid (const Wall)
 
 coordAt :: Int -> Int -> Maybe (Coord Cs)
 coordAt cx cy =
-    (\a b -> review asOrdinal a :| review asOrdinal b :| EmptyCoord) <$>
-    numToOrdinal cx <*>
-    numToOrdinal cy
+  (\a b -> review asOrdinal a :| review asOrdinal b :| EmptyCoord)
+    <$> numToOrdinal cx
+    <*> numToOrdinal cy
 
 -- | A coordinate as its two axis indices.
 --
@@ -77,7 +79,7 @@ goalCell = fromMaybe (error "goalCell is off the board") (coordAt (side - 2) (si
 -- A 'Delta' is indexed by the /difference/ list rather than the axis list, so
 -- this table is written once for Z^2 and is not specific to @Cs@ --- the same
 -- four values would drive a walk on a @Periodic@ or @Reflective@ board.
-directions :: [Delta '[ Int, Int]]
+directions :: [Delta '[Int, Int]]
 directions = deltaFromTuple <$> [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
 -- | The same step twice: cell to wall to the next cell.
@@ -88,7 +90,7 @@ directions = deltaFromTuple <$> [(1, 0), (-1, 0), (0, 1), (0, -1)]
 -- on it --- which on a maze is the difference between \"there is a cell two
 -- along\" and \"there is a cell two along and a wall I may open between here
 -- and it\".
-twoSteps :: Delta '[ Int, Int] -> Path Cs
+twoSteps :: Delta '[Int, Int] -> Path Cs
 twoSteps d = Path [d, d]
 
 -- | Walk a 'Path' from the focus and report both where it landed and what is
@@ -98,18 +100,18 @@ twoSteps d = Path [d, d]
 -- pair, from one walk, because every caller here wants both.
 traceTo :: Path Cs -> FocusedGrid Cs Tile -> Maybe (Coord Cs, Tile)
 traceTo p fg =
-    (\c -> (c, indexGrid (focusedGrid fg) c)) <$> walkPath (pos fg) p
+  (\c -> (c, indexGrid (focusedGrid fg) c)) <$> walkPath (pos fg) p
 
 -- | One move of either phase, for the viewer to replay.
 data Move
-    = Opened (Coord Cs)
-    -- ^ This cell has been carved out of the rock.
-    | Moved (Coord Cs)
-    -- ^ The carving head is now here --- either because it advanced, or
+  = -- | This cell has been carved out of the rock.
+    Opened (Coord Cs)
+  | -- | The carving head is now here --- either because it advanced, or
     -- because it ran out of room and backtracked to a cell it had left.
-    | Reached (Coord Cs) Int
-    -- ^ The solver reached this cell, this many steps from the start.
-    | Solved [Coord Cs]
-    -- ^ The route, start first.
-    | Unreachable
-    -- ^ The solver ran out of frontier without finding the goal.
+    Moved (Coord Cs)
+  | -- | The solver reached this cell, this many steps from the start.
+    Reached (Coord Cs) Int
+  | -- | The route, start first.
+    Solved [Coord Cs]
+  | -- | The solver ran out of frontier without finding the goal.
+    Unreachable

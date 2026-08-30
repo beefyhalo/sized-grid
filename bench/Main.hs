@@ -1,21 +1,20 @@
 -- | Baseline benchmarks for the operations the real workloads hit.
 module Main (main) where
 
-import           Data.Grid.Sized
-import           Data.Grid.Sized.Unboxed (UGrid)
-
-import           Control.Comonad
-import           Control.Comonad.Store   (peek, pos)
-import           Control.DeepSeq         (NFData (..))
-import           Control.Exception       (evaluate)
-import           Control.Lens            (ifoldl', imap, itraverse, toListOf, view)
-import           Data.Aeson              (Result (..), fromJSON, toJSON)
-import           Data.AffineSpace        ((.+^), (.-.))
-import           Data.Functor.Identity   (Identity (..))
-import           Data.Functor.Rep        (index, tabulate)
-import qualified Data.Vector             as V
-import qualified Data.Vector.Generic     as VG
-import           Test.Tasty.Bench
+import Control.Comonad
+import Control.Comonad.Store (peek, pos)
+import Control.DeepSeq (NFData (..))
+import Control.Exception (evaluate)
+import Control.Lens (ifoldl', imap, itraverse, toListOf, view)
+import Data.Aeson (Result (..), fromJSON, toJSON)
+import Data.AffineSpace ((.+^), (.-.))
+import Data.Functor.Identity (Identity (..))
+import Data.Functor.Rep (index, tabulate)
+import Data.Grid.Sized
+import Data.Grid.Sized.Unboxed (UGrid)
+import Data.Vector qualified as V
+import Data.Vector.Generic qualified as VG
+import Test.Tasty.Bench
 
 -- | 90,000 cells, a real consumer's working size.
 type Big = '[Clamped 300, Clamped 300]
@@ -99,10 +98,10 @@ neighbourSum fg = total [peek p fg | p <- neighbours (pos fg)]
 -- checking whether 'FocusedGrid'\'s two lazy fields let a thunk chain build
 -- up across generations even though 'Grid' underneath is a strict vector.
 iterateExtend ::
-       (IsCoordList cs, AllSizedKnown cs)
-    => Int
-    -> FocusedGrid cs Int
-    -> FocusedGrid cs Int
+  (IsCoordList cs, AllSizedKnown cs) =>
+  Int ->
+  FocusedGrid cs Int ->
+  FocusedGrid cs Int
 iterateExtend n fg = iterate (extend neighbourSum) fg !! n
 
 -- | The same neighbourhood fold as 'neighbourSum', written against a
@@ -116,7 +115,7 @@ iterateExtend n fg = iterate (extend neighbourSum) fg !! n
 -- Polymorphic in the vector, like 'Data.Grid.Sized.Stencil.stencilGrid'
 -- itself, so the same function drives both the boxed and unboxed iterated
 -- benchmarks below.
-stencilStep :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilStep :: (VG.Vector v Int) => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
 stencilStep s = stencilGrid s (\_ ns -> total ns)
 
 -- | The loop `Data.Grid.Sized.Stencil.stencilGrid` literally replaces, and what
@@ -127,11 +126,11 @@ stencilStep s = stencilGrid s (\_ ns -> total ns)
 -- comonadic version also pays for a `FocusedGrid` per cell that the rule never
 -- reads, so measuring the stencil against it would credit the table with a
 -- saving that is really the focus.
-neighbourStep :: IsCoordList cs => Grid cs Int -> Grid cs Int
+neighbourStep :: (IsCoordList cs) => Grid cs Int -> Grid cs Int
 neighbourStep g = imapGrid (\c _ -> total (map (indexGrid g) (neighbours c))) g
 
 -- | 'neighbourStep' iterated, the counterpart of 'iterateStencil'.
-iterateNeighbourStep :: IsCoordList cs => Int -> Grid cs Int -> Grid cs Int
+iterateNeighbourStep :: (IsCoordList cs) => Int -> Grid cs Int -> Grid cs Int
 iterateNeighbourStep n g = iterate neighbourStep g !! n
 
 -- | 'stencilStep' iterated, the counterpart of 'iterateExtend'.
@@ -139,43 +138,43 @@ iterateNeighbourStep n g = iterate neighbourStep g !! n
 -- The stencil is built once, outside the loop, which is the entire claim the
 -- API makes: the neighbourhood is a fact about the type, so a hundred
 -- generations should consult the axis list once rather than a hundred times.
-iterateStencil :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencil :: (VG.Vector v Int) => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencil s n g = iterate (stencilStep s) g !! n
 
 -- | 'stencilStep', against `Data.Grid.Sized.Stencil.stencilFoldGrid` instead of
 -- `Data.Grid.Sized.Stencil.stencilGrid` (@sized-grid-adr.13@): the same
 -- neighbour-sum rule, folded straight out of the table with no list in
 -- between.
-stencilFoldStep :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilFoldStep :: (VG.Vector v Int) => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
 stencilFoldStep s = stencilFoldGrid s (+) id
 
 -- | 'stencilFoldStep' iterated, the counterpart of 'iterateStencil'.
-iterateStencilFold :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilFold :: (VG.Vector v Int) => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilFold s n g = iterate (stencilFoldStep s) g !! n
 
 -- | 'stencilStep' against @stencilGrid'@ instead of `Data.Grid.Sized.Stencil.stencilGrid`
 -- (@sized-grid-d6ng@): identical rule, identical table, the strict fill the
 -- only difference.
-stencilStepStrict :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilStepStrict :: (VG.Vector v Int) => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
 stencilStepStrict s = stencilGrid' s (\_ ns -> total ns)
 
 -- | 'stencilFoldStep' against @stencilFoldGrid'@, the fold-kernel counterpart.
-stencilFoldStepStrict :: VG.Vector v Int => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
+stencilFoldStepStrict :: (VG.Vector v Int) => Stencil cs -> GridOf v cs Int -> GridOf v cs Int
 stencilFoldStepStrict s = stencilFoldGrid' s (+) id
 
 -- | 'iterateStencil' on the strict fill. This is where @sized-grid-d6ng@ lives:
 -- a single pass under 'nf' forces everything either way, so the strict fill can
 -- only show what it is worth across generations, where the lazy fill defers a
 -- hundred passes behind whoever finally looks.
-iterateStencilStrict :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilStrict :: (VG.Vector v Int) => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilStrict s n g = iterate (stencilStepStrict s) g !! n
 
 -- | 'iterateStencilFold' on the strict fill.
-iterateStencilFoldStrict :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilFoldStrict :: (VG.Vector v Int) => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilFoldStrict s n g = iterate (stencilFoldStepStrict s) g !! n
 
 -- | The same repeated step without the lazy list created by 'iterate'.
-iterateStencilFoldLoop :: VG.Vector v Int => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
+iterateStencilFoldLoop :: (VG.Vector v Int) => Stencil cs -> Int -> GridOf v cs Int -> GridOf v cs Int
 iterateStencilFoldLoop stencil count = go count
   where
     go 0 grid = grid
@@ -193,13 +192,13 @@ walk k c = walk (k - 1) (c .+^ (1 :^ 1 :^ NoDelta))
 -- 'Clamped' grid, which is what a read loop actually does.
 cornerReads :: Grid Big Int -> Int
 cornerReads g =
-    total
-        [ index g (c .+^ (0 :^ 0 :^ NoDelta)) +
-          index g (c .+^ (3 :^ 3 :^ NoDelta)) -
-          index g (c .+^ (0 :^ 3 :^ NoDelta)) -
-          index g (c .+^ (3 :^ 0 :^ NoDelta))
-        | c <- allCoord @Big
-        ]
+  total
+    [ index g (c .+^ (0 :^ 0 :^ NoDelta))
+        + index g (c .+^ (3 :^ 3 :^ NoDelta))
+        - index g (c .+^ (0 :^ 3 :^ NoDelta))
+        - index g (c .+^ (3 :^ 0 :^ NoDelta))
+    | c <- allCoord @Big
+    ]
 
 -- | The same four displacements as 'cornerReads', through the /checked/ offset
 -- instead of @('.+^')@: 360,000 'offsetCoord' calls over the 90,000 cells of
@@ -231,15 +230,16 @@ cornerReads g =
 -- caller iterating a runtime list of offsets would actually write the loop.
 checkedCornerReads :: Int -> Int
 checkedCornerReads k =
-    total
-        [ maybe 0 coordPosition (offsetCoord c d)
-        | c <- allCoord @Big
-        , d <- [ 0 :^ 0 :^ NoDelta
-               , k :^ k :^ NoDelta
-               , 0 :^ k :^ NoDelta
-               , k :^ 0 :^ NoDelta
-               ]
+  total
+    [ maybe 0 coordPosition (offsetCoord c d)
+    | c <- allCoord @Big,
+      d <-
+        [ 0 :^ 0 :^ NoDelta,
+          k :^ k :^ NoDelta,
+          0 :^ k :^ NoDelta,
+          k :^ 0 :^ NoDelta
         ]
+    ]
 
 -- | sized-grid-2xv. The same 360,000 'offsetCoord' calls as
 -- 'checkedCornerReads', on the same four displacements with @k@ still a
@@ -270,13 +270,13 @@ checkedCornerReads k =
 -- exist to measure honestly rather than hide.
 checkedCornerReadsFlat :: Int -> Int
 checkedCornerReadsFlat k =
-    total
-        [ maybe 0 coordPosition (offsetCoord c (0 :^ 0 :^ NoDelta)) +
-          maybe 0 coordPosition (offsetCoord c (k :^ k :^ NoDelta)) +
-          maybe 0 coordPosition (offsetCoord c (0 :^ k :^ NoDelta)) +
-          maybe 0 coordPosition (offsetCoord c (k :^ 0 :^ NoDelta))
-        | c <- allCoord @Big
-        ]
+  total
+    [ maybe 0 coordPosition (offsetCoord c (0 :^ 0 :^ NoDelta))
+        + maybe 0 coordPosition (offsetCoord c (k :^ k :^ NoDelta))
+        + maybe 0 coordPosition (offsetCoord c (0 :^ k :^ NoDelta))
+        + maybe 0 coordPosition (offsetCoord c (k :^ 0 :^ NoDelta))
+    | c <- allCoord @Big
+    ]
 
 -- | 'onBoundary' at the same four displacements as 'checkedCornerReads',
 -- over 'Big'. Reaches 'axisBoundaryIsCoord''s default,
@@ -285,17 +285,18 @@ checkedCornerReadsFlat k =
 -- and this function's own flat counterpart, 'onBoundarySweepFlat'.
 onBoundarySweep :: Int -> Int
 onBoundarySweep k =
-    total
-        [ if onBoundary (c .+^ d)
-              then 1
-              else 0
-        | c <- allCoord @Big
-        , d <- [ 0 :^ 0 :^ NoDelta
-               , k :^ k :^ NoDelta
-               , 0 :^ k :^ NoDelta
-               , k :^ 0 :^ NoDelta
-               ]
+  total
+    [ if onBoundary (c .+^ d)
+        then 1
+        else 0
+    | c <- allCoord @Big,
+      d <-
+        [ 0 :^ 0 :^ NoDelta,
+          k :^ k :^ NoDelta,
+          0 :^ k :^ NoDelta,
+          k :^ 0 :^ NoDelta
         ]
+    ]
 
 -- | sized-grid-2xv. 'onBoundarySweep' rewritten as flat arms, exactly as
 -- 'checkedCornerReadsFlat' is to 'checkedCornerReads'. ~35 MB drops to ~60
@@ -304,13 +305,13 @@ onBoundarySweep k =
 -- 'axisBoundaryIsCoord''s.
 onBoundarySweepFlat :: Int -> Int
 onBoundarySweepFlat k =
-    total
-        [ (if onBoundary (c .+^ (0 :^ 0 :^ NoDelta)) then 1 else 0) +
-          (if onBoundary (c .+^ (k :^ k :^ NoDelta)) then 1 else 0) +
-          (if onBoundary (c .+^ (0 :^ k :^ NoDelta)) then 1 else 0) +
-          (if onBoundary (c .+^ (k :^ 0 :^ NoDelta)) then 1 else 0)
-        | c <- allCoord @Big
-        ]
+  total
+    [ (if onBoundary (c .+^ (0 :^ 0 :^ NoDelta)) then 1 else 0)
+        + (if onBoundary (c .+^ (k :^ k :^ NoDelta)) then 1 else 0)
+        + (if onBoundary (c .+^ (0 :^ k :^ NoDelta)) then 1 else 0)
+        + (if onBoundary (c .+^ (k :^ 0 :^ NoDelta)) then 1 else 0)
+    | c <- allCoord @Big
+    ]
 
 -- | 'coordDistance' at the same four displacements, over 'Big'. Reaches
 -- 'axisDistance' and so 'axisDistanceIsCoord''s default. Allocates for the
@@ -318,15 +319,16 @@ onBoundarySweepFlat k =
 -- this function's own flat counterpart, 'axisDistanceSweepFlat'.
 axisDistanceSweep :: Int -> Int
 axisDistanceSweep k =
-    total
-        [ coordDistance c (c .+^ d)
-        | c <- allCoord @Big
-        , d <- [ 0 :^ 0 :^ NoDelta
-               , k :^ k :^ NoDelta
-               , 0 :^ k :^ NoDelta
-               , k :^ 0 :^ NoDelta
-               ]
+  total
+    [ coordDistance c (c .+^ d)
+    | c <- allCoord @Big,
+      d <-
+        [ 0 :^ 0 :^ NoDelta,
+          k :^ k :^ NoDelta,
+          0 :^ k :^ NoDelta,
+          k :^ 0 :^ NoDelta
         ]
+    ]
 
 -- | sized-grid-2xv. 'axisDistanceSweep' rewritten as flat arms, exactly as
 -- 'checkedCornerReadsFlat' is to 'checkedCornerReads'. ~35 MB drops to
@@ -335,13 +337,13 @@ axisDistanceSweep k =
 -- 'coordDistance''s or 'axisDistanceIsCoord''s.
 axisDistanceSweepFlat :: Int -> Int
 axisDistanceSweepFlat k =
-    total
-        [ coordDistance c (c .+^ (0 :^ 0 :^ NoDelta)) +
-          coordDistance c (c .+^ (k :^ k :^ NoDelta)) +
-          coordDistance c (c .+^ (0 :^ k :^ NoDelta)) +
-          coordDistance c (c .+^ (k :^ 0 :^ NoDelta))
-        | c <- allCoord @Big
-        ]
+  total
+    [ coordDistance c (c .+^ (0 :^ 0 :^ NoDelta))
+        + coordDistance c (c .+^ (k :^ k :^ NoDelta))
+        + coordDistance c (c .+^ (0 :^ k :^ NoDelta))
+        + coordDistance c (c .+^ (k :^ 0 :^ NoDelta))
+    | c <- allCoord @Big
+    ]
 
 -- | The same 360,000 offsets as 'cornerReads', on a bare axis instead of a
 -- 'Coord', read against it to separate the per-axis arithmetic cost from
@@ -349,11 +351,11 @@ axisDistanceSweepFlat k =
 -- arithmetic shows up here, improving the fold shows up in 'cornerReads'.
 axisOffsets :: Int -> Int
 axisOffsets k =
-    total
-        [ ordinalToInt (view asOrdinal (c .+^ d))
-        | c <- allCoordLike @300 @Clamped
-        , d <- [1 .. k]
-        ]
+  total
+    [ ordinalToInt (view asOrdinal (c .+^ d))
+    | c <- allCoordLike @300 @Clamped,
+      d <- [1 .. k]
+    ]
 
 --------------------------------------------------------------------------------
 -- Boxed against unboxed.
@@ -371,30 +373,29 @@ axisOffsets k =
 
 -- | Prefix-sum each row independently: @scanl1Grid@ lifted through the
 -- outermost axis, which is how the consumer builds a summed-area table.
-rowPrefix :: VG.Vector v Int => GridOf v Big Int -> GridOf v Big Int
+rowPrefix :: (VG.Vector v Int) => GridOf v Big Int -> GridOf v Big Int
 rowPrefix = runIdentity . mapLowerDim (Identity . scanl1Grid (+))
 
 -- | Cell values for the summed-area benchmark below, matching a real
 -- consumer's table-building workload.
 power :: Int -> Coord Big -> Int
 power serial ((fromEnum -> y) :| (fromEnum -> x) :| _) =
-    (rack * y + serial) * rack `div` 100 `mod` 10 - 5
+  (rack * y + serial) * rack `div` 100 `mod` 10 - 5
   where
     rack = x + 10
-
 
 -- | The hand-rolled equivalent of @'scanAxis' 0@: rotate the grid so the
 -- axis is outermost, prefix each row, rotate back. This is what a caller
 -- writes when the library does not reach the axis for them, and what
 -- 'scanAxis' has to beat rather than merely match (sized-grid-adr.5).
-rotatedPrefix :: VG.Vector v Int => GridOf v Big Int -> GridOf v Big Int
+rotatedPrefix :: (VG.Vector v Int) => GridOf v Big Int -> GridOf v Big Int
 rotatedPrefix = transposeGrid . rowPrefix . transposeGrid
 
 -- | Summed-area table: prefix along the rows, transpose, prefix again,
 -- transpose back. Four whole-grid passes, which is the shape unboxing helps.
-satBuild :: VG.Vector v Int => Int -> GridOf v Big Int
+satBuild :: (VG.Vector v Int) => Int -> GridOf v Big Int
 satBuild serial =
-    transposeGrid . rowPrefix . transposeGrid . rowPrefix . tabulateGrid $
+  transposeGrid . rowPrefix . transposeGrid . rowPrefix . tabulateGrid $
     power serial
 
 -- | The same table, named by axis instead of built from the transpose
@@ -402,9 +403,9 @@ satBuild serial =
 -- other rather than assumed equal: @scanAxis 0@ genuinely transposes and
 -- measured ~25% slower boxed than the hand-fused pipeline, trading that for
 -- a function that reaches any axis of a grid of any dimension.
-satBuildAxis :: VG.Vector v Int => Int -> GridOf v Big Int
+satBuildAxis :: (VG.Vector v Int) => Int -> GridOf v Big Int
 satBuildAxis serial =
-    scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid $ power serial
+  scanAxis 0 (+) . scanAxis 1 (+) . tabulateGrid $ power serial
 
 -- There is no standalone @allCoord@ benchmark: at a fixed type it is a CAF,
 -- so the obvious benchmark just measures a pointer, and @-fno-full-laziness@
@@ -420,322 +421,322 @@ satBuildAxis serial =
 
 main :: IO ()
 main = do
-    -- Force the shared inputs once, so their construction is not charged to
-    -- whichever benchmark happens to run first.
-    _ <- evaluate (rnf bigGrid)
-    _ <- evaluate (rnf midGrid)
-    _ <- evaluate (rnf stepGrid)
-    _ <- evaluate (rnf stepGridPeriodic)
-    _ <- evaluate (rnf uPlainStepGrid)
-    defaultMain
-        [ bgroup
-              "coord arithmetic"
-              [ bench "(.+^) x10000, Periodic 300x300" $
-                whnf (`walk` zeroCoord) 10000
-              , -- sized-grid-hb4. 'nf f x' passes x as an argument, but that alone
-                -- does not stop GHC floating 'f x' out of the benchmark loop when
-                -- x is itself a statically-known value (a literal, or a top-level
-                -- CAF like 'bigGrid' below): full laziness only needs x to be
-                -- loop-invariant, not written as a literal. It floated here for one
-                -- library build and not another, changing nothing in this file --
-                -- see the note on tasty-bench's own 'funcToBench'. 'env' pushes x
-                -- through 'withResource'/'unsafePerformIO', which GHC does not see
-                -- through, so the benchmark keeps measuring real work regardless of
-                -- how much the library's cross-module inlining shifts underneath it.
-                env (pure zeroCoord) $ \o ->
-                bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
-                nf
-                    (\o' -> [view deltaHead (c .-. o') | c <- allCoord @Mid])
-                    o
-              , bench "(.+^) x360000, four corner reads over Clamped 300x300" $
-                whnf cornerReads bigGrid
-                -- sized-grid-adr.16: these six take their @k@ through 'env'
-                -- for the same reason '(.-.) x10000' above does, and they did
-                -- not need to before. While a coordinate was a spine, the cold
-                -- branch of 'unsafeOrdinal''s guard sat in the middle of every
-                -- one of these loops and was on its own enough to stop GHC
-                -- folding them. adr.16 removed that guard from the /decode/
-                -- path (see 'unsafeOrdinalUnchecked'), and with nothing left
-                -- to block it GHC evaluated 'checkedCornerReads 3' at compile
-                -- time: 3.46 ms and 36.7 MB became 205 us and __24 bytes__,
-                -- which is not a 17x speedup but a benchmark that had stopped
-                -- doing the work. 'env' pushes @k@ through
-                -- 'withResource'/'unsafePerformIO', which GHC does not see
-                -- through, so what is measured is 360,000 real calls again.
-              , env (pure 3) $ \k ->
-                bench "offsetCoord x360000, checked, over Clamped 300x300" $
-                whnf checkedCornerReads k
-              , env (pure 3) $ \k ->
-                bench "offsetCoord x360000, checked, flat arms (sized-grid-2xv)" $
-                whnf checkedCornerReadsFlat k
-              , env (pure 3) $ \k ->
-                bench "onBoundary x360000, over Clamped 300x300" $
-                whnf onBoundarySweep k
-              , env (pure 3) $ \k ->
-                bench "onBoundary x360000, flat arms (sized-grid-2xv)" $
-                whnf onBoundarySweepFlat k
-              , env (pure 3) $ \k ->
-                bench "coordDistance x360000, over Clamped 300x300" $
-                whnf axisDistanceSweep k
-              , env (pure 3) $ \k ->
-                bench "coordDistance x360000, flat arms (sized-grid-2xv)" $
-                whnf axisDistanceSweepFlat k
-              , bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
-                whnf axisOffsets 1200
-              , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
-                env (pure 299) $ \n ->
-                bench "toEnum/fromEnum x300, Clamped 300" $
-                nf
-                    (\n' -> [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n']])
-                    n
-              ]
-        , bgroup
-              "indexed vs unindexed (the gap is coordPosition, not allCoord)"
-              [ bench "tabulate 300x300  [coordPosition per cell]" $
-                nf (\f -> tabulate f :: Grid Big Int) coordPosition
-                -- sized-grid-adr.16: the worst case for a coordinate that is
-                -- a position rather than a spine, and the one adr.8 called
-                -- out. Every other tabulate here passes its coordinate
-                -- straight to 'coordPosition', which is now free; this one
-                -- takes the coordinate apart per cell, so both @(':|')@
-                -- matches are a 'quotRem' where they used to be field reads.
-                -- adr.8 predicted it still comes out ahead, because producing
-                -- a coordinate costs more than decoding one, and the suite had
-                -- no benchmark that would have caught it if that were wrong.
-              , bench "tabulate 300x300  [rule destructures the coord]" $
-                nf (\s -> tabulate (power s) :: Grid Big Int) 42
-              , bench "pure 300x300      [no coord at all]" $
-                nf (\x -> pure x :: Grid Big Int) 1
-              , bench "imap 300x300      [coordPosition per cell]" $
-                nf (imap (\c x -> coordPosition c + x)) bigGrid
-              , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
-                env (pure bigGrid) $ \g ->
-                bench "fmap 300x300      [no coord at all]" $
-                nf (fmap (+ 1)) g
-              ]
-        , bgroup
-              "grid access"
-              [ -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
-                env (pure bigGrid) $ \g ->
-                bench "index x90000, 300x300 (coord list shared)" $
-                nf (\g' -> map (index g') (allCoord @Big)) g
-              ]
-        , bgroup
-              "indexed traversals"
-              [ bench "ifoldl' 300x300" $
-                whnf (ifoldl' (\c acc x -> acc + coordPosition c + x) 0) bigGrid
-              , bench "itraverse 100x100" $
-                nf (itraverse (const Just)) midGrid
-              ]
-        , bgroup
-              "comonad"
-              [ bench "extract 50x50" $ whnf extract stepGrid
-              , bench "extend neighbourSum 50x50" $
-                nf (extend neighbourSum) stepGrid
-              , bench "extend neighbourSum 50x50, Periodic" $
-                nf (extend neighbourSum) stepGridPeriodic
-              , bench "iterate (extend neighbourSum) x100, 50x50" $
-                nf (iterateExtend 100) stepGrid
-              , bench "iterate (extend neighbourSum) x100, 50x50, Periodic" $
-                nf (iterateExtend 100) stepGridPeriodic
-              ]
-        , -- The same workload as the four above, through a precomputed
-          -- neighbourhood, split into the three costs that make up the trade.
-          --
-          -- Building the table is the case the stencil /loses/: it is one full
-          -- pass of the neighbourhood computation it replaces, and rather more
-          -- than one 'extend' because it also lays out a vector. Running an
-          -- already-built table is the case it wins, and by how much. A caller
-          -- taking @n@ passes pays the first once and the second @n@ times, so
-          -- the two together say where the crossover is.
-          --
-          -- The radius is the 'whnf' argument in the two build benchmarks and
-          -- not a literal in the expression, because as a literal GHC floats
-          -- @mooreStencil 1@ out of the benchmarked function --- it depends on
-          -- nothing else --- and what gets measured is the step alone under a
-          -- label claiming otherwise. That happened, and these numbers are the
-          -- ones after it was caught.
-          --
-          -- sized-grid-fup0 moved the two "building the table" benchmarks:
-          -- @mooreStencil@ used to build through 'stencilFor'\'s two-pass path
-          -- and now goes through the bounded one-pass 'stencilBounded'
-          -- instead. Measured here: 1.46 ms / 16 MB before, 916 μs / 6.9 MB
-          -- after --- 1.6x faster, 2.3x less allocated, matching the module
-          -- Haddock's numbers for this same benchmark.
-          bgroup
-              "stencil (the same neighbourhood, precomputed)"
-              [ bench "imapGrid over neighbours 50x50 (what it replaces)" $
-                nf neighbourStep plainStepGrid
-              , bench "imapGrid over neighbours 50x50, Periodic" $
-                nf neighbourStep plainStepGridPeriodic
-              , bench "imapGrid over neighbours x100, 50x50" $
-                nf (iterateNeighbourStep 100) plainStepGrid
-              , bench "mooreStencil r, 50x50 (building the table)" $
-                whnf (VG.length . stencilPositions . mooreStencil @Step) 1
-              , bench "mooreStencil r, 50x50, Periodic" $
-                whnf (VG.length . stencilPositions . mooreStencil @StepPeriodic) 1
-              , bench "stencilStep 50x50, table already built" $
-                nf (stencilStep stepStencil) plainStepGrid
-              , bench "stencilStep 50x50, Periodic, table already built" $
-                nf (stencilStep stepStencilPeriodic) plainStepGridPeriodic
-              , bench "stencilStep 50x50, table built for this one pass" $
-                nf (\r -> stencilStep (mooreStencil r) plainStepGrid) 1
-              , bench "stencilStep x100, 50x50" $
-                nf (iterateStencil stepStencil 100) plainStepGrid
-              , bench "stencilStep x100, 50x50, Periodic" $
-                nf (iterateStencil stepStencilPeriodic 100) plainStepGridPeriodic
-              , -- sized-grid-adr.13: splits the boxed figure above between the
-                -- neighbour lists 'stencilGrid' builds per pass and the boxed
-                -- 'Int' thunk chains 'iterate' builds across passes, deciding
-                -- whether a fold-shaped 'stencilFoldGrid' is worth writing.
-                bench "stencilStep x100, 50x50, unboxed" $
-                nf (iterateStencil stepStencil 100) uPlainStepGrid
-              , -- The fold-shaped counterparts of the four 'stencilStep'
-                -- benchmarks just above, same grids and same rule, against
-                -- 'stencilFoldGrid' instead of 'stencilGrid' (sized-grid-adr.13).
-                bench "stencilFoldStep 50x50, table already built" $
-                nf (stencilFoldStep stepStencil) plainStepGrid
-              , bench "stencilFoldStep 50x50, Periodic, table already built" $
-                nf (stencilFoldStep stepStencilPeriodic) plainStepGridPeriodic
-              , bench "stencilFoldStep x100, 50x50" $
-                nf (iterateStencilFold stepStencil 100) plainStepGrid
-              , bench "stencilFoldStep x100, 50x50, Periodic" $
-                nf (iterateStencilFold stepStencilPeriodic 100) plainStepGridPeriodic
-              , bench "stencilFoldStep x100, 50x50, unboxed" $
-                nf (iterateStencilFold stepStencil 100) uPlainStepGrid
-              , bench "stencilFoldStep x100, 50x50, unboxed, recursive" $
-                nf (iterateStencilFoldLoop stepStencil 100) uPlainStepGrid
-              , -- sized-grid-d6ng: the primed kernels, same rule and same
-                -- table, differing only in that the fill forces each cell
-                -- where it writes it. Under 'nf' a single pass forces
-                -- everything either way, so the pairs to read are the x100
-                -- ones: that is where the lazy fill defers a hundred
-                -- generations behind whoever finally looks. The unboxed row
-                -- is here to pin the claim that it changes nothing there,
-                -- 'VG.generate' having already forced.
-                bench "stencilStep' 50x50, table already built" $
-                nf (stencilStepStrict stepStencil) plainStepGrid
-              , bench "stencilStep' x100, 50x50" $
-                nf (iterateStencilStrict stepStencil 100) plainStepGrid
-              , bench "stencilStep' x100, 50x50, unboxed" $
-                nf (iterateStencilStrict stepStencil 100) uPlainStepGrid
-              , bench "stencilFoldStep' 50x50, table already built" $
-                nf (stencilFoldStepStrict stepStencil) plainStepGrid
-              , bench "stencilFoldStep' x100, 50x50" $
-                nf (iterateStencilFoldStrict stepStencil 100) plainStepGrid
-              , bench "stencilFoldStep' x100, 50x50, Periodic" $
-                nf (iterateStencilFoldStrict stepStencilPeriodic 100) plainStepGridPeriodic
-              , bench "stencilFoldStep' x100, 50x50, unboxed" $
-                nf (iterateStencilFoldStrict stepStencil 100) uPlainStepGrid
-              ]
-        , bgroup
-              "collapse round trip"
-              [ bench "collapseGrid 100x100" $ nf collapseGrid midGrid
-              , bench "gridFromList . collapseGrid 100x100" $
-                nf
-                    (\g -> gridFromList (collapseGrid g) :: Maybe (Grid Mid Int))
-                    midGrid
-              ]
-        , bgroup
-              "boxed vs unboxed (same code, different vector)"
-              [ bench "tabulateGrid 300x300      boxed" $
-                nf (\f -> tabulateGrid f :: Grid Big Int) coordPosition
-              , bench "tabulateGrid 300x300    unboxed" $
-                nf (\f -> tabulateGrid f :: UGrid Big Int) coordPosition
-              , -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
-                -- This pair is the clearest evidence for it: the unboxed
-                -- benchmark's time was identical whether floated or not (an
-                -- already-realised unboxed vector is nearly free to re-force),
-                -- so only its allocation column exposed the sharing.
-                env (pure bigGrid) $ \g ->
-                bench "mapGrid 300x300              boxed" $
-                nf (mapGrid (+ 1)) g
-              , env (pure ubigGrid) $ \g ->
-                bench "mapGrid 300x300            unboxed" $
-                nf (mapGrid (+ 1)) g
-              , env (pure bigGrid) $ \g ->
-                bench "imapGrid 300x300            boxed" $
-                nf (imapGrid (\_ x -> x + 1)) g
-              , env (pure ubigGrid) $ \g ->
-                bench "imapGrid 300x300          unboxed" $
-                nf (imapGrid (\_ x -> x + 1)) g
-              , bench "foldlGrid' 300x300         boxed" $
-                whnf (foldlGrid' (+) 0) bigGrid
-              , bench "foldlGrid' 300x300       unboxed" $
-                whnf (foldlGrid' (+) 0) ubigGrid
-              , bench "transposeGrid 300x300      boxed" $ nf transposeGrid bigGrid
-              , bench "transposeGrid 300x300    unboxed" $ nf transposeGrid ubigGrid
-              , bench "summed-area build 300x300  boxed" $
-                nf (\s -> satBuild s :: Grid Big Int) 18
-              , bench "summed-area build 300x300 unboxed" $
-                nf (\s -> satBuild s :: UGrid Big Int) 18
-              , bench "summed-area build (scanAxis) 300x300  boxed" $
-                nf (\s -> satBuildAxis s :: Grid Big Int) 18
-              , bench "summed-area build (scanAxis) 300x300 unboxed" $
-                nf (\s -> satBuildAxis s :: UGrid Big Int) 18
-                -- sized-grid-adr.5. The summed-area pair above measures
-                -- 'scanAxis' with 'tabulateGrid' in front of it, which is
-                -- most of the time; these four measure the axis walk on a
-                -- grid that already exists. Axis 1 is the innermost, whose
-                -- fibres are contiguous; axis 0 is the strided one, and the
-                -- 'rotatedPrefix' rows below are what a caller writes
-                -- instead when the combinator is not worth reaching for.
-              , env (pure bigGrid) $ \g ->
-                bench "scanAxis 0 300x300           boxed" $ nf (scanAxis 0 (+)) g
-              , env (pure ubigGrid) $ \g ->
-                bench "scanAxis 0 300x300         unboxed" $ nf (scanAxis 0 (+)) g
-              , env (pure bigGrid) $ \g ->
-                bench "transpose-prefix-transpose   boxed" $ nf rotatedPrefix g
-              , env (pure ubigGrid) $ \g ->
-                bench "transpose-prefix-transpose unboxed" $ nf rotatedPrefix g
-              , env (pure bigGrid) $ \g ->
-                bench "scanAxis 1 300x300           boxed" $ nf (scanAxis 1 (+)) g
-              , env (pure ubigGrid) $ \g ->
-                bench "scanAxis 1 300x300         unboxed" $ nf (scanAxis 1 (+)) g
-              , env (pure bigGrid) $ \g ->
-                bench "mapAxis 0 300x300            boxed" $
-                nf (mapAxis 0 (mapGrid (+ 1))) g
-              , env (pure ubigGrid) $ \g ->
-                bench "mapAxis 0 300x300          unboxed" $
-                nf (mapAxis 0 (mapGrid (+ 1))) g
-              , env (pure bigGrid) $ \g ->
-                bench "axisFold 0 300x300         boxed" $
-                nf (sum . map (foldlGrid' (+) 0) . toListOf (axisFold 0)) g
-              , env (pure ubigGrid) $ \g ->
-                bench "axisFold 0 300x300       unboxed" $
-                nf (sum . map (foldlGrid' (+) 0) . toListOf (axisFold 0)) g
-                -- The pair that reports no difference, deliberately kept.
-              , bench "indexGrid x90000           boxed" $
-                whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid
-              , bench "indexGrid x90000         unboxed" $
-                whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) ubigGrid
-              ]
-        , bgroup
-              "json"
-              [ bench "toJSON 100x100" $ nf toJSON midGrid
-              , bench "fromJSON . toJSON 100x100" $
-                whnf (roundTrips . toJSON) midGrid
-              , env (pure (toJSON midGrid)) $ \v ->
-                bench "fromJSON 100x100, pre-serialised" $ whnf roundTrips v
-              , env (pure (toJSON midGrid)) $ \v ->
-                bench "TEMP aeson floor [[Int]]" $ whnf floorList v
-              , env (pure (toJSON midGrid)) $ \v ->
-                bench "TEMP aeson floor Vector" $ whnf floorVec v
-              ]
+  -- Force the shared inputs once, so their construction is not charged to
+  -- whichever benchmark happens to run first.
+  _ <- evaluate (rnf bigGrid)
+  _ <- evaluate (rnf midGrid)
+  _ <- evaluate (rnf stepGrid)
+  _ <- evaluate (rnf stepGridPeriodic)
+  _ <- evaluate (rnf uPlainStepGrid)
+  defaultMain
+    [ bgroup
+        "coord arithmetic"
+        [ bench "(.+^) x10000, Periodic 300x300" $
+            whnf (`walk` zeroCoord) 10000,
+          -- sized-grid-hb4. 'nf f x' passes x as an argument, but that alone
+          -- does not stop GHC floating 'f x' out of the benchmark loop when
+          -- x is itself a statically-known value (a literal, or a top-level
+          -- CAF like 'bigGrid' below): full laziness only needs x to be
+          -- loop-invariant, not written as a literal. It floated here for one
+          -- library build and not another, changing nothing in this file --
+          -- see the note on tasty-bench's own 'funcToBench'. 'env' pushes x
+          -- through 'withResource'/'unsafePerformIO', which GHC does not see
+          -- through, so the benchmark keeps measuring real work regardless of
+          -- how much the library's cross-module inlining shifts underneath it.
+          env (pure zeroCoord) $ \o ->
+            bench "(.-.) x10000, Clamped 100x100 (coord list shared)" $
+              nf
+                (\o' -> [view deltaHead (c .-. o') | c <- allCoord @Mid])
+                o,
+          bench "(.+^) x360000, four corner reads over Clamped 300x300" $
+            whnf cornerReads bigGrid,
+          -- sized-grid-adr.16: these six take their @k@ through 'env'
+          -- for the same reason '(.-.) x10000' above does, and they did
+          -- not need to before. While a coordinate was a spine, the cold
+          -- branch of 'unsafeOrdinal''s guard sat in the middle of every
+          -- one of these loops and was on its own enough to stop GHC
+          -- folding them. adr.16 removed that guard from the /decode/
+          -- path (see 'unsafeOrdinalUnchecked'), and with nothing left
+          -- to block it GHC evaluated 'checkedCornerReads 3' at compile
+          -- time: 3.46 ms and 36.7 MB became 205 us and __24 bytes__,
+          -- which is not a 17x speedup but a benchmark that had stopped
+          -- doing the work. 'env' pushes @k@ through
+          -- 'withResource'/'unsafePerformIO', which GHC does not see
+          -- through, so what is measured is 360,000 real calls again.
+          env (pure 3) $ \k ->
+            bench "offsetCoord x360000, checked, over Clamped 300x300" $
+              whnf checkedCornerReads k,
+          env (pure 3) $ \k ->
+            bench "offsetCoord x360000, checked, flat arms (sized-grid-2xv)" $
+              whnf checkedCornerReadsFlat k,
+          env (pure 3) $ \k ->
+            bench "onBoundary x360000, over Clamped 300x300" $
+              whnf onBoundarySweep k,
+          env (pure 3) $ \k ->
+            bench "onBoundary x360000, flat arms (sized-grid-2xv)" $
+              whnf onBoundarySweepFlat k,
+          env (pure 3) $ \k ->
+            bench "coordDistance x360000, over Clamped 300x300" $
+              whnf axisDistanceSweep k,
+          env (pure 3) $ \k ->
+            bench "coordDistance x360000, flat arms (sized-grid-2xv)" $
+              whnf axisDistanceSweepFlat k,
+          bench "(.+^) x360000, one Clamped 300 axis (no Coord)" $
+            whnf axisOffsets 1200,
+          -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+          env (pure 299) $ \n ->
+            bench "toEnum/fromEnum x300, Clamped 300" $
+              nf
+                (\n' -> [fromEnum (toEnum i :: Clamped 300) | i <- [0 .. n']])
+                n
+        ],
+      bgroup
+        "indexed vs unindexed (the gap is coordPosition, not allCoord)"
+        [ bench "tabulate 300x300  [coordPosition per cell]" $
+            nf (\f -> tabulate f :: Grid Big Int) coordPosition,
+          -- sized-grid-adr.16: the worst case for a coordinate that is
+          -- a position rather than a spine, and the one adr.8 called
+          -- out. Every other tabulate here passes its coordinate
+          -- straight to 'coordPosition', which is now free; this one
+          -- takes the coordinate apart per cell, so both @(':|')@
+          -- matches are a 'quotRem' where they used to be field reads.
+          -- adr.8 predicted it still comes out ahead, because producing
+          -- a coordinate costs more than decoding one, and the suite had
+          -- no benchmark that would have caught it if that were wrong.
+          bench "tabulate 300x300  [rule destructures the coord]" $
+            nf (\s -> tabulate (power s) :: Grid Big Int) 42,
+          bench "pure 300x300      [no coord at all]" $
+            nf (\x -> pure x :: Grid Big Int) 1,
+          bench "imap 300x300      [coordPosition per cell]" $
+            nf (imap (\c x -> coordPosition c + x)) bigGrid,
+          -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+          env (pure bigGrid) $ \g ->
+            bench "fmap 300x300      [no coord at all]" $
+              nf (fmap (+ 1)) g
+        ],
+      bgroup
+        "grid access"
+        [ -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+          env (pure bigGrid) $ \g ->
+            bench "index x90000, 300x300 (coord list shared)" $
+              nf (\g' -> map (index g') (allCoord @Big)) g
+        ],
+      bgroup
+        "indexed traversals"
+        [ bench "ifoldl' 300x300" $
+            whnf (ifoldl' (\c acc x -> acc + coordPosition c + x) 0) bigGrid,
+          bench "itraverse 100x100" $
+            nf (itraverse (const Just)) midGrid
+        ],
+      bgroup
+        "comonad"
+        [ bench "extract 50x50" $ whnf extract stepGrid,
+          bench "extend neighbourSum 50x50" $
+            nf (extend neighbourSum) stepGrid,
+          bench "extend neighbourSum 50x50, Periodic" $
+            nf (extend neighbourSum) stepGridPeriodic,
+          bench "iterate (extend neighbourSum) x100, 50x50" $
+            nf (iterateExtend 100) stepGrid,
+          bench "iterate (extend neighbourSum) x100, 50x50, Periodic" $
+            nf (iterateExtend 100) stepGridPeriodic
+        ],
+      -- The same workload as the four above, through a precomputed
+      -- neighbourhood, split into the three costs that make up the trade.
+      --
+      -- Building the table is the case the stencil /loses/: it is one full
+      -- pass of the neighbourhood computation it replaces, and rather more
+      -- than one 'extend' because it also lays out a vector. Running an
+      -- already-built table is the case it wins, and by how much. A caller
+      -- taking @n@ passes pays the first once and the second @n@ times, so
+      -- the two together say where the crossover is.
+      --
+      -- The radius is the 'whnf' argument in the two build benchmarks and
+      -- not a literal in the expression, because as a literal GHC floats
+      -- @mooreStencil 1@ out of the benchmarked function --- it depends on
+      -- nothing else --- and what gets measured is the step alone under a
+      -- label claiming otherwise. That happened, and these numbers are the
+      -- ones after it was caught.
+      --
+      -- sized-grid-fup0 moved the two "building the table" benchmarks:
+      -- @mooreStencil@ used to build through 'stencilFor'\'s two-pass path
+      -- and now goes through the bounded one-pass 'stencilBounded'
+      -- instead. Measured here: 1.46 ms / 16 MB before, 916 μs / 6.9 MB
+      -- after --- 1.6x faster, 2.3x less allocated, matching the module
+      -- Haddock's numbers for this same benchmark.
+      bgroup
+        "stencil (the same neighbourhood, precomputed)"
+        [ bench "imapGrid over neighbours 50x50 (what it replaces)" $
+            nf neighbourStep plainStepGrid,
+          bench "imapGrid over neighbours 50x50, Periodic" $
+            nf neighbourStep plainStepGridPeriodic,
+          bench "imapGrid over neighbours x100, 50x50" $
+            nf (iterateNeighbourStep 100) plainStepGrid,
+          bench "mooreStencil r, 50x50 (building the table)" $
+            whnf (VG.length . stencilPositions . mooreStencil @Step) 1,
+          bench "mooreStencil r, 50x50, Periodic" $
+            whnf (VG.length . stencilPositions . mooreStencil @StepPeriodic) 1,
+          bench "stencilStep 50x50, table already built" $
+            nf (stencilStep stepStencil) plainStepGrid,
+          bench "stencilStep 50x50, Periodic, table already built" $
+            nf (stencilStep stepStencilPeriodic) plainStepGridPeriodic,
+          bench "stencilStep 50x50, table built for this one pass" $
+            nf (\r -> stencilStep (mooreStencil r) plainStepGrid) 1,
+          bench "stencilStep x100, 50x50" $
+            nf (iterateStencil stepStencil 100) plainStepGrid,
+          bench "stencilStep x100, 50x50, Periodic" $
+            nf (iterateStencil stepStencilPeriodic 100) plainStepGridPeriodic,
+          -- sized-grid-adr.13: splits the boxed figure above between the
+          -- neighbour lists 'stencilGrid' builds per pass and the boxed
+          -- 'Int' thunk chains 'iterate' builds across passes, deciding
+          -- whether a fold-shaped 'stencilFoldGrid' is worth writing.
+          bench "stencilStep x100, 50x50, unboxed" $
+            nf (iterateStencil stepStencil 100) uPlainStepGrid,
+          -- The fold-shaped counterparts of the four 'stencilStep'
+          -- benchmarks just above, same grids and same rule, against
+          -- 'stencilFoldGrid' instead of 'stencilGrid' (sized-grid-adr.13).
+          bench "stencilFoldStep 50x50, table already built" $
+            nf (stencilFoldStep stepStencil) plainStepGrid,
+          bench "stencilFoldStep 50x50, Periodic, table already built" $
+            nf (stencilFoldStep stepStencilPeriodic) plainStepGridPeriodic,
+          bench "stencilFoldStep x100, 50x50" $
+            nf (iterateStencilFold stepStencil 100) plainStepGrid,
+          bench "stencilFoldStep x100, 50x50, Periodic" $
+            nf (iterateStencilFold stepStencilPeriodic 100) plainStepGridPeriodic,
+          bench "stencilFoldStep x100, 50x50, unboxed" $
+            nf (iterateStencilFold stepStencil 100) uPlainStepGrid,
+          bench "stencilFoldStep x100, 50x50, unboxed, recursive" $
+            nf (iterateStencilFoldLoop stepStencil 100) uPlainStepGrid,
+          -- sized-grid-d6ng: the primed kernels, same rule and same
+          -- table, differing only in that the fill forces each cell
+          -- where it writes it. Under 'nf' a single pass forces
+          -- everything either way, so the pairs to read are the x100
+          -- ones: that is where the lazy fill defers a hundred
+          -- generations behind whoever finally looks. The unboxed row
+          -- is here to pin the claim that it changes nothing there,
+          -- 'VG.generate' having already forced.
+          bench "stencilStep' 50x50, table already built" $
+            nf (stencilStepStrict stepStencil) plainStepGrid,
+          bench "stencilStep' x100, 50x50" $
+            nf (iterateStencilStrict stepStencil 100) plainStepGrid,
+          bench "stencilStep' x100, 50x50, unboxed" $
+            nf (iterateStencilStrict stepStencil 100) uPlainStepGrid,
+          bench "stencilFoldStep' 50x50, table already built" $
+            nf (stencilFoldStepStrict stepStencil) plainStepGrid,
+          bench "stencilFoldStep' x100, 50x50" $
+            nf (iterateStencilFoldStrict stepStencil 100) plainStepGrid,
+          bench "stencilFoldStep' x100, 50x50, Periodic" $
+            nf (iterateStencilFoldStrict stepStencilPeriodic 100) plainStepGridPeriodic,
+          bench "stencilFoldStep' x100, 50x50, unboxed" $
+            nf (iterateStencilFoldStrict stepStencil 100) uPlainStepGrid
+        ],
+      bgroup
+        "collapse round trip"
+        [ bench "collapseGrid 100x100" $ nf collapseGrid midGrid,
+          bench "gridFromList . collapseGrid 100x100" $
+            nf
+              (\g -> gridFromList (collapseGrid g) :: Maybe (Grid Mid Int))
+              midGrid
+        ],
+      bgroup
+        "boxed vs unboxed (same code, different vector)"
+        [ bench "tabulateGrid 300x300      boxed" $
+            nf (\f -> tabulateGrid f :: Grid Big Int) coordPosition,
+          bench "tabulateGrid 300x300    unboxed" $
+            nf (\f -> tabulateGrid f :: UGrid Big Int) coordPosition,
+          -- sized-grid-hb4: same floating hazard as '(.-.) x10000' above.
+          -- This pair is the clearest evidence for it: the unboxed
+          -- benchmark's time was identical whether floated or not (an
+          -- already-realised unboxed vector is nearly free to re-force),
+          -- so only its allocation column exposed the sharing.
+          env (pure bigGrid) $ \g ->
+            bench "mapGrid 300x300              boxed" $
+              nf (mapGrid (+ 1)) g,
+          env (pure ubigGrid) $ \g ->
+            bench "mapGrid 300x300            unboxed" $
+              nf (mapGrid (+ 1)) g,
+          env (pure bigGrid) $ \g ->
+            bench "imapGrid 300x300            boxed" $
+              nf (imapGrid (\_ x -> x + 1)) g,
+          env (pure ubigGrid) $ \g ->
+            bench "imapGrid 300x300          unboxed" $
+              nf (imapGrid (\_ x -> x + 1)) g,
+          bench "foldlGrid' 300x300         boxed" $
+            whnf (foldlGrid' (+) 0) bigGrid,
+          bench "foldlGrid' 300x300       unboxed" $
+            whnf (foldlGrid' (+) 0) ubigGrid,
+          bench "transposeGrid 300x300      boxed" $ nf transposeGrid bigGrid,
+          bench "transposeGrid 300x300    unboxed" $ nf transposeGrid ubigGrid,
+          bench "summed-area build 300x300  boxed" $
+            nf (\s -> satBuild s :: Grid Big Int) 18,
+          bench "summed-area build 300x300 unboxed" $
+            nf (\s -> satBuild s :: UGrid Big Int) 18,
+          bench "summed-area build (scanAxis) 300x300  boxed" $
+            nf (\s -> satBuildAxis s :: Grid Big Int) 18,
+          bench "summed-area build (scanAxis) 300x300 unboxed" $
+            nf (\s -> satBuildAxis s :: UGrid Big Int) 18,
+          -- sized-grid-adr.5. The summed-area pair above measures
+          -- 'scanAxis' with 'tabulateGrid' in front of it, which is
+          -- most of the time; these four measure the axis walk on a
+          -- grid that already exists. Axis 1 is the innermost, whose
+          -- fibres are contiguous; axis 0 is the strided one, and the
+          -- 'rotatedPrefix' rows below are what a caller writes
+          -- instead when the combinator is not worth reaching for.
+          env (pure bigGrid) $ \g ->
+            bench "scanAxis 0 300x300           boxed" $ nf (scanAxis 0 (+)) g,
+          env (pure ubigGrid) $ \g ->
+            bench "scanAxis 0 300x300         unboxed" $ nf (scanAxis 0 (+)) g,
+          env (pure bigGrid) $ \g ->
+            bench "transpose-prefix-transpose   boxed" $ nf rotatedPrefix g,
+          env (pure ubigGrid) $ \g ->
+            bench "transpose-prefix-transpose unboxed" $ nf rotatedPrefix g,
+          env (pure bigGrid) $ \g ->
+            bench "scanAxis 1 300x300           boxed" $ nf (scanAxis 1 (+)) g,
+          env (pure ubigGrid) $ \g ->
+            bench "scanAxis 1 300x300         unboxed" $ nf (scanAxis 1 (+)) g,
+          env (pure bigGrid) $ \g ->
+            bench "mapAxis 0 300x300            boxed" $
+              nf (mapAxis 0 (mapGrid (+ 1))) g,
+          env (pure ubigGrid) $ \g ->
+            bench "mapAxis 0 300x300          unboxed" $
+              nf (mapAxis 0 (mapGrid (+ 1))) g,
+          env (pure bigGrid) $ \g ->
+            bench "axisFold 0 300x300         boxed" $
+              nf (sum . map (foldlGrid' (+) 0) . toListOf (axisFold 0)) g,
+          env (pure ubigGrid) $ \g ->
+            bench "axisFold 0 300x300       unboxed" $
+              nf (sum . map (foldlGrid' (+) 0) . toListOf (axisFold 0)) g,
+          -- The pair that reports no difference, deliberately kept.
+          bench "indexGrid x90000           boxed" $
+            whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) bigGrid,
+          bench "indexGrid x90000         unboxed" $
+            whnf (\g -> sum (map (indexGrid g) (allCoord @Big))) ubigGrid
+        ],
+      bgroup
+        "json"
+        [ bench "toJSON 100x100" $ nf toJSON midGrid,
+          bench "fromJSON . toJSON 100x100" $
+            whnf (roundTrips . toJSON) midGrid,
+          env (pure (toJSON midGrid)) $ \v ->
+            bench "fromJSON 100x100, pre-serialised" $ whnf roundTrips v,
+          env (pure (toJSON midGrid)) $ \v ->
+            bench "TEMP aeson floor [[Int]]" $ whnf floorList v,
+          env (pure (toJSON midGrid)) $ \v ->
+            bench "TEMP aeson floor Vector" $ whnf floorVec v
         ]
+    ]
   where
     -- 'Result' has no 'NFData' instance, so this stays a manual force rather
     -- than 'nf'; 'rnf' on the decoded 'Grid' is still the direct deep force,
     -- not a 'total'-style Foldable sum.
     roundTrips v =
-        case fromJSON v :: Result (Grid Mid Int) of
-            Success g -> rnf g `seq` (1 :: Int)
-            Error _   -> -1
+      case fromJSON v :: Result (Grid Mid Int) of
+        Success g -> rnf g `seq` (1 :: Int)
+        Error _ -> -1
     floorList v =
-        case fromJSON v :: Result [[Int]] of
-            Success g -> rnf g `seq` (1 :: Int)
-            Error _   -> -1
+      case fromJSON v :: Result [[Int]] of
+        Success g -> rnf g `seq` (1 :: Int)
+        Error _ -> -1
     floorVec v =
-        case fromJSON v :: Result (V.Vector (V.Vector Int)) of
-            Success g -> rnf g `seq` (1 :: Int)
-            Error _   -> -1
+      case fromJSON v :: Result (V.Vector (V.Vector Int)) of
+        Success g -> rnf g `seq` (1 :: Int)
+        Error _ -> -1

@@ -7,44 +7,47 @@
 -- compiles at all. The assertions in 'main' are almost beside the point;
 -- the type checker is the test.
 module Main
-  ( main
-  ) where
+  ( main,
+  )
+where
 
-import           Data.Grid.Sized
-
-import           Control.Exception    (SomeException, evaluate, try)
-import           Data.Aeson           (decode, encode)
-import           Data.ByteString.Lazy (ByteString)
-import           Data.Maybe           (fromJust)
-import           GHC.TypeLits         (KnownNat)
-import           System.Exit          (exitFailure)
+import Control.Exception (SomeException, evaluate, try)
+import Data.Aeson (decode, encode)
+import Data.ByteString.Lazy (ByteString)
+import Data.Grid.Sized
+import Data.Maybe (fromJust)
+import GHC.TypeLits (KnownNat)
+import System.Exit (exitFailure)
 
 parseSquare ::
-     forall n. KnownNat n
-  => String
-  -> Maybe (Grid '[ Clamped n, Clamped n] Char)
+  forall n.
+  (KnownNat n) =>
+  String ->
+  Maybe (Grid '[Clamped n, Clamped n] Char)
 parseSquare = gridFromList . lines
 
 renderSquare ::
-     forall n. KnownNat n
-  => Grid '[ Clamped n, Clamped n] Char
-  -> [String]
+  forall n.
+  (KnownNat n) =>
+  Grid '[Clamped n, Clamped n] Char ->
+  [String]
 renderSquare = collapseGrid
 
 roundTripJSON ::
-     forall n. KnownNat n
-  => Grid '[ Clamped n, Clamped n] Char
-  -> Maybe (Grid '[ Clamped n, Clamped n] Char)
+  forall n.
+  (KnownNat n) =>
+  Grid '[Clamped n, Clamped n] Char ->
+  Maybe (Grid '[Clamped n, Clamped n] Char)
 roundTripJSON = decode . encode
 
-columnSums :: Grid '[ Clamped 3, Clamped 3] Int -> Grid '[ Clamped 3, Clamped 3] Int
+columnSums :: Grid '[Clamped 3, Clamped 3] Int -> Grid '[Clamped 3, Clamped 3] Int
 columnSums = scanAxis 0 (+)
 
 rejectsRagged :: Bool
 rejectsRagged =
-  case decode ragged :: Maybe (Grid '[ Clamped 3, Clamped 3] Int) of
+  case decode ragged :: Maybe (Grid '[Clamped 3, Clamped 3] Int) of
     Nothing -> True
-    Just _  -> False
+    Just _ -> False
   where
     ragged = "[[1,2,3],[4,5]]" :: ByteString
 
@@ -67,23 +70,25 @@ checkSurvivesIntoConsumers = do
   r <- try (evaluate (ordinalToInt (unsafeOrdinal 99 :: Ordinal 5)))
   pure $
     case r :: Either SomeException Int of
-      Left _  -> True
+      Left _ -> True
       Right _ -> False
 
 main :: IO ()
 main = do
   checkLives <- checkSurvivesIntoConsumers
   let rows = ["abc", "def", "ghi"]
-      grid = fromJust (parseSquare (unlines rows)) :: Grid '[ Clamped 3, Clamped 3] Char
-      numbers = fromJust (gridFromList [[1, 2, 3], [4, 5, 6], [7, 8, 9]]) ::
-                  Grid '[ Clamped 3, Clamped 3] Int
+      grid = fromJust (parseSquare (unlines rows)) :: Grid '[Clamped 3, Clamped 3] Char
+      numbers =
+        fromJust (gridFromList [[1, 2, 3], [4, 5, 6], [7, 8, 9]]) ::
+          Grid '[Clamped 3, Clamped 3] Int
       checks =
-        [ ("collapseGrid . gridFromList", renderSquare grid == rows)
-        , ("decode . encode", fmap renderSquare (roundTripJSON grid) == Just rows)
-        , ("ragged JSON rejected", rejectsRagged)
-        , ( "scanAxis 0 scans down each column"
-          , collapseGrid (columnSums numbers) == [[1, 2, 3], [5, 7, 9], [12, 15, 18]])
-        , ("unsafeOrdinal's range check survives into a consumer", checkLives)
+        [ ("collapseGrid . gridFromList", renderSquare grid == rows),
+          ("decode . encode", fmap renderSquare (roundTripJSON grid) == Just rows),
+          ("ragged JSON rejected", rejectsRagged),
+          ( "scanAxis 0 scans down each column",
+            collapseGrid (columnSums numbers) == [[1, 2, 3], [5, 7, 9], [12, 15, 18]]
+          ),
+          ("unsafeOrdinal's range check survives into a consumer", checkLives)
         ]
   case [name | (name, ok) <- checks, not ok] of
     [] -> putStrLn ("downstream: " ++ show (length checks) ++ " checks passed")

@@ -11,21 +11,25 @@
 -- escape codes and the delay are both dropped and the frames are simply
 -- appended. That is the case the gloss front end cannot serve at all.
 module Sudoku.Render.Ansi
-  ( animate
-  ) where
+  ( animate,
+  )
+where
 
-import           Sudoku.Board
-import           Sudoku.Solve
-
-import           Data.Grid.Sized    (Coord, allCoord, indexGrid)
-
-import           Control.Concurrent (threadDelay)
-import           Control.Exception  (bracket_)
-import           Control.Monad      (when)
-import           Data.List          (intercalate)
-import           Data.Maybe         (isJust)
-import           System.IO          (BufferMode (..), hFlush,
-                                     hIsTerminalDevice, hSetBuffering, stdout)
+import Control.Concurrent (threadDelay)
+import Control.Exception (bracket_)
+import Control.Monad (when)
+import Data.Grid.Sized (Coord, allCoord, indexGrid)
+import Data.List (intercalate)
+import Data.Maybe (isJust)
+import Sudoku.Board
+import Sudoku.Solve
+import System.IO
+  ( BufferMode (..),
+    hFlush,
+    hIsTerminalDevice,
+    hSetBuffering,
+    stdout,
+  )
 
 -- * Escape codes
 
@@ -48,15 +52,15 @@ sgr n = esc (show n ++ "m")
 -- | Replay a board's search in the terminal at the given steps per second.
 animate :: Float -> Board -> IO ()
 animate rate givens = do
-    tty <- hIsTerminalDevice stdout
-    hSetBuffering stdout (BlockBuffering Nothing)
-    let start = when tty (putStr (clearScreen ++ hideCursor))
-        stop = when tty (putStr (showCursor ++ sgr 0)) >> hFlush stdout
-    bracket_ start stop $ do
-        final <- go tty (solveTrace givens) givens Nothing 0 0
-        putStrLn ""
-        putStrLn final
-        hFlush stdout
+  tty <- hIsTerminalDevice stdout
+  hSetBuffering stdout (BlockBuffering Nothing)
+  let start = when tty (putStr (clearScreen ++ hideCursor))
+      stop = when tty (putStr (showCursor ++ sgr 0)) >> hFlush stdout
+  bracket_ start stop $ do
+    final <- go tty (solveTrace givens) givens Nothing 0 0
+    putStrLn ""
+    putStrLn final
+    hFlush stdout
   where
     -- At most fifty frames a second; above that the steps are batched into one
     -- frame rather than the terminal being asked to redraw faster than it can.
@@ -64,76 +68,82 @@ animate rate givens = do
     perFrame = max 1 (round (rate / frameRate)) :: Int
     delay = round (1e6 / frameRate) :: Int
     go tty steps board focus placed undone =
-        case steps of
-            [] -> pure "no solution (the trace ended without one)"
-            _ -> do
-                let (taken, rest) = splitAt perFrame steps
-                    (board', focus', placed', undone') =
-                        foldl apply (board, focus, placed, undone) taken
-                frame tty board' focus' placed' undone'
-                case [mb | Done mb <- taken] of
-                    (mb:_) ->
-                        pure $
-                        if isJust mb
-                            then "solved in " ++ show placed' ++
-                                 " placements and " ++ show undone' ++
-                                 " backtracks"
-                            else "no solution after " ++ show placed' ++
-                                 " placements and " ++ show undone' ++
-                                 " backtracks"
-                    [] -> do
-                        when tty (threadDelay delay)
-                        go tty rest board' focus' placed' undone'
+      case steps of
+        [] -> pure "no solution (the trace ended without one)"
+        _ -> do
+          let (taken, rest) = splitAt perFrame steps
+              (board', focus', placed', undone') =
+                foldl apply (board, focus, placed, undone) taken
+          frame tty board' focus' placed' undone'
+          case [mb | Done mb <- taken] of
+            (mb : _) ->
+              pure $
+                if isJust mb
+                  then
+                    "solved in "
+                      ++ show placed'
+                      ++ " placements and "
+                      ++ show undone'
+                      ++ " backtracks"
+                  else
+                    "no solution after "
+                      ++ show placed'
+                      ++ " placements and "
+                      ++ show undone'
+                      ++ " backtracks"
+            [] -> do
+              when tty (threadDelay delay)
+              go tty rest board' focus' placed' undone'
     apply (board, _, placed, undone) s =
-        case s of
-            Place p _ b -> (b, Just (p, True), placed + 1, undone)
-            Undo p b    -> (b, Just (p, False), placed, undone + 1)
-            Done mb     -> (maybe board id mb, Nothing, placed, undone)
+      case s of
+        Place p _ b -> (b, Just (p, True), placed + 1, undone)
+        Undo p b -> (b, Just (p, False), placed, undone + 1)
+        Done mb -> (maybe board id mb, Nothing, placed, undone)
     frame tty board focus placed undone = do
-        putStr (if tty then home else "\n")
-        putStr (render tty givens board focus placed undone)
-        hFlush stdout
+      putStr (if tty then home else "\n")
+      putStr (render tty givens board focus placed undone)
+      hFlush stdout
 
 -- * Drawing
 
 render ::
-       Bool
-    -> Board
-    -> Board
-    -> Maybe (Coord Cs, Bool)
-    -> Int
-    -> Int
-    -> String
+  Bool ->
+  Board ->
+  Board ->
+  Maybe (Coord Cs, Bool) ->
+  Int ->
+  Int ->
+  String
 render tty givensBoard board focus placed undone =
-    unlines (concatMap bandRows [0 .. 2] ++ ["", status])
+  unlines (concatMap bandRows [0 .. 2] ++ ["", status])
   where
     bandRows band =
-        [rule | band > 0] ++ [row r | r <- [3 * band .. 3 * band + 2]]
+      [rule | band > 0] ++ [row r | r <- [3 * band .. 3 * band + 2]]
     rule = "-------+-------+-------"
     -- Bands of three, joined by the same '|' the rule above puts a '+' at, so
     -- the 3x3 squares line up down the page.
     row r =
-        intercalate
-            "|"
-            [ concat [" " ++ cellAt r c | c <- [3 * b .. 3 * b + 2]] ++ " "
-            | b <- [0 .. 2 :: Int]
-            ]
+      intercalate
+        "|"
+        [ concat [" " ++ cellAt r c | c <- [3 * b .. 3 * b + 2]] ++ " "
+        | b <- [0 .. 2 :: Int]
+        ]
     cellAt r c =
-        let p = coordAt r c
-            given = isJust (indexGrid givensBoard p)
-            here = indexGrid board p
-            glyph = displaySymbol here
-        in case focus of
-               Just (q, wrote)
-                   | q == p -> paint (if wrote then 7 else 2) glyph
-               _
-                   | given -> glyph
-                   | otherwise -> paint 36 glyph
+      let p = coordAt r c
+          given = isJust (indexGrid givensBoard p)
+          here = indexGrid board p
+          glyph = displaySymbol here
+       in case focus of
+            Just (q, wrote)
+              | q == p -> paint (if wrote then 7 else 2) glyph
+            _
+              | given -> glyph
+              | otherwise -> paint 36 glyph
     paint code s
-        | tty = sgr code ++ s ++ sgr 0
-        | otherwise = s
+      | tty = sgr code ++ s ++ sgr 0
+      | otherwise = s
     status =
-        show placed ++ " placed, " ++ show undone ++ " backtracked"
+      show placed ++ " placed, " ++ show undone ++ " backtracked"
 
 -- | The coordinate at a row and column, read out of the grid's own
 -- enumeration rather than built here: 'allCoord' is row-major, so cell

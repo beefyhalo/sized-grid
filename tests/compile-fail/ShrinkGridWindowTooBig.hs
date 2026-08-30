@@ -7,5 +7,5 @@ module ShrinkGridWindowTooBig where
 
 import Data.Grid.Sized
 
-bad :: Coord '[ Ordinal 3] -> Grid '[ Ordinal 3] Int -> Grid '[ Ordinal 3] Int
+bad :: Coord '[Ordinal 3] -> Grid '[Ordinal 3] Int -> Grid '[Ordinal 3] Int
 bad = shrinkGrid

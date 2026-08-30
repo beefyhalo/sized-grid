@@ -1,27 +1,37 @@
-{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Optics
-  ( opticTests
-  ) where
+  ( opticTests,
+  )
+where
 
-import           Control.Lens
-import           Data.Grid.Sized
-import           Data.Maybe          (isNothing)
-import qualified Data.Vector         as V
-import           Generics.SOP        (NP)
-import           Test.Arbitrary      ()
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.QuickCheck (chooseInt, testProperty)
-import           Test.Utils          (isoLaws, lensLaws, prismLaws, prismLawsFrom,
-                                      traversalLaws)
+import Control.Lens
+import Data.Grid.Sized
+import Data.Maybe (isNothing)
+import Data.Vector qualified as V
+import Generics.SOP (NP)
+import Test.Arbitrary ()
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck (chooseInt, testProperty)
+import Test.Utils
+  ( isoLaws,
+    lensLaws,
+    prismLaws,
+    prismLawsFrom,
+    traversalLaws,
+  )
 
 type Coord2 = Coord '[Ordinal 5, Ordinal 7]
+
 type Grid2 = Grid '[Ordinal 5, Ordinal 7] Int
+
 type TransposedGrid2 = Grid '[Ordinal 7, Ordinal 5] Int
+
 type Focused2 = FocusedGrid '[Ordinal 5, Ordinal 7] Int
+
 type Torus2 = Coord '[Periodic 5, Periodic 3]
 
 torusDelta :: Int -> Int -> Delta '[Int, Int]
@@ -34,40 +44,53 @@ coordOpticTests :: TestTree
 coordOpticTests =
   testGroup
     "Coordinate optics"
-    [ isoLaws "_CoordAxes"
-      (_CoordAxes :: Iso' Coord2 (NP I '[Ordinal 5, Ordinal 7]))
-    , isoLaws "_CoordTuple"
-      (_CoordTuple :: Iso' Coord2 (Ordinal 5, Ordinal 7))
-    , isoLaws "_CoordCons"
-      (_CoordCons :: Iso' Coord2 (Ordinal 5, Coord '[Ordinal 7]))
-    , isoLaws "_SingleCoord"
-      (_SingleCoord :: Iso' (Coord '[Ordinal 5]) (Ordinal 5))
-    , isoLaws "_EmptyCoord"
-      (_EmptyCoord :: Iso' (Coord '[]) ())
-    , prismLaws "_Position" (_Position :: Prism' Int Coord2)
-    , prismLaws "_Strengthened"
-      (_Strengthened :: Prism' (Ordinal 7) (Ordinal 5))
-    , prismLaws "_Weakened"
-      (_Weakened :: Prism' (Clamped 7) (Clamped 5))
-    , prismLaws "_WeakenedCoord"
-      (_WeakenedCoord :: Prism' (Coord '[Ordinal 7, Ordinal 9]) Coord2)
-    , lensLaws "coordHead" (coordHead :: Lens' Coord2 (Ordinal 5))
-    , lensLaws "coordTail" (coordTail :: Lens' Coord2 (Coord '[Ordinal 7]))
+    [ isoLaws
+        "_CoordAxes"
+        (_CoordAxes :: Iso' Coord2 (NP I '[Ordinal 5, Ordinal 7])),
+      isoLaws
+        "_CoordTuple"
+        (_CoordTuple :: Iso' Coord2 (Ordinal 5, Ordinal 7)),
+      isoLaws
+        "_CoordCons"
+        (_CoordCons :: Iso' Coord2 (Ordinal 5, Coord '[Ordinal 7])),
+      isoLaws
+        "_SingleCoord"
+        (_SingleCoord :: Iso' (Coord '[Ordinal 5]) (Ordinal 5)),
+      isoLaws
+        "_EmptyCoord"
+        (_EmptyCoord :: Iso' (Coord '[]) ()),
+      prismLaws "_Position" (_Position :: Prism' Int Coord2),
+      prismLaws
+        "_Strengthened"
+        (_Strengthened :: Prism' (Ordinal 7) (Ordinal 5)),
+      prismLaws
+        "_Weakened"
+        (_Weakened :: Prism' (Clamped 7) (Clamped 5)),
+      prismLaws
+        "_WeakenedCoord"
+        (_WeakenedCoord :: Prism' (Coord '[Ordinal 7, Ordinal 9]) Coord2),
+      lensLaws "coordHead" (coordHead :: Lens' Coord2 (Ordinal 5)),
+      lensLaws "coordTail" (coordTail :: Lens' Coord2 (Coord '[Ordinal 7]))
     ]
 
 deltaOpticTests :: TestTree
 deltaOpticTests =
   testGroup
     "Delta optics"
-    [ isoLaws "_WrappedDelta"
-        (_WrappedDelta :: Iso' (Delta '[Int, Int]) (NP I '[Int, Int]))
-    , isoLaws "_DeltaTuple"
-      (_DeltaTuple :: Iso' (Delta '[Int, Int]) (Int, Int))
-    , isoLaws "_DeltaCons"
-      (_DeltaCons :: Iso' (Delta '[Int, Int]) (Int, Delta '[Int]))
-    , lensLaws "deltaHead"
-        (deltaHead :: Lens' (Delta '[Int, Int]) Int)
-    , lensLaws "deltaTail"
+    [ isoLaws
+        "_WrappedDelta"
+        (_WrappedDelta :: Iso' (Delta '[Int, Int]) (NP I '[Int, Int])),
+      isoLaws
+        "_DeltaTuple"
+        (_DeltaTuple :: Iso' (Delta '[Int, Int]) (Int, Int)),
+      isoLaws
+        "_DeltaCons"
+        (_DeltaCons :: Iso' (Delta '[Int, Int]) (Int, Delta '[Int])),
+      lensLaws
+        "deltaHead"
+        (deltaHead :: Lens' (Delta '[Int, Int]) Int),
+      lensLaws
+        "deltaTail"
         (deltaTail :: Lens' (Delta '[Int, Int]) (Delta '[Int]))
     ]
 
@@ -76,63 +99,82 @@ torusTests =
   testGroup
     "Boundaryless displacement group"
     [ testCase "equivalent displacements have equal residues" $
-        assertEqual "residue"
+        assertEqual
+          "residue"
           (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 1 0))
-          (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 0))
-    , testCase "the residue group has one value per coordinate" $
-        assertEqual "cardinality" 15 (length (allTorusCoords @'[Periodic 5, Periodic 3]))
-    , testCase "conversion recovers the shortest displacement" $
-        assertEqual "shortest delta"
+          (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 0)),
+      testCase "the residue group has one value per coordinate" $
+        assertEqual "cardinality" 15 (length (allTorusCoords @'[Periodic 5, Periodic 3])),
+      testCase "conversion recovers the shortest displacement" $
+        assertEqual
+          "shortest delta"
           (torusDelta 1 (-1))
-          (torusCoordToDelta @'[Periodic 5, Periodic 3]
-            (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 (-1))))
-    , isoLaws "translated" (translationOptic (torusDelta 2 (-1)))
+          ( torusCoordToDelta @'[Periodic 5, Periodic 3]
+              (torusCoordFromDelta @'[Periodic 5, Periodic 3] (torusDelta 6 (-1)))
+          ),
+      isoLaws "translated" (translationOptic (torusDelta 2 (-1)))
     ]
 
 focusedOpticTests :: TestTree
 focusedOpticTests =
   testGroup
     "Focused-grid optics"
-    [ isoLaws "_FocusedGrid"
-        (_FocusedGrid :: Iso' Focused2 (Grid2, Coord2))
-    , lensLaws "focus" (focus :: Lens' Focused2 Coord2)
-    , lensLaws "unfocused" (unfocused :: Lens' Focused2 Grid2)
-    , lensLaws "asGrid" (asGrid :: Lens' Focused2 Grid2)
-    , lensLaws "gridIndex" (gridIndex (zeroCoord :: Coord2) :: Lens' Grid2 Int)
+    [ isoLaws
+        "_FocusedGrid"
+        (_FocusedGrid :: Iso' Focused2 (Grid2, Coord2)),
+      lensLaws "focus" (focus :: Lens' Focused2 Coord2),
+      lensLaws "unfocused" (unfocused :: Lens' Focused2 Grid2),
+      lensLaws "asGrid" (asGrid :: Lens' Focused2 Grid2),
+      lensLaws "gridIndex" (gridIndex (zeroCoord :: Coord2) :: Lens' Grid2 Int)
     ]
 
 gridOpticTests :: TestTree
 gridOpticTests =
   testGroup
     "Grid optics"
-    [ isoLaws "_TransposedCoord"
-        (_TransposedCoord :: Iso' Coord2 (Coord '[Ordinal 7, Ordinal 5]))
-    , isoLaws "permuted _TransposedCoord"
-        (permuted _TransposedCoord :: Iso' TransposedGrid2 Grid2)
-    , isoLaws "_Transposed"
-        (_Transposed :: Iso' Grid2 TransposedGrid2)
-    , isoLaws "_SplitGrid"
-        (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int)))
-    , isoLaws "_SplitHigherDim"
-      (_SplitHigherDim :: Iso' Grid2
-        (Grid '[Ordinal 3, Ordinal 7] Int, Grid '[Ordinal 2, Ordinal 7] Int))
-    , prismLaws "_CollapsedGrid"
-      (_CollapsedGrid :: Prism' [[Int]] Grid2)
-    , testGroup "_GridVector is a prism"
-      [ prismLawsFrom (V.replicate 35 <$> chooseInt (-100, 100))
-          "_GridVector" (_GridVector :: Prism' (V.Vector Int) Grid2)
-      , testProperty "preview rejects the wrong length" $
-        isNothing $ preview (_GridVector :: Prism' (V.Vector Int) Grid2)
-          (V.replicate 34 0)
-      ]
-    , testGroup "lowerDim"
-      [ traversalLaws
-        (lowerDim :: Traversal' Grid2 (Grid '[Ordinal 7] Int))
-      ]
-    , lensLaws "cell" (cell (zeroCoord :: Coord2) :: Lens' Grid2 Int)
-    , lensLaws "slice" (slice 1 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int))
-    , lensLaws "prefix" (prefix 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int))
-    , lensLaws "suffix" (suffix 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 3] Int))
+    [ isoLaws
+        "_TransposedCoord"
+        (_TransposedCoord :: Iso' Coord2 (Coord '[Ordinal 7, Ordinal 5])),
+      isoLaws
+        "permuted _TransposedCoord"
+        (permuted _TransposedCoord :: Iso' TransposedGrid2 Grid2),
+      isoLaws
+        "_Transposed"
+        (_Transposed :: Iso' Grid2 TransposedGrid2),
+      isoLaws
+        "_SplitGrid"
+        (_SplitGrid :: Iso' Grid2 (Grid '[Ordinal 5] (Grid '[Ordinal 7] Int))),
+      isoLaws
+        "_SplitHigherDim"
+        ( _SplitHigherDim ::
+            Iso'
+              Grid2
+              (Grid '[Ordinal 3, Ordinal 7] Int, Grid '[Ordinal 2, Ordinal 7] Int)
+        ),
+      prismLaws
+        "_CollapsedGrid"
+        (_CollapsedGrid :: Prism' [[Int]] Grid2),
+      testGroup
+        "_GridVector is a prism"
+        [ prismLawsFrom
+            (V.replicate 35 <$> chooseInt (-100, 100))
+            "_GridVector"
+            (_GridVector :: Prism' (V.Vector Int) Grid2),
+          testProperty "preview rejects the wrong length" $
+            isNothing $
+              preview
+                (_GridVector :: Prism' (V.Vector Int) Grid2)
+                (V.replicate 34 0)
+        ],
+      testGroup
+        "lowerDim"
+        [ traversalLaws
+            (lowerDim :: Traversal' Grid2 (Grid '[Ordinal 7] Int))
+        ],
+      lensLaws "cell" (cell (zeroCoord :: Coord2) :: Lens' Grid2 Int),
+      lensLaws "slice" (slice 1 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int)),
+      lensLaws "prefix" (prefix 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int)),
+      lensLaws "suffix" (suffix 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 3] Int))
     ]
 
 ordinalOpticTests :: TestTree
@@ -146,10 +188,10 @@ opticTests :: TestTree
 opticTests =
   testGroup
     "Optic laws"
-    [ coordOpticTests
-    , deltaOpticTests
-    , torusTests
-    , focusedOpticTests
-    , gridOpticTests
-    , ordinalOpticTests
+    [ coordOpticTests,
+      deltaOpticTests,
+      torusTests,
+      focusedOpticTests,
+      gridOpticTests,
+      ordinalOpticTests
     ]

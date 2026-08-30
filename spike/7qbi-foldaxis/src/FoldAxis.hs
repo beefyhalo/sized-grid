@@ -12,25 +12,25 @@
 -- winner is, the rest exist so the winner is a measurement rather than a
 -- preference.
 module FoldAxis
-  ( DropAxis
-  , foldAxisGenerate
-  , foldAxisWrite
-  , foldAxisSweep
-  , foldAxisFibres
-  , foldAxisSlices
-  , foldAxisSplit
-  , foldAxisTotal
-  , foldAxisNonEmpty
-  ) where
+  ( DropAxis,
+    foldAxisGenerate,
+    foldAxisWrite,
+    foldAxisSweep,
+    foldAxisFibres,
+    foldAxisSlices,
+    foldAxisSplit,
+    foldAxisTotal,
+    foldAxisNonEmpty,
+  )
+where
 
-import           Data.Grid.Sized
-import           Data.Grid.Sized.Unsafe      (unsafeGridFromVector)
-
-import           Data.Kind                   (Type)
-import           Data.Proxy                  (Proxy (..))
-import qualified Data.Vector.Generic         as VG
-import qualified Data.Vector.Generic.Mutable as VGM
-import           GHC.TypeLits                (KnownNat, Nat, natVal, type (-))
+import Data.Grid.Sized
+import Data.Grid.Sized.Unsafe (unsafeGridFromVector)
+import Data.Kind (Type)
+import Data.Proxy (Proxy (..))
+import Data.Vector.Generic qualified as VG
+import Data.Vector.Generic.Mutable qualified as VGM
+import GHC.TypeLits (KnownNat, Nat, natVal, type (-))
 
 -- | The axis list with the axis at position @n@ removed: the result shape of
 -- every fold below.
@@ -48,6 +48,7 @@ type family DropAxis (n :: Nat) (cs :: [Type]) :: [Type] where
   DropAxis n (c ': cs) = c ': DropAxis (n - 1) cs
 
 -- * The address arithmetic every candidate shares
+
 --
 -- Row-major means a position decomposes as
 --
@@ -71,13 +72,15 @@ type family DropAxis (n :: Nat) (cs :: [Type]) :: [Type] where
 -- Reads jump @stride@ at a time; writes are sequential and there is no
 -- mutable state beyond whatever 'VG.generate' uses.
 foldAxisGenerate ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisGenerate n f z g =
-    unsafeGridFromVector $ VG.generate outLen fibreFold
+  unsafeGridFromVector $ VG.generate outLen fibreFold
   where
     v = gridVector g
     (axisSize, stride) = axisSizeAndStride @n @cs @c
@@ -99,28 +102,30 @@ foldAxisGenerate n f z g =
 -- shapes is really about the walk or about what @'VG.generate'@ costs per
 -- cell. Nothing else distinguishes it from 'foldAxisGenerate'.
 foldAxisWrite ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisWrite n f z g = unsafeGridFromVector $ VG.create $ do
-    out <- VGM.unsafeNew outLen
-    let outer !o !hi !lo
-          | o >= outLen = pure ()
-          | lo >= stride = outer o (hi + 1) 0
-          | otherwise = do
-              -- Forced before the write: a boxed vector would otherwise hold
-              -- a fibre-long thunk per cell, which is the hazard 'scanl1Grid'
-              -- is strict for.
-              let !acc = go z axisSize (hi * block + lo)
-              VGM.unsafeWrite out o acc
-              outer (o + 1) hi (lo + 1)
-        go !acc !k !p
-          | k <= 0 = acc
-          | otherwise = go (f acc (VG.unsafeIndex v p)) (k - 1) (p + stride)
-    outer 0 0 0
-    pure out
+  out <- VGM.unsafeNew outLen
+  let outer !o !hi !lo
+        | o >= outLen = pure ()
+        | lo >= stride = outer o (hi + 1) 0
+        | otherwise = do
+            -- Forced before the write: a boxed vector would otherwise hold
+            -- a fibre-long thunk per cell, which is the hazard 'scanl1Grid'
+            -- is strict for.
+            let !acc = go z axisSize (hi * block + lo)
+            VGM.unsafeWrite out o acc
+            outer (o + 1) hi (lo + 1)
+      go !acc !k !p
+        | k <= 0 = acc
+        | otherwise = go (f acc (VG.unsafeIndex v p)) (k - 1) (p + stride)
+  outer 0 0 0
+  pure out
   where
     v = gridVector g
     (axisSize, stride) = axisSizeAndStride @n @cs @c
@@ -137,31 +142,33 @@ foldAxisWrite n f z g = unsafeGridFromVector $ VG.create $ do
 -- scan, though: a scan writes each output cell once, where this one writes
 -- every output cell @axisSize@ times.
 foldAxisSweep ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisSweep n f z g = unsafeGridFromVector $ VG.create $ do
-    out <- VGM.replicate outLen z
-    let -- One block of the input: @axisSize@ rows of @stride@ cells, all
-        -- landing on the same @stride@ output cells.
-        rows !p !end !o0
-          | p >= end = pure ()
-          | otherwise = cells p o0 (o0 + stride) >> rows (p + stride) end o0
-        cells !p !o !oEnd
-          | o >= oEnd = pure ()
-          | otherwise = do
-              acc <- VGM.unsafeRead out o
-              let !acc' = f acc (VG.unsafeIndex v p)
-              VGM.unsafeWrite out o acc'
-              cells (p + 1) (o + 1) oEnd
-        blocks !start !o0
-          | start >= len = pure ()
-          | otherwise =
-              rows start (start + block) o0 >> blocks (start + block) (o0 + stride)
-    blocks 0 0
-    pure out
+  out <- VGM.replicate outLen z
+  let -- One block of the input: @axisSize@ rows of @stride@ cells, all
+      -- landing on the same @stride@ output cells.
+      rows !p !end !o0
+        | p >= end = pure ()
+        | otherwise = cells p o0 (o0 + stride) >> rows (p + stride) end o0
+      cells !p !o !oEnd
+        | o >= oEnd = pure ()
+        | otherwise = do
+            acc <- VGM.unsafeRead out o
+            let !acc' = f acc (VG.unsafeIndex v p)
+            VGM.unsafeWrite out o acc'
+            cells (p + 1) (o + 1) oEnd
+      blocks !start !o0
+        | start >= len = pure ()
+        | otherwise =
+            rows start (start + block) o0 >> blocks (start + block) (o0 + stride)
+  blocks 0 0
+  pure out
   where
     v = gridVector g
     (axisSize, stride) = axisSizeAndStride @n @cs @c
@@ -178,14 +185,17 @@ foldAxisSweep n f z g = unsafeGridFromVector $ VG.create $ do
 -- a copy -- 'fibreAt' materialises it -- and the list is a cons cell per
 -- output cell.
 foldAxisFibres ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisFibres n f z g =
-    unsafeGridFromVector $
-    VG.fromListN outLen $ map (foldlGrid' f z) (axisFibres n g)
+  unsafeGridFromVector $
+    VG.fromListN outLen $
+      map (foldlGrid' f z) (axisFibres n g)
   where
     (axisSize, _stride) = axisSizeAndStride @n @cs @c
     outLen = VG.length (gridVector g) `quot` axisSize
@@ -203,15 +213,18 @@ foldAxisFibres n f z g =
 -- Falls back to 'foldAxisGenerate' off the fast path so the two can be
 -- compared on the same axis.
 foldAxisSlices ::
-     forall v cs x y c. forall n -> (MapAxis n cs c, VG.Vector v x, VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisSlices n f z g
   | stride == 1 && axisSize > 0 =
       unsafeGridFromVector $
-      VG.generate outLen $ \o -> VG.foldl' f z (VG.unsafeSlice (o * axisSize) axisSize v)
+        VG.generate outLen $
+          \o -> VG.foldl' f z (VG.unsafeSlice (o * axisSize) axisSize v)
   | otherwise = foldAxisGenerate n f z g
   where
     v = gridVector g
@@ -229,17 +242,18 @@ foldAxisSlices n f z g
 --
 -- Restricted to axis 0 by its type, which is why it takes no @n@.
 foldAxisSplit ::
-     forall v c cs x y. (VG.Vector v x, VG.Vector v y, AllSizedKnown cs)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v (c ': cs) x
-  -> GridOf v cs y
+  forall v c cs x y.
+  (VG.Vector v x, VG.Vector v y, AllSizedKnown cs) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v (c ': cs) x ->
+  GridOf v cs y
 foldAxisSplit f z g =
-    case foldable (splitGrid g) of
-      [] -> error "foldAxisSplit: the outermost axis is empty"
-      subs@(s : _) -> foldl' (zipWithGrid f) (mapGrid (const z) s) subs
+  case foldable (splitGrid g) of
+    [] -> error "foldAxisSplit: the outermost axis is empty"
+    subs@(s : _) -> foldl' (zipWithGrid f) (mapGrid (const z) s) subs
   where
-    foldable :: Grid '[ c] (GridOf v cs x) -> [GridOf v cs x]
+    foldable :: Grid '[c] (GridOf v cs x) -> [GridOf v cs x]
     foldable = foldr (:) []
 {-# INLINE foldAxisSplit #-}
 
@@ -276,28 +290,31 @@ foldAxisSplit f z g =
 -- cost on the method call rather than on the extra dictionary argument. One
 -- 'natVal' of a type-level product has no chain to collapse.
 foldAxisTotal ::
-     forall v cs x y c. forall n -> ( MapAxis n cs c
-                                    , KnownNat (MaxCoordSize (DropAxis n cs))
-                                    , VG.Vector v x
-                                    , VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  ( MapAxis n cs c,
+    KnownNat (MaxCoordSize (DropAxis n cs)),
+    VG.Vector v x,
+    VG.Vector v y
+  ) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisTotal n f z g = unsafeGridFromVector $ VG.create $ do
-    out <- VGM.unsafeNew outLen
-    let outer !o !hi !lo
-          | o >= outLen = pure ()
-          | lo >= stride = outer o (hi + 1) 0
-          | otherwise = do
-              let !acc = go z axisSize (hi * block + lo)
-              VGM.unsafeWrite out o acc
-              outer (o + 1) hi (lo + 1)
-        go !acc !k !p
-          | k <= 0 = acc
-          | otherwise = go (f acc (VG.unsafeIndex v p)) (k - 1) (p + stride)
-    outer 0 0 0
-    pure out
+  out <- VGM.unsafeNew outLen
+  let outer !o !hi !lo
+        | o >= outLen = pure ()
+        | lo >= stride = outer o (hi + 1) 0
+        | otherwise = do
+            let !acc = go z axisSize (hi * block + lo)
+            VGM.unsafeWrite out o acc
+            outer (o + 1) hi (lo + 1)
+      go !acc !k !p
+        | k <= 0 = acc
+        | otherwise = go (f acc (VG.unsafeIndex v p)) (k - 1) (p + stride)
+  outer 0 0 0
+  pure out
   where
     v = gridVector g
     (axisSize, stride) = axisSizeAndStride @n @cs @c
@@ -315,28 +332,31 @@ foldAxisTotal n f z g = unsafeGridFromVector $ VG.create $ do
 -- length still comes from the vector rather than from type-level evidence,
 -- which is the difference 'foldAxisTotal' measures.
 foldAxisNonEmpty ::
-     forall v cs x y c. forall n -> ( MapAxis n cs c
-                                    , IsCoordLifted c
-                                    , VG.Vector v x
-                                    , VG.Vector v y)
-  => (y -> x -> y)
-  -> y
-  -> GridOf v cs x
-  -> GridOf v (DropAxis n cs) y
+  forall v cs x y c.
+  forall n ->
+  ( MapAxis n cs c,
+    IsCoordLifted c,
+    VG.Vector v x,
+    VG.Vector v y
+  ) =>
+  (y -> x -> y) ->
+  y ->
+  GridOf v cs x ->
+  GridOf v (DropAxis n cs) y
 foldAxisNonEmpty n f z g = unsafeGridFromVector $ VG.create $ do
-    out <- VGM.unsafeNew outLen
-    let outer !o !hi !lo
-          | o >= outLen = pure ()
-          | lo >= stride = outer o (hi + 1) 0
-          | otherwise = do
-              let !acc = go z axisSize (hi * block + lo)
-              VGM.unsafeWrite out o acc
-              outer (o + 1) hi (lo + 1)
-        go !acc !k !p
-          | k <= 0 = acc
-          | otherwise = go (f acc (VG.unsafeIndex v p)) (k - 1) (p + stride)
-    outer 0 0 0
-    pure out
+  out <- VGM.unsafeNew outLen
+  let outer !o !hi !lo
+        | o >= outLen = pure ()
+        | lo >= stride = outer o (hi + 1) 0
+        | otherwise = do
+            let !acc = go z axisSize (hi * block + lo)
+            VGM.unsafeWrite out o acc
+            outer (o + 1) hi (lo + 1)
+      go !acc !k !p
+        | k <= 0 = acc
+        | otherwise = go (f acc (VG.unsafeIndex v p)) (k - 1) (p + stride)
+  outer 0 0 0
+  pure out
   where
     v = gridVector g
     (axisSize, stride) = axisSizeAndStride @n @cs @c

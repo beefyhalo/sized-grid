@@ -53,28 +53,30 @@
 -- all-'Data.Grid.Sized.Coord.Class.Boundaryless' shape the displacements do
 -- form a finite group, and that is a separate, bounded type.
 module Data.Grid.Sized.Coord.Delta
-  ( Delta(..)
-  , pattern (:^)
-  , pattern NoDelta
-  , deltaSplit
-    -- * Building and taking apart
-  , singleDelta
-  , appendDelta
-  , deltaFromTuple
-  , deltaToTuple
-  ) where
+  ( Delta (..),
+    pattern (:^),
+    pattern NoDelta,
+    deltaSplit,
 
-import           Control.Applicative   (empty)
-import           Control.DeepSeq       (NFData (..))
-import           Control.Monad.State
-import           Data.AdditiveGroup
-import           Data.Aeson
-import           Data.List             (intercalate)
-import qualified Data.Vector           as V
-import           Generics.SOP          hiding (Generic, S, Z)
-import qualified Generics.SOP          as SOP
-import           GHC.Generics          (Generic)
-import           System.Random         (Random (..))
+    -- * Building and taking apart
+    singleDelta,
+    appendDelta,
+    deltaFromTuple,
+    deltaToTuple,
+  )
+where
+
+import Control.Applicative (empty)
+import Control.DeepSeq (NFData (..))
+import Control.Monad.State
+import Data.AdditiveGroup
+import Data.Aeson
+import Data.List (intercalate)
+import Data.Vector qualified as V
+import GHC.Generics (Generic)
+import Generics.SOP hiding (Generic, S, Z)
+import Generics.SOP qualified as SOP
+import System.Random (Random (..))
 
 -- | A displacement, one component per axis. @ds@ is the list of
 -- 'Data.AffineSpace.Diff's -- in this library always @'[Int, Int, ...]@ --
@@ -90,7 +92,8 @@ deltaSplit (Delta (I x :* xs)) = (x, Delta xs)
 -- directions: unlike a @Coord@\'s, a @Delta@\'s spine is still there.
 pattern (:^) :: d -> Delta ds -> Delta (d ': ds)
 pattern (:^) a as <- (deltaSplit -> (a, as))
-  where (:^) a (Delta as) = Delta (I a :* as)
+  where
+    (:^) a (Delta as) = Delta (I a :* as)
 {-# INLINE (:^) #-}
 
 -- | The displacement with no components: the zero of the empty difference
@@ -106,81 +109,85 @@ pattern NoDelta = Delta Nil
 
 infixr 5 :^
 
-instance All Eq ds => Eq (Delta ds) where
-    Delta a == Delta b =
-        and $
-        hcollapse $ hcliftA2 (Proxy :: Proxy Eq) (\(I x) (I y) -> K (x == y)) a b
+instance (All Eq ds) => Eq (Delta ds) where
+  Delta a == Delta b =
+    and $
+      hcollapse $
+        hcliftA2 (Proxy :: Proxy Eq) (\(I x) (I y) -> K (x == y)) a b
 
 -- | @All Eq ds@ does not follow from @All Ord ds@: superclass evidence must be resolved at instance-declaration time, so both constraints are required.
 instance (All Eq ds, All Ord ds) => Ord (Delta ds) where
-    compare (Delta a) (Delta b) =
-        mconcat $
-        hcollapse $
+  compare (Delta a) (Delta b) =
+    mconcat $
+      hcollapse $
         hcliftA2 (Proxy :: Proxy Ord) (\(I x) (I y) -> K (compare x y)) a b
 
-instance All Show ds => Show (Delta ds) where
-    show (Delta a) =
-        "Delta [" ++
-        intercalate
-            ", "
-            (hcollapse $ hcliftA (Proxy :: Proxy Show) (\(I x) -> K $ show x) a) ++
-        "]"
+instance (All Show ds) => Show (Delta ds) where
+  show (Delta a) =
+    "Delta ["
+      ++ intercalate
+        ", "
+        (hcollapse $ hcliftA (Proxy :: Proxy Show) (\(I x) -> K $ show x) a)
+      ++ "]"
 
 instance (All ToJSON ds) => ToJSON (Delta ds) where
-    toJSON (Delta a) =
-        Array $
-        V.fromList $
-        hcollapse $ hcmap (Proxy @ToJSON) (\(I x) -> K $ toJSON x) a
+  toJSON (Delta a) =
+    Array $
+      V.fromList $
+        hcollapse $
+          hcmap (Proxy @ToJSON) (\(I x) -> K $ toJSON x) a
 
-instance All FromJSON ds => FromJSON (Delta ds) where
-    parseJSON =
-        withArray "Delta" $ \v ->
-            case SOP.fromList $ V.toList v of
-                Just a ->
-                    Delta <$>
-                    hsequence
-                        (hcmap (Proxy @FromJSON) (\(K x) -> parseJSON x) a)
-                Nothing -> empty
+instance (All FromJSON ds) => FromJSON (Delta ds) where
+  parseJSON =
+    withArray "Delta" $ \v ->
+      case SOP.fromList $ V.toList v of
+        Just a ->
+          Delta
+            <$> hsequence
+              (hcmap (Proxy @FromJSON) (\(K x) -> parseJSON x) a)
+        Nothing -> empty
 
-instance All Semigroup ds => Semigroup (Delta ds) where
+instance (All Semigroup ds) => Semigroup (Delta ds) where
   Delta a <> Delta b = Delta $ hcliftA2 (Proxy :: Proxy Semigroup) (liftA2 (<>)) a b
 
 instance (All Semigroup ds, All Monoid ds) => Monoid (Delta ds) where
   mappend = (<>)
   mempty = Delta $ hcpure (Proxy :: Proxy Monoid) (pure mempty)
 
-instance All NFData ds => NFData (Delta ds) where
-    rnf (Delta a) =
-        foldr seq () $
-        hcollapse $ hcliftA (Proxy :: Proxy NFData) (\(I x) -> K (rnf x)) a
+instance (All NFData ds) => NFData (Delta ds) where
+  rnf (Delta a) =
+    foldr seq () $
+      hcollapse $
+        hcliftA (Proxy :: Proxy NFData) (\(I x) -> K (rnf x)) a
 
 instance (All AdditiveGroup ds) => AdditiveGroup (Delta ds) where
-    zeroV = Delta $ hcpure (Proxy :: Proxy AdditiveGroup) (pure zeroV)
-    Delta a ^+^ Delta b =
-        Delta $ hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^+^)) a b
-    negateV (Delta a) =
-        Delta $ hcliftA (Proxy :: Proxy AdditiveGroup) (fmap negateV) a
-    Delta a ^-^ Delta b =
-        Delta $ hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^-^)) a b
+  zeroV = Delta $ hcpure (Proxy :: Proxy AdditiveGroup) (pure zeroV)
+  Delta a ^+^ Delta b =
+    Delta $ hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^+^)) a b
+  negateV (Delta a) =
+    Delta $ hcliftA (Proxy :: Proxy AdditiveGroup) (fmap negateV) a
+  Delta a ^-^ Delta b =
+    Delta $ hcliftA2 (Proxy :: Proxy AdditiveGroup) (liftA2 (^-^)) a b
 
 instance (All Random ds) => Random (Delta ds) where
-    random g =
-        let (c, g') =
-                runState
-                    (hsequence $ hcpure (Proxy :: Proxy Random) (state random))
-                    g
-        in (Delta c, g')
-    randomR (Delta mi, Delta ma) g =
-        let (c, g') =
-                runState
-                    (hsequence $
-                     hcliftA2
-                         (Proxy :: Proxy Random)
-                         (\(I a) (I b) -> state (randomR (a, b)))
-                         mi
-                         ma)
-                    g
-        in (Delta c, g')
+  random g =
+    let (c, g') =
+          runState
+            (hsequence $ hcpure (Proxy :: Proxy Random) (state random))
+            g
+     in (Delta c, g')
+  randomR (Delta mi, Delta ma) g =
+    let (c, g') =
+          runState
+            ( hsequence $
+                hcliftA2
+                  (Proxy :: Proxy Random)
+                  (\(I a) (I b) -> state (randomR (a, b)))
+                  mi
+                  ma
+            )
+            g
+     in (Delta c, g')
 
 singleDelta :: a -> Delta '[a]
 singleDelta a = Delta (I a :* Nil)
@@ -190,8 +197,8 @@ appendDelta a (Delta as) = Delta (I a :* as)
 
 -- | Build a displacement from a tuple of the same arity, where that reads
 -- better than a @(':^')@ chain.
-deltaFromTuple :: IsProductType t ds => t -> Delta ds
+deltaFromTuple :: (IsProductType t ds) => t -> Delta ds
 deltaFromTuple = Delta . productTypeFrom
 
-deltaToTuple :: IsProductType t ds => Delta ds -> t
+deltaToTuple :: (IsProductType t ds) => Delta ds -> t
 deltaToTuple = productTypeTo . unDelta

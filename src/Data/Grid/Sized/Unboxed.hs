@@ -25,16 +25,20 @@
 -- vector, so importing "Data.Grid.Sized" alongside this module gets them at
 -- @UGrid@ for free, with the same size proofs.
 module Data.Grid.Sized.Unboxed
-  ( UGrid
-  , ugridFromVector
-  , ugridFromList
-  ) where
+  ( UGrid,
+    ugridFromVector,
+    ugridFromList,
+  )
+where
 
-import           Data.Grid.Sized.Coord         (AllSizedKnown)
-import           Data.Grid.Sized.Internal.Grid (CollapseGrid, GridOf,
-                                                gridFromList, gridFromVector)
-
-import qualified Data.Vector.Unboxed           as U
+import Data.Grid.Sized.Coord (AllSizedKnown)
+import Data.Grid.Sized.Internal.Grid
+  ( CollapseGrid,
+    GridOf,
+    gridFromList,
+    gridFromVector,
+  )
+import Data.Vector.Unboxed qualified as U
 
 -- | An unboxed grid. @UGrid cs a@ is @'GridOf' 'U.Vector' cs a@, and holds
 -- exactly @MaxCoordSize cs@ elements just as a boxed one does.
@@ -42,16 +46,18 @@ type UGrid = GridOf U.Vector
 
 -- | 'Data.Grid.Sized.gridFromVector' at @'U.Vector'@.
 ugridFromVector ::
-     forall cs a. (U.Unbox a, AllSizedKnown cs)
-  => U.Vector a
-  -> Maybe (UGrid cs a)
+  forall cs a.
+  (U.Unbox a, AllSizedKnown cs) =>
+  U.Vector a ->
+  Maybe (UGrid cs a)
 ugridFromVector = gridFromVector
 
 -- | 'Data.Grid.Sized.gridFromList' at @'U.Vector'@: the general version's
 -- result vector @v@ is otherwise ambiguous, since nothing in a nested-list
 -- argument says which vector to build.
 ugridFromList ::
-     forall cs a. (U.Unbox a, AllSizedKnown cs)
-  => CollapseGrid cs a
-  -> Maybe (UGrid cs a)
+  forall cs a.
+  (U.Unbox a, AllSizedKnown cs) =>
+  CollapseGrid cs a ->
+  Maybe (UGrid cs a)
 ugridFromList = gridFromList

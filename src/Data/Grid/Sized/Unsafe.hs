@@ -12,7 +12,8 @@
 -- `Data.Grid.Sized.gridFromVector` first if the length can be checked at
 -- runtime instead.
 module Data.Grid.Sized.Unsafe
-  ( unsafeGridFromVector
-  ) where
+  ( unsafeGridFromVector,
+  )
+where
 
-import           Data.Grid.Sized.Internal.Grid (unsafeGridFromVector)
+import Data.Grid.Sized.Internal.Grid (unsafeGridFromVector)

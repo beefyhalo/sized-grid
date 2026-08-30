@@ -1,35 +1,47 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Data.Grid.Sized.Coord.Reflect101
-  ( Reflect101(..)
-  ) where
+  ( Reflect101 (..),
+  )
+where
 
-import           Data.Grid.Sized.Coord.Class
-import           Data.Grid.Sized.Ordinal
-
-import           Control.DeepSeq       (NFData)
-import           Control.Lens          (iso)
-import           Data.Aeson
-import           Data.AffineSpace
-import           Data.Hashable        (Hashable)
-import           Data.Ix              (Ix)
-import           Data.Primitive.Types  (Prim)
-import           Data.Universe.Class  (universe, universeF)
-import qualified Data.Universe.Class  as U
-import           GHC.TypeLits
-import           System.Random         (Random (..))
+import Control.DeepSeq (NFData)
+import Control.Lens (iso)
+import Data.Aeson
+import Data.AffineSpace
+import Data.Grid.Sized.Coord.Class
+import Data.Grid.Sized.Ordinal
+import Data.Hashable (Hashable)
+import Data.Ix (Ix)
+import Data.Primitive.Types (Prim)
+import Data.Universe.Class (universe, universeF)
+import Data.Universe.Class qualified as U
+import GHC.TypeLits
+import System.Random (Random (..))
 
 -- | A coordinate on a bounded axis that mirrors around its edge cells rather
 -- than across the wall beyond them: index @-1@ becomes @1@ (not @0@), and
 -- @-2@ becomes @2@.
 newtype Reflect101 (n :: Nat) = Reflect101
-    { unReflect101 :: Ordinal n
-  } deriving stock (Eq, Ord)
-      deriving newtype (Show, NFData, Ix, Hashable, Prim, ToJSON, FromJSON,
-                        ToJSONKey, FromJSONKey)
+  { unReflect101 :: Ordinal n
+  }
+  deriving stock (Eq, Ord)
+  deriving newtype
+    ( Show,
+      NFData,
+      Ix,
+      Hashable,
+      Prim,
+      ToJSON,
+      FromJSON,
+      ToJSONKey,
+      FromJSONKey
+    )
 
 deriving newtype instance (KnownNat n, 1 <= n) => Random (Reflect101 n)
+
 deriving newtype instance (KnownNat n, 1 <= n) => Enum (Reflect101 n)
+
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflect101 n)
 
 instance (1 <= n, KnownNat n) => U.Universe (Reflect101 n) where
@@ -42,18 +54,19 @@ instance IsCoord Reflect101 where
   asOrdinal = iso unReflect101 Reflect101
   zeroPosition = Reflect101 minBound
 
-  -- | A mirror bounce reverses direction on an odd number of wall /crossings/,
+  -- \| A mirror bounce reverses direction on an odd number of wall /crossings/,
   -- which 'mirrorAt' already computes for ('.+^'). Landing on a mirror is not
   -- crossing it, so it does not count -- see 'mirrorAt' for why that is the
   -- only reading the 'IsCoord' law leaves open.
-  axisFrameFlipsIsCoord :: forall n. KnownNat n => Reflect101 n -> Int -> Bool
+  axisFrameFlipsIsCoord :: forall n. (KnownNat n) => Reflect101 n -> Int -> Bool
   axisFrameFlipsIsCoord (Reflect101 a) d =
-      snd (mirrorAt @n (ordinalToInt a) d)
+    snd (mirrorAt @n (ordinalToInt a) d)
 
 -- | ('.-.') is not mirrored: doing so would break @b .+^ (a .-. b) == a@.
 instance (1 <= n, KnownNat n) => AffineSpace (Reflect101 n) where
   type Diff (Reflect101 n) = Int
   Reflect101 a .-. Reflect101 b = ordinalToInt a - ordinalToInt b
+
   -- This is a retraction of the partial interior action; associativity fails
   -- when a displacement reaches a wall.
   Reflect101 a .+^ d = Reflect101 $ unsafeOrdinal $ fst (mirrorAt @n (ordinalToInt a) d)
@@ -76,13 +89,13 @@ instance (1 <= n, KnownNat n) => AffineSpace (Reflect101 n) where
 -- successful checked step has not hit a wall, and it made a checked walker
 -- turn around one cell early where
 -- "Data.Grid.Sized.Coord.Reflective" walks to the wall (sized-grid-c0s9).
-mirrorAt :: forall n. KnownNat n => Int -> Int -> (Int, Bool)
+mirrorAt :: forall n. (KnownNat n) => Int -> Int -> (Int, Bool)
 mirrorAt i d
-    | m == 0 = (0, False)
-    | otherwise =
-        if r > m
-            then (period - r, True)
-            else (r, False)
+  | m == 0 = (0, False)
+  | otherwise =
+      if r > m
+        then (period - r, True)
+        else (r, False)
   where
     m = ordinalSize @n - 1
     period = 2 * m

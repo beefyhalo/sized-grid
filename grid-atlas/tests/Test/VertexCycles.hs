@@ -8,19 +8,22 @@
 -- library actually has --- including a cube, whose seams turn a corner
 -- between axes where a single-chart surface's never do.
 module Test.VertexCycles
-  ( vertexCycleTests
-  ) where
+  ( vertexCycleTests,
+  )
+where
 
-import           Data.Atlas.Topology.Seam   (Corner, vertexCycleLengths,
-                                             vertexCycleViolations)
-import           Data.Grid.Atlas.CubeMap    (Face, cubeSeam)
-import           Data.Grid.Atlas.Klein      (kleinSeam)
-import           Data.Grid.Atlas.Projective (projectiveSeam)
-import           Data.Grid.Atlas.Rect       (Axis (..))
-import           Data.Grid.Sized            (Extremum (..))
-
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import Data.Atlas.Topology.Seam
+  ( Corner,
+    vertexCycleLengths,
+    vertexCycleViolations,
+  )
+import Data.Grid.Atlas.CubeMap (Face, cubeSeam)
+import Data.Grid.Atlas.Klein (kleinSeam)
+import Data.Grid.Atlas.Projective (projectiveSeam)
+import Data.Grid.Atlas.Rect (Axis (..))
+import Data.Grid.Sized (Extremum (..))
+import Test.Tasty
+import Test.Tasty.HUnit
 
 -- | One rectangular chart's four corners in row-major order: @(0,0)@,
 -- @(max,0)@, @(0,max)@, @(max,max)@.
@@ -31,11 +34,11 @@ import           Test.Tasty.HUnit
 -- direction 'rectStep' measures its own orientation bit along.
 rectCorners :: chart -> [Corner chart (Axis, Extremum)]
 rectCorners chart =
-    [ ((chart, (U, AtMin)), (chart, (V, AtMin)))
-    , ((chart, (U, AtMax)), (chart, (V, AtMin)))
-    , ((chart, (U, AtMin)), (chart, (V, AtMax)))
-    , ((chart, (U, AtMax)), (chart, (V, AtMax)))
-    ]
+  [ ((chart, (U, AtMin)), (chart, (V, AtMin))),
+    ((chart, (U, AtMax)), (chart, (V, AtMin))),
+    ((chart, (U, AtMin)), (chart, (V, AtMax))),
+    ((chart, (U, AtMax)), (chart, (V, AtMax)))
+  ]
 
 cubeCorners :: [Corner Face (Axis, Extremum)]
 cubeCorners = concatMap rectCorners [minBound .. maxBound]
@@ -49,15 +52,15 @@ squareCorners = rectCorners ()
 -- where a cube keeps all of it.
 cubeHasEightConePoints :: TestTree
 cubeHasEightConePoints =
-    testGroup
-        "cube map"
-        [ testCase "every vertex joins three faces" $
-          assertEqual "" [3] (vertexCycleLengths cubeSeam cubeCorners)
-        , testCase "all 24 corners are accounted for by 8 cycles of 3" $
-          assertEqual "" 24 (length cubeCorners)
-        , testCase "a cube is not flat" $
-          assertEqual "" [3] (vertexCycleViolations cubeSeam cubeCorners)
-        ]
+  testGroup
+    "cube map"
+    [ testCase "every vertex joins three faces" $
+        assertEqual "" [3] (vertexCycleLengths cubeSeam cubeCorners),
+      testCase "all 24 corners are accounted for by 8 cycles of 3" $
+        assertEqual "" 24 (length cubeCorners),
+      testCase "a cube is not flat" $
+        assertEqual "" [3] (vertexCycleViolations cubeSeam cubeCorners)
+    ]
 
 -- | The two single-chart surfaces are told apart by their orientation bits
 -- alone: same chart, same four half-edges, same pairing, and the projective
@@ -65,20 +68,20 @@ cubeHasEightConePoints =
 -- vertices where the Klein bottle's leaves one.
 singleChartSurfaces :: TestTree
 singleChartSurfaces =
-    testGroup
-        "single-chart surfaces"
-        [ testCase "a Klein bottle has one four-corner vertex" $
-          assertEqual "" [4] (vertexCycleLengths kleinSeam squareCorners)
-        , testCase "a Klein bottle is flat" $
-          assertEqual "" [] (vertexCycleViolations kleinSeam squareCorners)
-        , testCase "a projective plane has two two-corner vertices" $
-          assertEqual "" [2] (vertexCycleLengths projectiveSeam squareCorners)
-        , testCase "a projective plane is not flat" $
-          assertEqual "" [2] (vertexCycleViolations projectiveSeam squareCorners)
-        ]
+  testGroup
+    "single-chart surfaces"
+    [ testCase "a Klein bottle has one four-corner vertex" $
+        assertEqual "" [4] (vertexCycleLengths kleinSeam squareCorners),
+      testCase "a Klein bottle is flat" $
+        assertEqual "" [] (vertexCycleViolations kleinSeam squareCorners),
+      testCase "a projective plane has two two-corner vertices" $
+        assertEqual "" [2] (vertexCycleLengths projectiveSeam squareCorners),
+      testCase "a projective plane is not flat" $
+        assertEqual "" [2] (vertexCycleViolations projectiveSeam squareCorners)
+    ]
 
 vertexCycleTests :: TestTree
 vertexCycleTests =
-    testGroup
-        "Data.Atlas.Topology.Seam vertex cycles, on the shipped atlases"
-        [cubeHasEightConePoints, singleChartSurfaces]
+  testGroup
+    "Data.Atlas.Topology.Seam vertex cycles, on the shipped atlases"
+    [cubeHasEightConePoints, singleChartSurfaces]

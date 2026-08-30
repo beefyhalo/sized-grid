@@ -18,65 +18,64 @@
 -- its header for why that is load bearing rather than a detail.
 module Main (main) where
 
-import           Sokoban.Level
-import           Sokoban.Render
-
-import qualified Data.ByteString                    as BS
-import qualified Data.ByteString.Char8              as BC
-import           Data.IORef
-import           Foreign.Marshal.Alloc              (allocaBytes)
-import           Foreign.Ptr                        (castPtr)
-import qualified Graphics.Gloss.Interface.IO.Game   as G
-import qualified Graphics.Rendering.OpenGL          as GL
-import           Graphics.Rendering.OpenGL          (($=))
-import           System.Environment                 (getArgs)
-import           System.Exit                        (exitFailure, exitSuccess)
-import           System.IO                          (hPutStrLn, stderr)
+import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as BC
+import Data.IORef
+import Foreign.Marshal.Alloc (allocaBytes)
+import Foreign.Ptr (castPtr)
+import Graphics.Gloss.Interface.IO.Game qualified as G
+import Graphics.Rendering.OpenGL (($=))
+import Graphics.Rendering.OpenGL qualified as GL
+import Sokoban.Level
+import Sokoban.Render
+import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
+import System.IO (hPutStrLn, stderr)
 
 data Options = Options
-    { optOut   :: FilePath
-    , optLevel :: Int
-    , optView  :: View
-    , optFrame :: Bool
-    -- ^ Whether to switch to the player frame.
-    , optKeys  :: String
-    }
+  { optOut :: FilePath,
+    optLevel :: Int,
+    optView :: View,
+    -- | Whether to switch to the player frame.
+    optFrame :: Bool,
+    optKeys :: String
+  }
 
 defaults :: Options
 defaults =
-    Options {optOut = "shot.ppm", optLevel = 1, optView = Flat, optFrame = False, optKeys = ""}
+  Options {optOut = "shot.ppm", optLevel = 1, optView = Flat, optFrame = False, optKeys = ""}
 
 parse :: [String] -> Options -> Either String Options
 parse [] o = Right o
-parse ("--out":v:as) o = parse as o {optOut = v}
-parse ("--level":v:as) o =
-    case reads v of
-        [(n, "")] -> parse as o {optLevel = n}
-        _         -> Left ("--level wants a number, got " ++ v)
-parse ("--view":"flat":as) o = parse as o {optView = Flat}
-parse ("--view":"centred":as) o = parse as o {optView = Centred}
-parse ("--frame":"player":as) o = parse as o {optFrame = True}
-parse ("--frame":"chart":as) o = parse as o {optFrame = False}
-parse ("--keys":v:as) o = parse as o {optKeys = v}
-parse (a:_) _ = Left ("unknown argument " ++ a)
+parse ("--out" : v : as) o = parse as o {optOut = v}
+parse ("--level" : v : as) o =
+  case reads v of
+    [(n, "")] -> parse as o {optLevel = n}
+    _ -> Left ("--level wants a number, got " ++ v)
+parse ("--view" : "flat" : as) o = parse as o {optView = Flat}
+parse ("--view" : "centred" : as) o = parse as o {optView = Centred}
+parse ("--frame" : "player" : as) o = parse as o {optFrame = True}
+parse ("--frame" : "chart" : as) o = parse as o {optFrame = False}
+parse ("--keys" : v : as) o = parse as o {optKeys = v}
+parse (a : _) _ = Left ("unknown argument " ++ a)
 
 main :: IO ()
 main = do
-    args <- getArgs
-    case parse args defaults of
-        Left err -> hPutStrLn stderr err >> exitFailure
-        Right o -> do
-            let app0 = newApp defaultWindow builtinLevels
-                app1 = feed (levelKeys (optLevel o) ++ viewKeys o ++ optKeys o) app0
-            frames <- newIORef (0 :: Int)
-            G.playIO
-                (G.InWindow "sokoban shot" defaultWindow (40, 40))
-                (G.greyN 0.12)
-                30
-                app1
-                (shoot (optOut o) frames)
-                (\_ w -> pure w)
-                (\_ w -> pure w)
+  args <- getArgs
+  case parse args defaults of
+    Left err -> hPutStrLn stderr err >> exitFailure
+    Right o -> do
+      let app0 = newApp defaultWindow builtinLevels
+          app1 = feed (levelKeys (optLevel o) ++ viewKeys o ++ optKeys o) app0
+      frames <- newIORef (0 :: Int)
+      G.playIO
+        (G.InWindow "sokoban shot" defaultWindow (40, 40))
+        (G.greyN 0.12)
+        30
+        app1
+        (shoot (optOut o) frames)
+        (\_ w -> pure w)
+        (\_ w -> pure w)
 
 -- | Level @n@ is @n-1@ presses of the next-level key, since the app starts on
 -- the first one. Going through the real key handler rather than reaching into
@@ -86,12 +85,14 @@ levelKeys n = replicate (max 0 (n - 1)) 'n'
 
 viewKeys :: Options -> String
 viewKeys o =
-    (case optView o of
-         Flat    -> ""
-         Centred -> "v") ++
-    (if optFrame o
-         then "f"
-         else "")
+  ( case optView o of
+      Flat -> ""
+      Centred -> "v"
+  )
+    ++ ( if optFrame o
+           then "f"
+           else ""
+       )
 
 feed :: String -> App -> App
 feed keys app = foldl one app keys
@@ -105,28 +106,28 @@ feed keys app = foldl one app keys
 -- there.
 shoot :: FilePath -> IORef Int -> App -> IO G.Picture
 shoot path frames app = do
-    n <- readIORef frames
-    writeIORef frames (n + 1)
-    if n < 4
-        then pure (drawApp app)
-        else do
-            writePPM path
-            exitSuccess
+  n <- readIORef frames
+  writeIORef frames (n + 1)
+  if n < 4
+    then pure (drawApp app)
+    else do
+      writePPM path
+      exitSuccess
 
 writePPM :: FilePath -> IO ()
 writePPM path = do
-    GL.readBuffer $= GL.FrontBuffers
-    GL.rowAlignment GL.Pack $= 1
-    (pos@(GL.Position _ _), size@(GL.Size vw vh)) <- GL.get GL.viewport
-    let w = fromIntegral vw
-        h = fromIntegral vh
-        bytes = w * h * 3
-    allocaBytes bytes $ \ptr -> do
-        GL.readPixels pos size (GL.PixelData GL.RGB GL.UnsignedByte ptr)
-        raw <- BS.packCStringLen (castPtr ptr, bytes)
-        -- OpenGL's origin is bottom-left and a PPM's is top-left.
-        let stride = w * 3
-            rows = [BS.take stride (BS.drop (r * stride) raw) | r <- [h - 1,h - 2 .. 0]]
-            header = BC.pack ("P6\n" ++ show w ++ " " ++ show h ++ "\n255\n")
-        BS.writeFile path (BS.concat (header : rows))
-    hPutStrLn stderr ("wrote " ++ path)
+  GL.readBuffer $= GL.FrontBuffers
+  GL.rowAlignment GL.Pack $= 1
+  (pos@(GL.Position _ _), size@(GL.Size vw vh)) <- GL.get GL.viewport
+  let w = fromIntegral vw
+      h = fromIntegral vh
+      bytes = w * h * 3
+  allocaBytes bytes $ \ptr -> do
+    GL.readPixels pos size (GL.PixelData GL.RGB GL.UnsignedByte ptr)
+    raw <- BS.packCStringLen (castPtr ptr, bytes)
+    -- OpenGL's origin is bottom-left and a PPM's is top-left.
+    let stride = w * 3
+        rows = [BS.take stride (BS.drop (r * stride) raw) | r <- [h - 1, h - 2 .. 0]]
+        header = BC.pack ("P6\n" ++ show w ++ " " ++ show h ++ "\n255\n")
+    BS.writeFile path (BS.concat (header : rows))
+  hPutStrLn stderr ("wrote " ++ path)

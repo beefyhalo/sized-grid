@@ -8,76 +8,95 @@
 -- 'Fold' because offering write-back would make it retain every fibre. The
 -- Haddock on each says which fact it rests on.
 module Data.Grid.Sized.Optics.Grid
-  ( _GridVector
-  , permuted
-  , _Transposed
-  , _SplitGrid
-  , _SplitHigherDim
-  , _CollapsedGrid
-  , cell
-  , gridIndex
-  , asGrid
-  , slice
-  , prefix
-  , suffix
-  , lowerDim
-  , axisFold
-  ) where
+  ( _GridVector,
+    permuted,
+    _Transposed,
+    _SplitGrid,
+    _SplitHigherDim,
+    _CollapsedGrid,
+    cell,
+    gridIndex,
+    asGrid,
+    slice,
+    prefix,
+    suffix,
+    lowerDim,
+    axisFold,
+  )
+where
 
-import           Data.Grid.Sized.Class             (IsGrid (..))
-import           Data.Grid.Sized.Coord             (AllSizedKnown, Coord)
-import           Data.Grid.Sized.Coord.Class       (IsCoord, IsCoordList)
-import           Data.Grid.Sized.Internal.Grid     (CollapseGrid, Grid,
-                                                    GridOf (..), MapAxis (..),
-                                                    axisFibres, cellLens,
-                                                    collapseGrid, combineGrid,
-                                                    combineHigherDim, dropGrid,
-                                                    gridFromList,
-                                                    gridFromVector, gridVector,
-                                                    mapLowerDim, permuteGrid,
-                                                    sliceGrid, splitGrid,
-                                                    splitHigherDim)
-import           Data.Grid.Sized.Internal.Type     (requiring)
-import           Data.Grid.Sized.Ordinal           (Ordinal)
-import           Data.Grid.Sized.Optics.Coordinate (_TransposedCoord)
-
-import           Control.Lens
-import           Data.Proxy                        (Proxy (..))
-import           Data.Vector.Generic               (Vector)
-import qualified Data.Vector.Generic               as VG
-import           GHC.TypeLits                      (KnownNat, natVal, type (+),
-                                                    type (-), type (<=))
-
+import Control.Lens
+import Data.Grid.Sized.Class (IsGrid (..))
+import Data.Grid.Sized.Coord (AllSizedKnown, Coord)
+import Data.Grid.Sized.Coord.Class (IsCoord, IsCoordList)
+import Data.Grid.Sized.Internal.Grid
+  ( CollapseGrid,
+    Grid,
+    GridOf (..),
+    MapAxis (..),
+    axisFibres,
+    cellLens,
+    collapseGrid,
+    combineGrid,
+    combineHigherDim,
+    dropGrid,
+    gridFromList,
+    gridFromVector,
+    gridVector,
+    mapLowerDim,
+    permuteGrid,
+    sliceGrid,
+    splitGrid,
+    splitHigherDim,
+  )
+import Data.Grid.Sized.Internal.Type (requiring)
+import Data.Grid.Sized.Optics.Coordinate (_TransposedCoord)
+import Data.Grid.Sized.Ordinal (Ordinal)
+import Data.Proxy (Proxy (..))
+import Data.Vector.Generic (Vector)
+import Data.Vector.Generic qualified as VG
+import GHC.TypeLits
+  ( KnownNat,
+    natVal,
+    type (+),
+    type (-),
+    type (<=),
+  )
 
 -- | Lift a bijective coordinate optic to a grid permutation. Each direction
 -- builds its own index vector when applied.
-permuted :: (VG.Vector v a, VG.Vector v Int, IsCoordList cs, IsCoordList ds)
-     => Iso' (Coord cs) (Coord ds)
-     -> Iso' (GridOf v ds a) (GridOf v cs a)
+permuted ::
+  (VG.Vector v a, VG.Vector v Int, IsCoordList cs, IsCoordList ds) =>
+  Iso' (Coord cs) (Coord ds) ->
+  Iso' (GridOf v ds a) (GridOf v cs a)
 permuted i = iso (permuteGrid (view i)) (permuteGrid (review i))
 
 -- | Transpose a two-dimensional grid as an 'Iso'.
-_Transposed :: ( VG.Vector v a
-               , VG.Vector v Int
-               , IsCoord h
-               , IsCoord w
-               , KnownNat x
-               , KnownNat y
-               , 1 <= y
-               , 1 <= x
-               )
-            => Iso' (GridOf v '[w x, h y] a) (GridOf v '[h y, w x] a)
+_Transposed ::
+  ( VG.Vector v a,
+    VG.Vector v Int,
+    IsCoord h,
+    IsCoord w,
+    KnownNat x,
+    KnownNat y,
+    1 <= y,
+    1 <= x
+  ) =>
+  Iso' (GridOf v '[w x, h y] a) (GridOf v '[h y, w x] a)
 _Transposed = permuted _TransposedCoord
 
-_GridVector :: (VG.Vector v a, AllSizedKnown cs)
-      => Prism' (v a) (GridOf v cs a)
-_GridVector = prism
-  gridVector
-  (\v -> maybe (Left v) Right (gridFromVector v))
+_GridVector ::
+  (VG.Vector v a, AllSizedKnown cs) =>
+  Prism' (v a) (GridOf v cs a)
+_GridVector =
+  prism
+    gridVector
+    (\v -> maybe (Left v) Right (gridFromVector v))
 
 _SplitGrid ::
-  forall v c cs a. (Vector v a, AllSizedKnown cs)
-  => Iso' (GridOf v (c ': cs) a) (Grid '[ c] (GridOf v cs a))
+  forall v c cs a.
+  (Vector v a, AllSizedKnown cs) =>
+  Iso' (GridOf v (c ': cs) a) (Grid '[c] (GridOf v cs a))
 _SplitGrid = iso splitGrid combineGrid
 
 -- | The outermost axis is 'Ordinal' on all three sides, and that is the only
@@ -95,14 +114,17 @@ _SplitGrid = iso splitGrid combineGrid
 -- the library does not have: the cells return, the wrap does not. A caller
 -- windowing a grid with a real boundary policy uses 'splitHigherDim' itself,
 -- which says in its result type what was lost.
-_SplitHigherDim :: forall v as x y a.
-       (VG.Vector v a, KnownNat y, y <= x, AllSizedKnown as)
-    => Iso' (GridOf v (Ordinal x ': as) a)
-      (GridOf v (Ordinal y ': as) a, GridOf v (Ordinal (x - y) ': as) a)
+_SplitHigherDim ::
+  forall v as x y a.
+  (VG.Vector v a, KnownNat y, y <= x, AllSizedKnown as) =>
+  Iso'
+    (GridOf v (Ordinal x ': as) a)
+    (GridOf v (Ordinal y ': as) a, GridOf v (Ordinal (x - y) ': as) a)
 _SplitHigherDim = requiring @(y <= x) $ iso splitHigherDim (uncurry combineHigherDim)
 
-_CollapsedGrid :: (VG.Vector v a, AllSizedKnown cs)
-         => Prism' (CollapseGrid cs a) (GridOf v cs a)
+_CollapsedGrid ::
+  (VG.Vector v a, AllSizedKnown cs) =>
+  Prism' (CollapseGrid cs a) (GridOf v cs a)
 _CollapsedGrid = prism' collapseGrid gridFromList
 
 -- | The cell at a coordinate. @'Data.Grid.Sized.Internal.Grid.cellLens'@ under
@@ -126,34 +148,54 @@ cell c f = requiring @(IsCoordList cs) (cellLens c f)
 -- takes @len@ cells to splice in, whose own policy the splice never consults
 -- --- so demanding the replacement carry the source's policy would be
 -- demanding the caller invent one.
-slice :: forall v m c x. forall off len ->
-  ( Vector v x, KnownNat off, KnownNat len, off + len <= m )
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ Ordinal len] x)
-slice off len = lens (sliceGrid @v @m @c @x off len)
-  (\(Grid source) (Grid replacement) ->
-     Grid $ VG.take (fromIntegral $ natVal (Proxy @off)) source
-        VG.++ replacement
-        VG.++ VG.drop (fromIntegral (natVal (Proxy @off))
-                       + fromIntegral (natVal (Proxy @len))) source)
-{-# INLINABLE slice #-}
+slice ::
+  forall v m c x.
+  forall off len ->
+  (Vector v x, KnownNat off, KnownNat len, off + len <= m) =>
+  Lens' (GridOf v '[c m] x) (GridOf v '[Ordinal len] x)
+slice off len =
+  lens
+    (sliceGrid @v @m @c @x off len)
+    ( \(Grid source) (Grid replacement) ->
+        Grid $
+          VG.take (fromIntegral $ natVal (Proxy @off)) source
+            VG.++ replacement
+            VG.++ VG.drop
+              ( fromIntegral (natVal (Proxy @off))
+                  + fromIntegral (natVal (Proxy @len))
+              )
+              source
+    )
+{-# INLINEABLE slice #-}
 
-prefix :: forall v m c x. forall n ->
-       (Vector v x, KnownNat n, n <= m)
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ Ordinal n] x)
+prefix ::
+  forall v m c x.
+  forall n ->
+  (Vector v x, KnownNat n, n <= m) =>
+  Lens' (GridOf v '[c m] x) (GridOf v '[Ordinal n] x)
 prefix n = slice @v @m @c @x 0 n
 {-# INLINE prefix #-}
 
-suffix :: forall v m c x. forall n ->
-       (Vector v x, KnownNat n, n <= m)
-     => Lens' (GridOf v '[ c m] x) (GridOf v '[ Ordinal (m - n)] x)
-suffix n = lens (dropGrid n)
-  (\(Grid source) (Grid replacement) ->
-     Grid $ VG.take (fromIntegral (natVal (Proxy @n))) source VG.++ replacement)
+suffix ::
+  forall v m c x.
+  forall n ->
+  (Vector v x, KnownNat n, n <= m) =>
+  Lens' (GridOf v '[c m] x) (GridOf v '[Ordinal (m - n)] x)
+suffix n =
+  lens
+    (dropGrid n)
+    ( \(Grid source) (Grid replacement) ->
+        Grid $ VG.take (fromIntegral (natVal (Proxy @n))) source VG.++ replacement
+    )
 {-# INLINE suffix #-}
 
-lowerDim :: (Vector v x, Vector v y, AllSizedKnown as)
-         => Traversal (GridOf v (c ': as) x) (GridOf v (c ': bs) y)
-                      (GridOf v as x) (GridOf v bs y)
+lowerDim ::
+  (Vector v x, Vector v y, AllSizedKnown as) =>
+  Traversal
+    (GridOf v (c ': as) x)
+    (GridOf v (c ': bs) y)
+    (GridOf v as x)
+    (GridOf v bs y)
 lowerDim = mapLowerDim
 
 -- | Read the fibres along one named axis without offering write-back.
@@ -164,7 +206,9 @@ lowerDim = mapLowerDim
 -- read-only direction lazy and retains at most the foci demanded by its
 -- consumer.
 axisFold ::
-     forall v cs a c. forall n -> (MapAxis n cs c, VG.Vector v a)
-  => Fold (GridOf v cs a) (GridOf v '[c] a)
+  forall v cs a c.
+  forall n ->
+  (MapAxis n cs c, VG.Vector v a) =>
+  Fold (GridOf v cs a) (GridOf v '[c] a)
 axisFold n = folding (axisFibres n)
-{-# INLINABLE axisFold #-}
+{-# INLINEABLE axisFold #-}

@@ -2,16 +2,16 @@
 
 -- | Tests for "Data.Grid.Atlas.CubeMap".
 module Test.CubeMap
-  ( cubeMapTests
-  ) where
+  ( cubeMapTests,
+  )
+where
 
-import           Data.Atlas.Topology.Seam (HalfEdge, seamViolations)
-import           Data.Grid.Atlas          (AtlasCoord)
-import           Data.Grid.Atlas.CubeMap
-import           Data.Grid.Sized
-
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import Data.Atlas.Topology.Seam (HalfEdge, seamViolations)
+import Data.Grid.Atlas (AtlasCoord)
+import Data.Grid.Atlas.CubeMap
+import Data.Grid.Sized
+import Test.Tasty
+import Test.Tasty.HUnit
 
 allFaces :: [Face]
 allFaces = [minBound .. maxBound]
@@ -26,15 +26,15 @@ allExtrema = [minBound .. maxBound]
 -- a product type, which base gives 'Bounded' but not 'Enum'.
 cubeHalfEdges :: [HalfEdge Face (Axis, Extremum)]
 cubeHalfEdges =
-    [(f, (a, e)) | f <- allFaces, a <- allAxes, e <- allExtrema]
+  [(f, (a, e)) | f <- allFaces, a <- allAxes, e <- allExtrema]
 
 cubeSeamPairsUp :: TestTree
 cubeSeamPairsUp =
-    testCase "cubeSeam pairs every half-edge with one that points back" $
+  testCase "cubeSeam pairs every half-edge with one that points back" $
     assertEqual
-        "half-edges whose partner does not point back"
-        []
-        (seamViolations cubeSeam cubeHalfEdges)
+      "half-edges whose partner does not point back"
+      []
+      (seamViolations cubeSeam cubeHalfEdges)
 
 -- | Smallest size with an interior cell on every axis.
 type N = 5
@@ -42,32 +42,33 @@ type N = 5
 -- | 'cubeStep' with its 'Crossing' dropped; see Test.Frames for the tests that
 -- are about the crossing.
 step ::
-       (AtlasCoord '[ Ordinal N, Ordinal N] 6, Heading)
-    -> (AtlasCoord '[ Ordinal N, Ordinal N] 6, Heading)
+  (AtlasCoord '[Ordinal N, Ordinal N] 6, Heading) ->
+  (AtlasCoord '[Ordinal N, Ordinal N] 6, Heading)
 step (c, heading) =
-    let (c', heading', _) = cubeStep c heading
-    in (c', heading')
+  let (c', heading', _) = cubeStep c heading
+   in (c', heading')
 
 cubeStepBeltCloses :: TestTree
 cubeStepBeltCloses =
-    testCase
-        "cubeStep, followed for 4n steps from any start, returns to that exact start" $
-    mapM_
-        -- @ax@, not @axis@: 'Data.Grid.Sized.axis' is imported unqualified
-        -- above and -Wname-shadowing is an error here.
-        (\(face, ax, side, u, v) ->
-             let start = ((faceIndex face, u :| v :| EmptyCoord), Heading ax side)
-                 n = ordinalSize @N
-                 got = iterate step start !! (4 * n)
-             in assertEqual (show (face, ax, side, u, v)) start got)
-        [ (face, ax, side, u, v)
-        | face <- allFaces
-        , ax <- allAxes
-        , side <- allExtrema
-        , u <- [minBound .. maxBound] :: [Ordinal N]
-        , v <- [minBound .. maxBound] :: [Ordinal N]
-        ]
+  testCase
+    "cubeStep, followed for 4n steps from any start, returns to that exact start"
+    $ mapM_
+      -- @ax@, not @axis@: 'Data.Grid.Sized.axis' is imported unqualified
+      -- above and -Wname-shadowing is an error here.
+      ( \(face, ax, side, u, v) ->
+          let start = ((faceIndex face, u :| v :| EmptyCoord), Heading ax side)
+              n = ordinalSize @N
+              got = iterate step start !! (4 * n)
+           in assertEqual (show (face, ax, side, u, v)) start got
+      )
+      [ (face, ax, side, u, v)
+      | face <- allFaces,
+        ax <- allAxes,
+        side <- allExtrema,
+        u <- [minBound .. maxBound] :: [Ordinal N],
+        v <- [minBound .. maxBound] :: [Ordinal N]
+      ]
 
 cubeMapTests :: TestTree
 cubeMapTests =
-    testGroup "Data.Grid.Atlas.CubeMap" [cubeSeamPairsUp, cubeStepBeltCloses]
+  testGroup "Data.Grid.Atlas.CubeMap" [cubeSeamPairsUp, cubeStepBeltCloses]

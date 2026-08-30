@@ -1,5 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DataKinds #-}
 
 -- | The surface the game is played on, and the vocabulary the rules are
 -- written in: what a cell holds, which way a key points, and where a step
@@ -33,45 +33,47 @@
 -- happens to mirror. sized-grid-lopy.5.
 module Sokoban.Board
   ( -- * The surface
-    Strip
-  , KnownStrip
-  , Spot
-  , spotAt
-  , spotXY
-  , spotCoord
-  , stripSpots
-  , stripSize
+    Strip,
+    KnownStrip,
+    Spot,
+    spotAt,
+    spotXY,
+    spotCoord,
+    stripSpots,
+    stripSize,
+
     -- * What a cell holds
-  , Tile(..)
-  , walkable
-  , Board
-  , boardTile
-  , boardFromGrid
+    Tile (..),
+    walkable,
+    Board,
+    boardTile,
+    boardFromGrid,
+
     -- * Pointing
-  , Dir(..)
-  , allDirs
-  , dirName
-  , Frame(..)
-  , Heading(..)
-  , headingFor
-  , dirOf
+    Dir (..),
+    allDirs,
+    dirName,
+    Frame (..),
+    Heading (..),
+    headingFor,
+    dirOf,
+
     -- * Stepping
-  , Crossing(..)
-  , crossedSeam
-  , reversedFrame
-  , stepSpot
-  , stepDir
-  , walkFrom
-  , cellAround
-  ) where
+    Crossing (..),
+    crossedSeam,
+    reversedFrame,
+    stepSpot,
+    stepDir,
+    walkFrom,
+    cellAround,
+  )
+where
 
-import           Data.Grid.Atlas
-import           Data.Grid.Atlas.Mobius
-import           Data.Grid.Sized
-
-import           Control.Monad          (foldM)
-
-import           GHC.TypeLits           (KnownNat, type (<=))
+import Control.Monad (foldM)
+import Data.Grid.Atlas
+import Data.Grid.Atlas.Mobius
+import Data.Grid.Sized
+import GHC.TypeLits (KnownNat, type (<=))
 
 -- | The chart: a rectangle @w@ cells around the strip and @h@ cells across
 -- it.
@@ -83,7 +85,7 @@ import           GHC.TypeLits           (KnownNat, type (<=))
 -- Saying it is what the atlas layer is for. So each axis is clamped --- a
 -- step off either end of the chart is a step out of the chart --- and
 -- 'mobiusStep' decides which of those two ends has something on the far side.
-type Strip w h = '[ Clamped w, Clamped h]
+type Strip w h = '[Clamped w, Clamped h]
 
 -- | What every function here needs to know about a board's size. Both bounds
 -- come from 'Clamped' itself, which has no zero-length axis.
@@ -100,11 +102,11 @@ type Spot w h = AtlasCoord (Strip w h) 1
 
 -- | The cell at column @x@ (around the strip) and row @y@ (across it), or
 -- 'Nothing' if either is off the chart.
-spotAt :: forall w h. KnownStrip w h => Int -> Int -> Maybe (Spot w h)
+spotAt :: forall w h. (KnownStrip w h) => Int -> Int -> Maybe (Spot w h)
 spotAt x y = do
-    u <- numToOrdinal x
-    v <- numToOrdinal y
-    pure (minBound, Clamped u :| Clamped v :| EmptyCoord)
+  u <- numToOrdinal x
+  v <- numToOrdinal y
+  pure (minBound, Clamped u :| Clamped v :| EmptyCoord)
 
 -- | A cell as @(column, row)@ --- around the strip first, across it second.
 --
@@ -112,7 +114,7 @@ spotAt x y = do
 -- of the chart-local coordinate: no unwrapping of 'Clamped' to
 -- 'Data.Grid.Sized.Ordinal.Ordinal' to 'Int' to ask where a cell is
 -- (sized-grid-bzzy).
-spotXY :: KnownStrip w h => Spot w h -> (Int, Int)
+spotXY :: (KnownStrip w h) => Spot w h -> (Int, Int)
 spotXY = coordIndices2 . spotCoord
 
 -- | The chart-local coordinate, which is all of a 'Spot' that distinguishes
@@ -124,26 +126,26 @@ spotCoord = snd
 -- | The board's size, as @(around the strip, across it)@. Named with a type
 -- application --- @stripSize \@w \@h@ --- since there is no value to read it
 -- off.
-stripSize :: forall w h. KnownStrip w h => (Int, Int)
+stripSize :: forall w h. (KnownStrip w h) => (Int, Int)
 stripSize = (ordinalSize @w, ordinalSize @h)
 
 -- | Every cell of the surface, once each.
-stripSpots :: forall w h. KnownStrip w h => [Spot w h]
+stripSpots :: forall w h. (KnownStrip w h) => [Spot w h]
 stripSpots = [(minBound, c) | c <- allCoord]
 
 -- | What is built into a cell. Crates are not here: they move, and what
 -- moves is state rather than terrain.
 data Tile
-    = Wall
-    | Floor
-    | Goal
-    deriving (Eq, Show)
+  = Wall
+  | Floor
+  | Goal
+  deriving (Eq, Show)
 
 -- | A cell a player or a crate may occupy, crates aside.
 walkable :: Tile -> Bool
-walkable Wall  = False
+walkable Wall = False
 walkable Floor = True
-walkable Goal  = True
+walkable Goal = True
 
 -- | The terrain, as the atlas it is played on.
 --
@@ -156,27 +158,27 @@ type Board w h = Atlas (Strip w h) 1 Tile
 boardFromGrid :: Grid (Strip w h) Tile -> Board w h
 boardFromGrid = mobiusAtlas
 
-boardTile :: KnownStrip w h => Board w h -> Spot w h -> Tile
+boardTile :: (KnownStrip w h) => Board w h -> Spot w h -> Tile
 boardTile = atlasIndex
 
 -- | A key press, in whichever frame it is being read in. Not a 'Heading':
 -- a heading names an axis of the chart, and up is not an axis of the chart
 -- once the player has crossed the seam an odd number of times.
 data Dir
-    = DirLeft
-    | DirRight
-    | DirUp
-    | DirDown
-    deriving (Eq, Show, Enum, Bounded)
+  = DirLeft
+  | DirRight
+  | DirUp
+  | DirDown
+  deriving (Eq, Show, Enum, Bounded)
 
 allDirs :: [Dir]
 allDirs = [minBound .. maxBound]
 
 dirName :: Dir -> String
-dirName DirLeft  = "left"
+dirName DirLeft = "left"
 dirName DirRight = "right"
-dirName DirUp    = "up"
-dirName DirDown  = "down"
+dirName DirUp = "up"
+dirName DirDown = "down"
 
 -- | Which frame the direction keys are read in.
 --
@@ -193,9 +195,9 @@ dirName DirDown  = "down"
 --     the same key press walks the opposite way after a lap, for a reason
 --     nothing on screen shows.
 data Frame
-    = ChartFrame
-    | PlayerFrame
-    deriving (Eq, Show)
+  = ChartFrame
+  | PlayerFrame
+  deriving (Eq, Show)
 
 -- | The chart heading a key press means.
 --
@@ -209,7 +211,7 @@ headingFor _ _ DirLeft = Heading Wrapped AtMin
 headingFor frame flipped dir = Heading Straight (side (upIsUp == (dir == DirUp)))
   where
     upIsUp = frame == ChartFrame || not flipped
-    side True  = AtMax
+    side True = AtMax
     side False = AtMin
 
 -- | The key press that means a heading, in a frame: the inverse of
@@ -219,8 +221,8 @@ dirOf :: Frame -> Bool -> Heading -> Dir
 dirOf _ _ (Heading Wrapped AtMax) = DirRight
 dirOf _ _ (Heading Wrapped AtMin) = DirLeft
 dirOf frame flipped (Heading Straight end)
-    | upIsUp == (end == AtMax) = DirUp
-    | otherwise = DirDown
+  | upIsUp == (end == AtMax) = DirUp
+  | otherwise = DirDown
   where
     upIsUp = frame == ChartFrame || not flipped
 
@@ -232,10 +234,10 @@ dirOf frame flipped (Heading Straight end)
 -- surface running out --- and "Sokoban.Rules" keeps the two apart because a
 -- player who cannot tell them apart cannot tell a mistake from a boundary.
 stepSpot ::
-       KnownStrip w h
-    => Spot w h
-    -> Heading
-    -> Maybe (Spot w h, Heading, Crossing)
+  (KnownStrip w h) =>
+  Spot w h ->
+  Heading ->
+  Maybe (Spot w h, Heading, Crossing)
 stepSpot = mobiusStep
 
 -- | One key press: where it lands, and the walker's parity on arrival.
@@ -245,23 +247,23 @@ stepSpot = mobiusStep
 -- left with; what a walker actually needs to carry is the parity, and that is
 -- what the 'Crossing' says.
 stepDir ::
-       KnownStrip w h
-    => Frame
-    -> (Spot w h, Bool)
-    -> Dir
-    -> Maybe (Spot w h, Bool)
+  (KnownStrip w h) =>
+  Frame ->
+  (Spot w h, Bool) ->
+  Dir ->
+  Maybe (Spot w h, Bool)
 stepDir frame (here, flipped) dir = do
-    (there, _, crossing) <- stepSpot here (headingFor frame flipped dir)
-    pure (there, flipped /= reversedFrame crossing)
+  (there, _, crossing) <- stepSpot here (headingFor frame flipped dir)
+  pure (there, flipped /= reversedFrame crossing)
 
 -- | A run of key presses, from a cell and a parity. 'Nothing' the moment one
 -- of them leaves the strip.
 walkFrom ::
-       KnownStrip w h
-    => Frame
-    -> (Spot w h, Bool)
-    -> [Dir]
-    -> Maybe (Spot w h, Bool)
+  (KnownStrip w h) =>
+  Frame ->
+  (Spot w h, Bool) ->
+  [Dir] ->
+  Maybe (Spot w h, Bool)
 walkFrom frame = foldM (stepDir frame)
 
 -- | The cell @(dx, dy)@ away, as the walker at this cell would count it:
@@ -273,13 +275,14 @@ walkFrom frame = foldM (stepDir frame)
 -- same cell. It is only in the /chart's/ frame that they come apart --- which
 -- is why a player-centred view has a well defined neighbourhood at all.
 cellAround ::
-       KnownStrip w h
-    => (Spot w h, Bool)
-    -> (Int, Int)
-    -> Maybe (Spot w h, Bool)
+  (KnownStrip w h) =>
+  (Spot w h, Bool) ->
+  (Int, Int) ->
+  Maybe (Spot w h, Bool)
 cellAround start (dx, dy) =
-    walkFrom
-        PlayerFrame
-        start
-        (replicate (abs dy) (if dy >= 0 then DirUp else DirDown) ++
-         replicate (abs dx) (if dx >= 0 then DirRight else DirLeft))
+  walkFrom
+    PlayerFrame
+    start
+    ( replicate (abs dy) (if dy >= 0 then DirUp else DirDown)
+        ++ replicate (abs dx) (if dx >= 0 then DirRight else DirLeft)
+    )

@@ -3,39 +3,39 @@
 -- | 6 same-shaped charts, one per face of a cube, glued along their 12 edges
 -- by an explicit transition table.
 module Data.Grid.Atlas.CubeMap
-  ( Face(..)
-  , faceIndex
-  , indexFace
-  , cubeAtlas
-  , Axis(..)
-  , Heading(..)
-  , Crossing(..)
-  , crossedSeam
-  , reversedFrame
-  , cubeSeam
-  , cubeStep
-  ) where
+  ( Face (..),
+    faceIndex,
+    indexFace,
+    cubeAtlas,
+    Axis (..),
+    Heading (..),
+    Crossing (..),
+    crossedSeam,
+    reversedFrame,
+    cubeSeam,
+    cubeStep,
+  )
+where
 
-import           Data.Atlas.Topology.Seam (SeamTable (..))
-import           Data.Grid.Atlas
-import           Data.Grid.Atlas.Rect
-import           Data.Grid.Sized
-
-import           Data.Functor.Identity (Identity (..))
-import           Data.Maybe            (fromMaybe)
-import qualified Data.Vector           as V
-import           GHC.TypeLits
+import Data.Atlas.Topology.Seam (SeamTable (..))
+import Data.Functor.Identity (Identity (..))
+import Data.Grid.Atlas
+import Data.Grid.Atlas.Rect
+import Data.Grid.Sized
+import Data.Maybe (fromMaybe)
+import Data.Vector qualified as V
+import GHC.TypeLits
 
 -- | The six faces of a cube map, named by the world axis and sign their
 -- outward normal points along.
 data Face
-    = PosX
-    | NegX
-    | PosY
-    | NegY
-    | PosZ
-    | NegZ
-    deriving (Eq, Show, Enum, Bounded)
+  = PosX
+  | NegX
+  | PosY
+  | NegY
+  | PosZ
+  | NegZ
+  deriving (Eq, Show, Enum, Bounded)
 
 faceIndex :: Face -> Ordinal 6
 faceIndex = unsafeOrdinal . fromEnum
@@ -46,16 +46,16 @@ indexFace = toEnum . ordinalToInt
 -- | Build a cube atlas from its 6 faces, given in 'Face'\'s own order
 -- (@PosX, NegX, PosY, NegY, PosZ, NegZ@).
 cubeAtlas ::
-       forall n a.
-       Grid '[ Ordinal n, Ordinal n] a
-    -> Grid '[ Ordinal n, Ordinal n] a
-    -> Grid '[ Ordinal n, Ordinal n] a
-    -> Grid '[ Ordinal n, Ordinal n] a
-    -> Grid '[ Ordinal n, Ordinal n] a
-    -> Grid '[ Ordinal n, Ordinal n] a
-    -> Atlas '[ Ordinal n, Ordinal n] 6 a
+  forall n a.
+  Grid '[Ordinal n, Ordinal n] a ->
+  Grid '[Ordinal n, Ordinal n] a ->
+  Grid '[Ordinal n, Ordinal n] a ->
+  Grid '[Ordinal n, Ordinal n] a ->
+  Grid '[Ordinal n, Ordinal n] a ->
+  Grid '[Ordinal n, Ordinal n] a ->
+  Atlas '[Ordinal n, Ordinal n] 6 a
 cubeAtlas px nx py ny pz nz =
-    fromMaybe (error "cubeAtlas: impossible, six faces always match k = 6") $
+  fromMaybe (error "cubeAtlas: impossible, six faces always match k = 6") $
     atlasFromVector (V.fromList [px, nx, py, ny, pz, nz])
 
 -- 'Axis' and 'Heading' are re-exported from "Data.Grid.Atlas.Rect" rather
@@ -107,20 +107,23 @@ crossCubeEdge NegZ (V, AtMax) = (PosX, (V, AtMin), False)
 -- of them. That is a fact about the surface rather than about the type, and it
 -- is asserted in the tests over all 24 half-edges.
 cubeStep ::
-       forall n. (KnownNat n, 1 <= n)
-    => AtlasCoord '[ Ordinal n, Ordinal n] 6
-    -> Heading
-    -> (AtlasCoord '[ Ordinal n, Ordinal n] 6, Heading, Crossing)
+  forall n.
+  (KnownNat n, 1 <= n) =>
+  AtlasCoord '[Ordinal n, Ordinal n] 6 ->
+  Heading ->
+  (AtlasCoord '[Ordinal n, Ordinal n] 6, Heading, Crossing)
 cubeStep (chart, u :| v :| EmptyCoord) heading =
-    let Landing destFace (u', v') heading' crossing =
-            runIdentity $
-            rectStep
-                (const (ordinalSize @n))
-                (\face edge -> Identity (crossSeam cubeSeam face edge))
-                (indexFace chart)
-                (ordinalToInt u, ordinalToInt v)
-                heading
-    in ( ( faceIndex destFace
-         , unsafeOrdinal u' :| unsafeOrdinal v' :| EmptyCoord)
-       , heading'
-       , crossing)
+  let Landing destFace (u', v') heading' crossing =
+        runIdentity $
+          rectStep
+            (const (ordinalSize @n))
+            (\face edge -> Identity (crossSeam cubeSeam face edge))
+            (indexFace chart)
+            (ordinalToInt u, ordinalToInt v)
+            heading
+   in ( ( faceIndex destFace,
+          unsafeOrdinal u' :| unsafeOrdinal v' :| EmptyCoord
+        ),
+        heading',
+        crossing
+      )

@@ -4,17 +4,21 @@
 -- they belong to neither QuickCheck nor the library.
 module Test.Arbitrary
   (
-  ) where
+  )
+where
 
-import           Data.Grid.Sized
-
-import           Control.Lens     (review)
-import           Data.Proxy
-import           Generics.SOP     hiding (S, Z)
-import qualified GHC.Generics     as GHC
-import           GHC.TypeLits
-import           Test.QuickCheck  (Arbitrary (..), Arbitrary1 (..), Gen,
-                                   chooseInt)
+import Control.Lens (review)
+import Data.Grid.Sized
+import Data.Proxy
+import GHC.Generics qualified as GHC
+import GHC.TypeLits
+import Generics.SOP hiding (S, Z)
+import Test.QuickCheck
+  ( Arbitrary (..),
+    Arbitrary1 (..),
+    Gen,
+    chooseInt,
+  )
 
 -- | Pick one position on an axis, in constant time -- rather than
 -- materialising the whole domain to draw a single sample.
@@ -51,7 +55,7 @@ instance (IsCoordList cs, All Arbitrary cs) => Arbitrary (Coord cs) where
 instance (All Arbitrary ds, SListI ds) => Arbitrary (Delta ds) where
   arbitrary = Delta <$> arbitrary
 
-instance AllSizedKnown cs => Arbitrary1 (Grid cs) where
+instance (AllSizedKnown cs) => Arbitrary1 (Grid cs) where
   liftArbitrary g = sequenceA (pure g)
 
 instance (AllSizedKnown cs, Arbitrary a) => Arbitrary (Grid cs a) where
@@ -65,12 +69,17 @@ instance (AllSizedKnown cs, Arbitrary a) => Arbitrary (Grid cs a) where
 -- The head is the bare type variable @r@, with the concrete 'GHC.Rep' pinned
 -- down by the equality constraint instead: 'GHC.Rep' is a type family, and
 -- GHC never accepts one directly in an instance head, ground or not.
-instance {-# OVERLAPPABLE #-} (r ~ GHC.Rep (Grid '[ Periodic 10, Periodic 11] Int) ()) =>
-         Arbitrary r where
-  arbitrary = GHC.from <$> (arbitrary :: Gen (Grid '[ Periodic 10, Periodic 11] Int))
+instance
+  {-# OVERLAPPABLE #-}
+  (r ~ GHC.Rep (Grid '[Periodic 10, Periodic 11] Int) ()) =>
+  Arbitrary r
+  where
+  arbitrary = GHC.from <$> (arbitrary :: Gen (Grid '[Periodic 10, Periodic 11] Int))
 
 -- | A grid and a focus drawn independently: the comonad laws have to hold for
 -- every focus, not just a canonical one.
-instance (AllSizedKnown cs, IsCoordList cs, All Arbitrary cs, Arbitrary a) =>
-         Arbitrary (FocusedGrid cs a) where
+instance
+  (AllSizedKnown cs, IsCoordList cs, All Arbitrary cs, Arbitrary a) =>
+  Arbitrary (FocusedGrid cs a)
+  where
   arbitrary = FocusedGrid <$> arbitrary <*> arbitrary

@@ -5,5 +5,5 @@ module DropGridTooBig where
 import Data.Grid.Sized
 import GHC.TypeLits (type (-))
 
-bad :: Grid '[ Ordinal 3] Int -> Grid '[ Ordinal (3 - 9)] Int
+bad :: Grid '[Ordinal 3] Int -> Grid '[Ordinal (3 - 9)] Int
 bad = dropGrid 9

@@ -9,20 +9,19 @@
 -- the only test in the expansion is \"is that a floor cell I have not seen\",
 -- and nothing here compares an index against 61.
 module Maze.Solve
-  ( solve
-  ) where
+  ( solve,
+  )
+where
 
-import           Maze.Model
-
-import           Data.Grid.Sized
-
-import           Control.Lens    ((&), (?~))
-import           Data.Maybe      (isNothing)
+import Control.Lens ((&), (?~))
+import Data.Grid.Sized
+import Data.Maybe (isNothing)
+import Maze.Model
 
 -- | How a cell was first reached, which is what turns the search into a route.
 data Prev
-    = Root
-    | From (Coord Cs)
+  = Root
+  | From (Coord Cs)
 
 -- | The search, as the layers it reaches and the route it ends with.
 --
@@ -30,45 +29,45 @@ data Prev
 -- spreading rather than waiting for an answer.
 solve :: Grid Cs Tile -> [Move]
 solve maze
-    | indexGrid maze startCell == Wall || indexGrid maze goalCell == Wall =
-        [Unreachable]
-    | otherwise = go seen0 [startCell] 0
+  | indexGrid maze startCell == Wall || indexGrid maze goalCell == Wall =
+      [Unreachable]
+  | otherwise = go seen0 [startCell] 0
   where
     seen0 :: Grid Cs (Maybe Prev)
     seen0 = tabulateGrid (const Nothing) & gridIndex startCell ?~ Root
     go :: Grid Cs (Maybe Prev) -> [Coord Cs] -> Int -> [Move]
     go seen level depth
-        | null level = [Unreachable]
-        | goalCell `elem` level =
-            map (`Reached` depth) level ++ [Solved (routeTo seen goalCell)]
-        | otherwise =
-            let (seen', next) = expand seen level
-            in map (`Reached` depth) level ++ go seen' next (depth + 1)
+      | null level = [Unreachable]
+      | goalCell `elem` level =
+          map (`Reached` depth) level ++ [Solved (routeTo seen goalCell)]
+      | otherwise =
+          let (seen', next) = expand seen level
+           in map (`Reached` depth) level ++ go seen' next (depth + 1)
     expand :: Grid Cs (Maybe Prev) -> [Coord Cs] -> (Grid Cs (Maybe Prev), [Coord Cs])
     expand seen = foldl step (seen, [])
       where
         step (s, acc) c =
-            let fresh =
-                    [ n
-                    | d <- directions
-                    , Just n <- [offsetCoord c d]
-                    , indexGrid maze n == Floor
-                    , isNothing (indexGrid s n)
-                    ]
-            -- 'fresh' is recomputed against the grid as it is written, so a
-            -- cell two cells of this level both border is claimed by the
-            -- first of them and not queued twice.
-            in foldl
-                   (\(s', acc') n -> (s' & gridIndex n ?~ From c, n : acc'))
-                   (s, acc)
-                   fresh
+          let fresh =
+                [ n
+                | d <- directions,
+                  Just n <- [offsetCoord c d],
+                  indexGrid maze n == Floor,
+                  isNothing (indexGrid s n)
+                ]
+           in -- 'fresh' is recomputed against the grid as it is written, so a
+              -- cell two cells of this level both border is claimed by the
+              -- first of them and not queued twice.
+              foldl
+                (\(s', acc') n -> (s' & gridIndex n ?~ From c, n : acc'))
+                (s, acc)
+                fresh
     routeTo :: Grid Cs (Maybe Prev) -> Coord Cs -> [Coord Cs]
     routeTo seen goal = reverse (walk goal)
       where
         walk c =
-            case indexGrid seen c of
-                Just Root       -> [c]
-                Just (From p)   -> c : walk p
-                -- Unreachable: 'routeTo' is only called on a cell the search
-                -- has just put in a layer, and every such cell has a 'Prev'.
-                Nothing         -> [c]
+          case indexGrid seen c of
+            Just Root -> [c]
+            Just (From p) -> c : walk p
+            -- Unreachable: 'routeTo' is only called on a cell the search
+            -- has just put in a layer, and every such cell has a 'Prev'.
+            Nothing -> [c]

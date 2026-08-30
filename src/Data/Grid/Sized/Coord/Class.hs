@@ -13,24 +13,25 @@
 -- The second is built on the first and the first does not mention the second,
 -- so the split is one edge with no cycle.
 module Data.Grid.Sized.Coord.Class
-  ( IsCoord(..)
-  , IsCoordLifted(..)
-  , IsCoordList(..)
-  , IsCoordListF
-  , Boundaryless
-  , MapDiff
-  , AllDiffSame
-  , Extremum(..)
-  , Even
-  , Odd
-  , OddC
-  , maxCoordSize
-  , allCoordLike
-  , axisSteps
-  , axisStepsIx
-  , toAxisIndex
-  , unsafeFromAxisIndex
-  ) where
+  ( IsCoord (..),
+    IsCoordLifted (..),
+    IsCoordList (..),
+    IsCoordListF,
+    Boundaryless,
+    MapDiff,
+    AllDiffSame,
+    Extremum (..),
+    Even,
+    Odd,
+    OddC,
+    maxCoordSize,
+    allCoordLike,
+    axisSteps,
+    axisStepsIx,
+    toAxisIndex,
+    unsafeFromAxisIndex,
+  )
+where
 
-import           Data.Grid.Sized.Coord.Class.Axis
-import           Data.Grid.Sized.Coord.Class.List
+import Data.Grid.Sized.Coord.Class.Axis
+import Data.Grid.Sized.Coord.Class.List

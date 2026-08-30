@@ -35,33 +35,34 @@
 -- back together does not recover the axis they were cut from.
 module Data.Grid.Sized.Internal.Grid.Shape
   ( -- * Rearranging
-    permuteGrid
-  , transposeGrid
-  , splitGrid
-  , combineGrid
-  , combineHigherDim
-  , splitHigherDim
-  , dropGrid
-  , takeGrid
-  , sliceGrid
-  , mapLowerDim
-  , zipLowerDim
+    permuteGrid,
+    transposeGrid,
+    splitGrid,
+    combineGrid,
+    combineHigherDim,
+    splitHigherDim,
+    dropGrid,
+    takeGrid,
+    sliceGrid,
+    mapLowerDim,
+    zipLowerDim,
+
     -- * Chunked traversal
-  , traverseChunks
-  ) where
+    traverseChunks,
+  )
+where
 
-import           Data.Grid.Sized.Coord
-import           Data.Grid.Sized.Coord.Class
-import           Data.Grid.Sized.Internal.Grid.Core
-import           Data.Grid.Sized.Internal.Type      (requiring)
-import           Data.Grid.Sized.Ordinal            (Ordinal)
-
-import           Control.Applicative                (ZipList (..))
-import           Data.Proxy                         (Proxy (..))
-import qualified Data.Vector                        as V
-import qualified Data.Vector.Generic                as VG
-import           GHC.TypeLits
-import qualified GHC.TypeLits                       as GHC
+import Control.Applicative (ZipList (..))
+import Data.Grid.Sized.Coord
+import Data.Grid.Sized.Coord.Class
+import Data.Grid.Sized.Internal.Grid.Core
+import Data.Grid.Sized.Internal.Type (requiring)
+import Data.Grid.Sized.Ordinal (Ordinal)
+import Data.Proxy (Proxy (..))
+import Data.Vector qualified as V
+import Data.Vector.Generic qualified as VG
+import GHC.TypeLits
+import GHC.TypeLits qualified as GHC
 
 -- | The general "view a grid by reindexing it", and --- despite the name ---
 -- not restricted to permutations.
@@ -124,53 +125,56 @@ import qualified GHC.TypeLits                       as GHC
 -- @IsCoordList ds@ is likewise gone: the table is @coordPosition@ of whatever
 -- @f@ returns, and that is now a field read rather than a fold.
 permuteGrid ::
-       forall v cs ds a.
-       (VG.Vector v a, VG.Vector v Int, IsCoordList cs)
-    => (Coord cs -> Coord ds)
-    -> GridOf v ds a
-    -> GridOf v cs a
+  forall v cs ds a.
+  (VG.Vector v a, VG.Vector v Int, IsCoordList cs) =>
+  (Coord cs -> Coord ds) ->
+  GridOf v ds a ->
+  GridOf v cs a
 permuteGrid f (Grid v) = Grid (VG.unsafeBackpermute v idx)
   where
     idx = VG.fromListN (coordSpaceSize @cs) $ map (coordPosition . f) allCoord
 {-# INLINE permuteGrid #-}
 
 transposeGrid ::
-     ( VG.Vector v a
-     , VG.Vector v Int
-     , IsCoord h
-     , IsCoord w
-     , GHC.KnownNat x
-     , GHC.KnownNat y
-     , 1 <= y
-     , 1 <= x
-     )
-  => GridOf v '[ w x, h y] a
-  -> GridOf v '[ h y, w x] a
+  ( VG.Vector v a,
+    VG.Vector v Int,
+    IsCoord h,
+    IsCoord w,
+    GHC.KnownNat x,
+    GHC.KnownNat y,
+    1 <= y,
+    1 <= x
+  ) =>
+  GridOf v '[w x, h y] a ->
+  GridOf v '[h y, w x] a
 transposeGrid = permuteGrid transposeCoord
-{-# INLINABLE transposeGrid #-}
+{-# INLINEABLE transposeGrid #-}
 
 -- | The outer grid holds grids, and a grid is never an unboxed element, so the
 -- outer vector is boxed whatever @v@ is. That asymmetry is what makes the whole
 -- shape algebra shareable: only the /inner/ representation follows @v@, and
 -- 'combineGrid' puts it back.
 splitGrid ::
-       forall v c cs a. (VG.Vector v a, AllSizedKnown cs)
-    => GridOf v (c ': cs) a
-    -> Grid '[ c] (GridOf v cs a)
+  forall v c cs a.
+  (VG.Vector v a, AllSizedKnown cs) =>
+  GridOf v (c ': cs) a ->
+  Grid '[c] (GridOf v cs a)
 splitGrid (Grid v) =
-    Grid $
+  Grid $
     V.fromList $
-    map
+      map
         Grid
-        (splitVectorBySize
-             (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
-             v)
-{-# INLINABLE splitGrid #-}
+        ( splitVectorBySize
+            (fromIntegral $ GHC.natVal (Proxy :: Proxy (MaxCoordSize cs)))
+            v
+        )
+{-# INLINEABLE splitGrid #-}
 
 combineGrid ::
-       forall v c cs a. VG.Vector v a
-    => Grid '[ c] (GridOf v cs a)
-    -> GridOf v (c ': cs) a
+  forall v c cs a.
+  (VG.Vector v a) =>
+  Grid '[c] (GridOf v cs a) ->
+  GridOf v (c ': cs) a
 combineGrid (Grid v) = Grid $ VG.concat $ map unGrid $ V.toList v
 {-# INLINE combineGrid #-}
 
@@ -202,10 +206,10 @@ combineGrid (Grid v) = Grid $ VG.concat $ map unGrid $ V.toList v
 -- not from `IsCoord`, so the class could not have justified the @n + m@ in the
 -- result even in principle.
 combineHigherDim ::
-       VG.Vector v x
-    => GridOf v (c n ': as) x
-    -> GridOf v (c m ': as) x
-    -> GridOf v (c (n + m) ': as) x
+  (VG.Vector v x) =>
+  GridOf v (c n ': as) x ->
+  GridOf v (c m ': as) x ->
+  GridOf v (c (n + m) ': as) x
 combineHigherDim (Grid v1) (Grid v2) = Grid (v1 VG.++ v2)
 {-# INLINE combineHigherDim #-}
 
@@ -223,12 +227,14 @@ combineHigherDim (Grid v1) (Grid v2) = Grid (v1 VG.++ v2)
 -- @n <= m@ is required: without it @dropGrid 9@ of a 3-grid typechecked and
 -- produced a grid whose vector was empty while its type claimed @3 - 9@.
 dropGrid ::
-       forall v m c x. forall n -> (VG.Vector v x, KnownNat n, n <= m)
-    => GridOf v '[ c m] x
-    -> GridOf v '[ Ordinal (m - n)] x
+  forall v m c x.
+  forall n ->
+  (VG.Vector v x, KnownNat n, n <= m) =>
+  GridOf v '[c m] x ->
+  GridOf v '[Ordinal (m - n)] x
 dropGrid n (Grid v) =
-    requiring @(n <= m) $ Grid $ VG.drop (fromIntegral $ natVal (Proxy @n)) v
-{-# INLINABLE dropGrid #-}
+  requiring @(n <= m) $ Grid $ VG.drop (fromIntegral $ natVal (Proxy @n)) v
+{-# INLINEABLE dropGrid #-}
 
 -- | Keep the first @n@ elements of a one-dimensional grid:
 --
@@ -243,12 +249,14 @@ dropGrid n (Grid v) =
 -- constraint @takeGrid 9@ of a 3-grid returned 3 elements under a type that
 -- promised 9.
 takeGrid ::
-       forall v m c x. forall n -> (VG.Vector v x, KnownNat n, n <= m)
-    => GridOf v '[ c m] x
-    -> GridOf v '[ Ordinal n] x
+  forall v m c x.
+  forall n ->
+  (VG.Vector v x, KnownNat n, n <= m) =>
+  GridOf v '[c m] x ->
+  GridOf v '[Ordinal n] x
 takeGrid n (Grid v) =
-    requiring @(n <= m) $ Grid $ VG.take (fromIntegral $ natVal (Proxy @n)) v
-{-# INLINABLE takeGrid #-}
+  requiring @(n <= m) $ Grid $ VG.take (fromIntegral $ natVal (Proxy @n)) v
+{-# INLINEABLE takeGrid #-}
 
 -- | Keep @len@ elements of a one-dimensional grid starting at offset @off@:
 --
@@ -271,20 +279,23 @@ takeGrid n (Grid v) =
 -- "Data.Grid.Sized.Internal.Grid.Windows" that existed only because this
 -- function preserved the constructor; that helper is gone.
 sliceGrid ::
-       forall v m c x. forall off len -> ( VG.Vector v x
-                                         , KnownNat off
-                                         , KnownNat len
-                                         , off + len <= m)
-    => GridOf v '[ c m] x
-    -> GridOf v '[ Ordinal len] x
+  forall v m c x.
+  forall off len ->
+  ( VG.Vector v x,
+    KnownNat off,
+    KnownNat len,
+    off + len <= m
+  ) =>
+  GridOf v '[c m] x ->
+  GridOf v '[Ordinal len] x
 sliceGrid off len (Grid v) =
-    requiring @(off + len <= m) $
+  requiring @(off + len <= m) $
     Grid $
-    VG.slice
+      VG.slice
         (fromIntegral $ natVal (Proxy @off))
         (fromIntegral $ natVal (Proxy @len))
         v
-{-# INLINABLE sliceGrid #-}
+{-# INLINEABLE sliceGrid #-}
 
 -- | Cut a grid in two along its outermost axis.
 --
@@ -301,23 +312,24 @@ sliceGrid off len (Grid v) =
 -- free, which let the caller annotate the remainder with any size at all and
 -- get a grid whose vector did not match.
 splitHigherDim ::
-       forall v c as x y a.
-       ( VG.Vector v a
-       , KnownNat y
-       , y <= x
-       , AllSizedKnown as
-       )
-    => GridOf v (c x ': as) a
-    -> (GridOf v (Ordinal y ': as) a, GridOf v (Ordinal (x - y) ': as) a)
+  forall v c as x y a.
+  ( VG.Vector v a,
+    KnownNat y,
+    y <= x,
+    AllSizedKnown as
+  ) =>
+  GridOf v (c x ': as) a ->
+  (GridOf v (Ordinal y ': as) a, GridOf v (Ordinal (x - y) ': as) a)
 splitHigherDim (Grid v) =
-    requiring @(y <= x) $
+  requiring @(y <= x) $
     let (a, b) =
-            VG.splitAt
-                (fromIntegral $
-                 GHC.natVal (Proxy @y) * GHC.natVal (Proxy @(MaxCoordSize as)))
-                v
+          VG.splitAt
+            ( fromIntegral $
+                GHC.natVal (Proxy @y) * GHC.natVal (Proxy @(MaxCoordSize as))
+            )
+            v
      in (Grid a, Grid b)
-{-# INLINABLE splitHigherDim #-}
+{-# INLINEABLE splitHigherDim #-}
 
 -- | Split a grid into its @CoordNat c@ sub-grids along the outermost axis,
 -- apply @f@ to each, and glue the results back together.
@@ -333,15 +345,15 @@ splitHigherDim (Grid v) =
 --
 -- The element type may change, so both @v x@ and @v y@ have to be vectors.
 mapLowerDim ::
-       forall v as bs x y c f.
-       (VG.Vector v x, VG.Vector v y, AllSizedKnown as, Applicative f)
-    => (GridOf v as x -> f (GridOf v bs y))
-    -> GridOf v (c ': as) x
-    -> f (GridOf v (c ': bs) y)
+  forall v as bs x y c f.
+  (VG.Vector v x, VG.Vector v y, AllSizedKnown as, Applicative f) =>
+  (GridOf v as x -> f (GridOf v bs y)) ->
+  GridOf v (c ': as) x ->
+  f (GridOf v (c ': bs) y)
 mapLowerDim f (Grid v) =
-    Grid <$>
-    traverseChunks (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))) f v
-{-# INLINABLE mapLowerDim #-}
+  Grid
+    <$> traverseChunks (fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))) f v
+{-# INLINEABLE mapLowerDim #-}
 
 -- | The engine shared by 'mapLowerDim' and @tiles@: split a flat vector into
 -- equally sized chunks, traverse each chunk as a sub-grid, and concatenate the
@@ -351,13 +363,14 @@ mapLowerDim f (Grid v) =
 -- (small ': rest)@ for @tiles@, where the chunk size is fixed and the count
 -- falls out of the vector's length.
 traverseChunks ::
-     forall v x y as bs f. (VG.Vector v x, VG.Vector v y, Applicative f)
-  => Int
-  -> (GridOf v as x -> f (GridOf v bs y))
-  -> v x
-  -> f (v y)
+  forall v x y as bs f.
+  (VG.Vector v x, VG.Vector v y, Applicative f) =>
+  Int ->
+  (GridOf v as x -> f (GridOf v bs y)) ->
+  v x ->
+  f (v y)
 traverseChunks size f =
-    fmap VG.concat . traverse (fmap unGrid . f . Grid) . splitVectorBySize size
+  fmap VG.concat . traverse (fmap unGrid . f . Grid) . splitVectorBySize size
 {-# INLINE traverseChunks #-}
 
 -- | 'mapLowerDim' where @f@ returns many results per sub-grid and they should
@@ -372,9 +385,10 @@ traverseChunks size f =
 -- expected length when @f@ returns the same number of results for every
 -- sub-grid -- which @gridTiles@ does, since its count is fixed by the types.
 zipLowerDim ::
-       forall v as bs x y c. (VG.Vector v x, VG.Vector v y, AllSizedKnown as)
-    => (GridOf v as x -> [GridOf v bs y])
-    -> GridOf v (c ': as) x
-    -> [GridOf v (c ': bs) y]
+  forall v as bs x y c.
+  (VG.Vector v x, VG.Vector v y, AllSizedKnown as) =>
+  (GridOf v as x -> [GridOf v bs y]) ->
+  GridOf v (c ': as) x ->
+  [GridOf v (c ': bs) y]
 zipLowerDim f = getZipList . mapLowerDim (ZipList . f)
-{-# INLINABLE zipLowerDim #-}
+{-# INLINEABLE zipLowerDim #-}

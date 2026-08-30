@@ -48,99 +48,113 @@
 --   * "Data.Grid.Sized.Coord.Centre" --- centred and punctured coordinates.
 module Data.Grid.Sized.Coord
   ( -- * Coordinates
-    Coord
-  , unCoord
-  , pattern (:|)
-  , pattern EmptyCoord
-  , coordSplit
-    -- * Displacements
-  , Delta(..)
-  , pattern (:^)
-  , pattern NoDelta
-  , deltaSplit
-  , singleDelta
-  , appendDelta
-  , deltaFromTuple
-  , deltaToTuple
-    -- * Building and taking apart
-  , singleCoord
-  , appendCoord
-  , coordFromTuple
-  , coordToTuple
-  , transposeCoord
-  , zeroCoord
-  , allCoord
-  , coordPosition
-  , coordIndices
-  , coordIndices2
-  , coordFromPosition
-  , unsafeCoordFromPosition
-  , coordSpaceSize
-  , axisCount
-    -- * Boundaryless displacement group
-  , TorusCoord(..)
-  , torusCoordFromDelta
-  , torusCoordToDelta
-  , allTorusCoords
-    -- * Centred coordinates
-  , CentredAxis
-  , centreCoord
-    -- * Punctured coordinates
-  , PuncturedCoord
-  , puncturedToCoord
-  , allPunctured
-    -- * Neighbourhoods
-  , offsetCoord
-  , neighbours
-  , mooreNeighbours
-  , vonNeumannNeighbours
-  , axisSteps
-  , stepsWithin
-    -- * Rays
-  , OffGrid(..)
-  , offsetCoordUpTo
-  , coordRay
-    -- * Paths
-  , Path(..)
-  , walkPath
-  , walkPathTotal
-  , pathOffset
-    -- * Distance
-  , axisDistance
-  , axisDistances
-  , coordDistance
-  , coordManhattan
-    -- * Boundaries
-  , axisBoundary
-  , axisBoundaries
-  , onBoundary
-  , isCorner
-  , interiorCoords
-    -- * Frame transform
-  , axisFrameFlips
-  , transportCoord
-  , TransportCoordList
-    -- * Changing the size of a coord
-  , WeakenCoord(..)
-  , StrengthenCoord(..)
-    -- * Type-level machinery
-  , Length
-  , MaxCoordSize
-  , MapDiff
-  , AffineCoordList
-  , AllDiffSame
-  , AllSizedKnown(..)
-  , SizeProof(..)
-  , IsCoordList
-  ) where
+    Coord,
+    unCoord,
+    pattern (:|),
+    pattern EmptyCoord,
+    coordSplit,
 
-import           Data.Grid.Sized.Coord.Boundary
-import           Data.Grid.Sized.Coord.Centre
-import           Data.Grid.Sized.Coord.Class
-import           Data.Grid.Sized.Coord.Delta
-import           Data.Grid.Sized.Coord.Distance
-import           Data.Grid.Sized.Coord.Internal
-import           Data.Grid.Sized.Coord.Neighbourhood
-import           Data.Grid.Sized.Coord.Path
-import           Data.Grid.Sized.Coord.Torus
-import           Data.Grid.Sized.Coord.Transform
+    -- * Displacements
+    Delta (..),
+    pattern (:^),
+    pattern NoDelta,
+    deltaSplit,
+    singleDelta,
+    appendDelta,
+    deltaFromTuple,
+    deltaToTuple,
+
+    -- * Building and taking apart
+    singleCoord,
+    appendCoord,
+    coordFromTuple,
+    coordToTuple,
+    transposeCoord,
+    zeroCoord,
+    allCoord,
+    coordPosition,
+    coordIndices,
+    coordIndices2,
+    coordFromPosition,
+    unsafeCoordFromPosition,
+    coordSpaceSize,
+    axisCount,
+
+    -- * Boundaryless displacement group
+    TorusCoord (..),
+    torusCoordFromDelta,
+    torusCoordToDelta,
+    allTorusCoords,
+
+    -- * Centred coordinates
+    CentredAxis,
+    centreCoord,
+
+    -- * Punctured coordinates
+    PuncturedCoord,
+    puncturedToCoord,
+    allPunctured,
+
+    -- * Neighbourhoods
+    offsetCoord,
+    neighbours,
+    mooreNeighbours,
+    vonNeumannNeighbours,
+    axisSteps,
+    stepsWithin,
+
+    -- * Rays
+    OffGrid (..),
+    offsetCoordUpTo,
+    coordRay,
+
+    -- * Paths
+    Path (..),
+    walkPath,
+    walkPathTotal,
+    pathOffset,
+
+    -- * Distance
+    axisDistance,
+    axisDistances,
+    coordDistance,
+    coordManhattan,
+
+    -- * Boundaries
+    axisBoundary,
+    axisBoundaries,
+    onBoundary,
+    isCorner,
+    interiorCoords,
+
+    -- * Frame transform
+    axisFrameFlips,
+    transportCoord,
+    TransportCoordList,
+
+    -- * Changing the size of a coord
+    WeakenCoord (..),
+    StrengthenCoord (..),
+
+    -- * Type-level machinery
+    Length,
+    MaxCoordSize,
+    MapDiff,
+    AffineCoordList,
+    AllDiffSame,
+    AllSizedKnown (..),
+    SizeProof (..),
+    IsCoordList,
+  )
+where
+
+import Data.Grid.Sized.Coord.Boundary
+import Data.Grid.Sized.Coord.Centre
+import Data.Grid.Sized.Coord.Class
+import Data.Grid.Sized.Coord.Delta
+import Data.Grid.Sized.Coord.Distance
+import Data.Grid.Sized.Coord.Internal
+import Data.Grid.Sized.Coord.Neighbourhood
+import Data.Grid.Sized.Coord.Path
+import Data.Grid.Sized.Coord.Torus
+import Data.Grid.Sized.Coord.Transform

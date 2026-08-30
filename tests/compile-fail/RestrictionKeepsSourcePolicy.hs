@@ -11,5 +11,5 @@ module RestrictionKeepsSourcePolicy where
 
 import Data.Grid.Sized
 
-bad :: Grid '[ Periodic 9] Int -> Grid '[ Periodic 3] Int
+bad :: Grid '[Periodic 9] Int -> Grid '[Periodic 3] Int
 bad = takeGrid 3

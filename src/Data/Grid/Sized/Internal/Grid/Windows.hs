@@ -58,26 +58,26 @@
 -- sorted operation by operation in
 -- "Data.Grid.Sized.Internal.Grid.Shape"\'s own header.
 module Data.Grid.Sized.Internal.Grid.Windows
-  ( ShrinkableGrid(..)
-  , gridTiles
-  , tiles
-  , gridWindows
-  , windows
-  ) where
+  ( ShrinkableGrid (..),
+    gridTiles,
+    tiles,
+    gridWindows,
+    windows,
+  )
+where
 
-import           Data.Grid.Sized.Coord
-import           Data.Grid.Sized.Coord.Class
-import           Data.Grid.Sized.Internal.Grid.Core
-import           Data.Grid.Sized.Internal.Grid.Shape
-import           Data.Grid.Sized.Internal.Type       (requiring, windowFits)
-import           Data.Grid.Sized.Ordinal             (Ordinal)
-
-import           Control.Lens                        hiding (index)
-import           Data.Constraint
-import           Data.Kind                           (Type)
-import           Data.Proxy                          (Proxy (..))
-import qualified Data.Vector.Generic                 as VG
-import           GHC.TypeLits
+import Control.Lens hiding (index)
+import Data.Constraint
+import Data.Grid.Sized.Coord
+import Data.Grid.Sized.Coord.Class
+import Data.Grid.Sized.Internal.Grid.Core
+import Data.Grid.Sized.Internal.Grid.Shape
+import Data.Grid.Sized.Internal.Type (requiring, windowFits)
+import Data.Grid.Sized.Ordinal (Ordinal)
+import Data.Kind (Type)
+import Data.Proxy (Proxy (..))
+import Data.Vector.Generic qualified as VG
+import GHC.TypeLits
 
 -- | Taking a window out of a grid, one axis at a time.
 --
@@ -99,10 +99,11 @@ import           GHC.TypeLits
 -- below cannot then match it against a @Type -> Type@ vector.
 class ShrinkableGrid (cs :: [Type]) (as :: [Type]) (bs :: [Type]) where
   shrinkGrid ::
-       forall (v :: Type -> Type) (x :: Type). VG.Vector v x
-    => Coord cs
-    -> GridOf v as x
-    -> GridOf v bs x
+    forall (v :: Type -> Type) (x :: Type).
+    (VG.Vector v x) =>
+    Coord cs ->
+    GridOf v as x ->
+    GridOf v bs x
 
 instance ShrinkableGrid '[] '[] '[] where
   shrinkGrid _ (Grid v) = Grid v
@@ -142,25 +143,26 @@ instance ShrinkableGrid '[] '[] '[] where
 -- 'Data.Grid.Sized.Ordinal.Ordinal'. Nothing is asked of the source axis at
 -- all, which is exactly the statement that a restriction does not care what
 -- policy it is restricting.
-instance ( KnownNat x
-         , KnownNat z
-         , AllSizedKnown as
-         , IsCoordList cs
-         , ShrinkableGrid cs as bs
-         , 1 <= x
-         , x + z <= y + 1
-         ) =>
-         ShrinkableGrid (Ordinal x ': cs) (c y ': as) (Ordinal z ': bs) where
-    shrinkGrid (c :| cs) =
-        combineGrid . fmap (shrinkGrid cs) . helper . splitGrid
-      where
-        helper ::
-             Grid '[ c y] (GridOf v as a)
-          -> Grid '[ Ordinal z] (GridOf v as a)
-        helper g =
-            reifyCoord c $ \n ->
-                withDict (windowFits @n @x @y @z) $ sliceGrid n z g
-
+instance
+  ( KnownNat x,
+    KnownNat z,
+    AllSizedKnown as,
+    IsCoordList cs,
+    ShrinkableGrid cs as bs,
+    1 <= x,
+    x + z <= y + 1
+  ) =>
+  ShrinkableGrid (Ordinal x ': cs) (c y ': as) (Ordinal z ': bs)
+  where
+  shrinkGrid (c :| cs) =
+    combineGrid . fmap (shrinkGrid cs) . helper . splitGrid
+    where
+      helper ::
+        Grid '[c y] (GridOf v as a) ->
+        Grid '[Ordinal z] (GridOf v as a)
+      helper g =
+        reifyCoord c $ \n ->
+          withDict (windowFits @n @x @y @z) $ sliceGrid n z g
 
 -- | Cut a grid into disjoint tiles along its outermost axis: a source axis of
 -- 9 tiled by @n ~ 3@ gives three tiles, not seven overlapping windows. The
@@ -191,18 +193,19 @@ instance ( KnownNat x
 -- than a whole axis type because there is no longer a choice to make: the
 -- result axis is 'Data.Grid.Sized.Ordinal.Ordinal', so all the caller can
 -- supply is its size. @gridTiles \@(Ordinal 3)@ becomes @gridTiles \@3@.
-gridTiles :: forall n v big rest a.
-               ( VG.Vector v a,
-                 KnownNat (MaxCoordSize (Ordinal n ': rest)),
-                 CoordNat big `Mod` n ~ 0
-               )
-            => GridOf v (big ': rest) a
-            -> [GridOf v (Ordinal n ': rest) a]
+gridTiles ::
+  forall n v big rest a.
+  ( VG.Vector v a,
+    KnownNat (MaxCoordSize (Ordinal n ': rest)),
+    CoordNat big `Mod` n ~ 0
+  ) =>
+  GridOf v (big ': rest) a ->
+  [GridOf v (Ordinal n ': rest) a]
 gridTiles (Grid v) =
-    requiring @(CoordNat big `Mod` n ~ 0) $
+  requiring @(CoordNat big `Mod` n ~ 0) $
     let size = fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))
-    in map Grid $ splitVectorBySize size v
-{-# INLINABLE gridTiles #-}
+     in map Grid $ splitVectorBySize size v
+{-# INLINEABLE gridTiles #-}
 
 -- | 'gridTiles' as an optic. The @Mod ~ 0@ constraint that makes 'gridTiles'
 -- total is exactly the statement that the tiles are disjoint and exactly
@@ -219,17 +222,18 @@ gridTiles (Grid v) =
 -- other direction: the tile handed to the function is
 -- 'Data.Grid.Sized.Ordinal.Ordinal'-axed, so nothing the function does to it
 -- can consult a wrap or a wall the source has and the tile does not.
-tiles :: forall n v big rest a.
-          ( VG.Vector v a
-          , KnownNat (MaxCoordSize (Ordinal n ': rest))
-          , CoordNat big `Mod` n ~ 0
-          )
-       => Traversal' (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
+tiles ::
+  forall n v big rest a.
+  ( VG.Vector v a,
+    KnownNat (MaxCoordSize (Ordinal n ': rest)),
+    CoordNat big `Mod` n ~ 0
+  ) =>
+  Traversal' (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
 tiles f (Grid v) =
-    requiring @(CoordNat big `Mod` n ~ 0) $
-    Grid <$>
-    traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))) f v
-{-# INLINABLE tiles #-}
+  requiring @(CoordNat big `Mod` n ~ 0) $
+    Grid
+      <$> traverseChunks (fromIntegral $ natVal (Proxy @(MaxCoordSize (Ordinal n ': rest)))) f v
+{-# INLINEABLE tiles #-}
 
 -- | Every overlapping window of size @n@ along a grid's outermost axis,
 -- stride 1: a source axis of 9 windowed by @n ~ 3@ gives seven overlapping
@@ -271,24 +275,25 @@ tiles f (Grid v) =
 -- rather than becoming @gridWindows \@_ \@3@. It is a 'Nat' and not a whole
 -- axis type for the reason given on 'gridTiles': there is no longer a policy
 -- to choose, only a size.
-gridWindows :: forall n v big rest a.
-               ( VG.Vector v a
-               , AllSizedKnown rest
-               , KnownNat n
-               , n <= CoordNat big
-               )
-            => GridOf v (big ': rest) a
-            -> [GridOf v (Ordinal n ': rest) a]
+gridWindows ::
+  forall n v big rest a.
+  ( VG.Vector v a,
+    AllSizedKnown rest,
+    KnownNat n,
+    n <= CoordNat big
+  ) =>
+  GridOf v (big ': rest) a ->
+  [GridOf v (Ordinal n ': rest) a]
 gridWindows (Grid v) =
-    requiring @(n <= CoordNat big) $
+  requiring @(n <= CoordNat big) $
     let restSize = fromIntegral $ natVal (Proxy @(MaxCoordSize rest))
         smallSize = fromIntegral $ natVal (Proxy @n)
         windowSize = smallSize * restSize
         bigSize = VG.length v `div` restSize
-    in [ Grid (VG.slice (off * restSize) windowSize v)
-       | off <- [0 .. bigSize - smallSize]
-       ]
-{-# INLINABLE gridWindows #-}
+     in [ Grid (VG.slice (off * restSize) windowSize v)
+        | off <- [0 .. bigSize - smallSize]
+        ]
+{-# INLINEABLE gridWindows #-}
 
 -- | 'gridWindows' as an optic -- and, on purpose, no more than a 'Fold'.
 --
@@ -304,12 +309,13 @@ gridWindows (Grid v) =
 -- caller can be trusted to use it read-only: the failure of the law is
 -- silent, wrong values rather than a type error, which is the one failure
 -- mode this library organises its types against.
-windows :: forall n v big rest a.
-           ( VG.Vector v a
-           , AllSizedKnown rest
-           , KnownNat n
-           , n <= CoordNat big
-           )
-        => Fold (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
+windows ::
+  forall n v big rest a.
+  ( VG.Vector v a,
+    AllSizedKnown rest,
+    KnownNat n,
+    n <= CoordNat big
+  ) =>
+  Fold (GridOf v (big ': rest) a) (GridOf v (Ordinal n ': rest) a)
 windows = folding (gridWindows @n)
-{-# INLINABLE windows #-}
+{-# INLINEABLE windows #-}

@@ -175,33 +175,39 @@
 -- lists.
 module Data.Grid.Sized.Stencil
   ( -- * The table
-    Stencil
-  , stencilWidth
-  , stencilPositions
+    Stencil,
+    stencilWidth,
+    stencilPositions,
+
     -- * Building one
-  , stencilFor
-  , mooreStencil
-  , vonNeumannStencil
+    stencilFor,
+    mooreStencil,
+    vonNeumannStencil,
+
     -- * Running one
-  , stencilGrid
-  , stencilFoldGrid
-  , stencilAt
+    stencilGrid,
+    stencilFoldGrid,
+    stencilAt,
+
     -- ** Forcing each cell where it is written
-  , stencilGrid'
-  , stencilFoldGrid'
-  ) where
+    stencilGrid',
+    stencilFoldGrid',
+  )
+where
 
-import           Data.Grid.Sized.Coord
-import           Data.Grid.Sized.Internal.Grid (GridOf, gridVector,
-                                                unsafeGridFromVector)
-
-import           Control.Monad                 (forM_)
-import           Control.Monad.ST              (ST, runST)
-import           Data.Kind                     (Type)
-import qualified Data.Vector.Generic           as VG
-import qualified Data.Vector.Generic.Mutable   as VGM
-import qualified Data.Vector.Unboxed           as VU
-import qualified Data.Vector.Unboxed.Mutable   as VUM
+import Control.Monad (forM_)
+import Control.Monad.ST (ST, runST)
+import Data.Grid.Sized.Coord
+import Data.Grid.Sized.Internal.Grid
+  ( GridOf,
+    gridVector,
+    unsafeGridFromVector,
+  )
+import Data.Kind (Type)
+import Data.Vector.Generic qualified as VG
+import Data.Vector.Generic.Mutable qualified as VGM
+import Data.Vector.Unboxed qualified as VU
+import Data.Vector.Unboxed.Mutable qualified as VUM
 
 -- | The neighbourhood of every cell of a @cs@-shaped grid, as vector positions.
 --
@@ -213,14 +219,14 @@ import qualified Data.Vector.Unboxed.Mutable   as VUM
 -- constructor, because a table whose width and length disagree, or whose
 -- positions are out of range, would make `stencilGrid` read out of bounds.
 data Stencil (cs :: [Type]) = Stencil
-    { stencilWidth     :: !Int
-      -- ^ The largest number of neighbours any cell has, and so the stride of
-      -- 'stencilPositions'. Rows shorter than this are padded with @-1@.
-    , stencilPositions :: !(VU.Vector Int)
-      -- ^ @'coordSpaceSize' \@cs * 'stencilWidth'@ entries, row-major by cell:
-      -- the neighbours of position @i@ occupy
-      -- @[i * w, (i + 1) * w)@, ending at the first @-1@ if there is one.
-    }
+  { -- | The largest number of neighbours any cell has, and so the stride of
+    -- 'stencilPositions'. Rows shorter than this are padded with @-1@.
+    stencilWidth :: !Int,
+    -- | @'coordSpaceSize' \@cs * 'stencilWidth'@ entries, row-major by cell:
+    -- the neighbours of position @i@ occupy
+    -- @[i * w, (i + 1) * w)@, ending at the first @-1@ if there is one.
+    stencilPositions :: !(VU.Vector Int)
+  }
 
 -- | Precompute a neighbourhood given as a function of the coordinate.
 --
@@ -247,9 +253,10 @@ data Stencil (cs :: [Type]) = Stencil
 -- buffer to fill it into. See 'stencilBounded', which 'mooreStencil' and
 -- 'vonNeumannStencil' use for exactly that.
 stencilFor ::
-       forall cs. IsCoordList cs
-    => (Coord cs -> [Coord cs])
-    -> Stencil cs
+  forall cs.
+  (IsCoordList cs) =>
+  (Coord cs -> [Coord cs]) ->
+  Stencil cs
 stencilFor neighbourhood = Stencil w (VU.fromListN (n * w) (concatMap padRow (allCoord @cs)))
   where
     n = coordSpaceSize @cs
@@ -261,10 +268,10 @@ stencilFor neighbourhood = Stencil w (VU.fromListN (n * w) (concatMap padRow (al
     w = maximum (0 : [length (neighbourhood c) | c <- allCoord @cs])
     padRow c = go w (map coordPosition (neighbourhood c))
       where
-        go 0 _      = []
-        go k []     = (-1) : go (k - 1) []
-        go k (p:ps) = p : go (k - 1) ps
-{-# INLINABLE stencilFor #-}
+        go 0 _ = []
+        go k [] = (-1) : go (k - 1) []
+        go k (p : ps) = p : go (k - 1) ps
+{-# INLINEABLE stencilFor #-}
 
 -- | The largest number of neighbours a Moore neighbourhood of radius @r@ can
 -- name on @cs@'s axes: the cube around the cell, less the cell itself.
@@ -281,7 +288,7 @@ stencilFor neighbourhood = Stencil w (VU.fromListN (n * w) (concatMap padRow (al
 -- the looseness costs peak residency during the build and nothing else: it
 -- is measured, bounded by @n@ times this formula, and freed at the
 -- compacting copy the same pass performs regardless.
-mooreUpperBound :: forall cs. IsCoordList cs => Int -> Int
+mooreUpperBound :: forall cs. (IsCoordList cs) => Int -> Int
 mooreUpperBound r = (2 * r + 1) ^ axisCount @cs - 1
 {-# INLINE mooreUpperBound #-}
 
@@ -294,9 +301,9 @@ mooreUpperBound r = (2 * r + 1) ^ axisCount @cs - 1
 -- 'mooreUpperBound' and run the neighbourhood function once per cell instead
 -- of twice. See 'stencilBounded' for the build itself and the module
 -- Haddock for what that measures.
-mooreStencil :: forall cs. IsCoordList cs => Int -> Stencil cs
+mooreStencil :: forall cs. (IsCoordList cs) => Int -> Stencil cs
 mooreStencil r = stencilBounded (mooreUpperBound @cs r) (mooreNeighbours r)
-{-# INLINABLE mooreStencil #-}
+{-# INLINEABLE mooreStencil #-}
 
 -- | The von Neumann neighbourhood at the given radius:
 -- `Data.Grid.Sized.Coord.vonNeumannNeighbours` precomputed. @vonNeumannStencil 1@
@@ -305,9 +312,9 @@ mooreStencil r = stencilBounded (mooreUpperBound @cs r) (mooreNeighbours r)
 -- Built through 'stencilBounded' at 'mooreUpperBound', the same allocation
 -- bound `mooreStencil` uses --- see there for why it is loose here and
 -- deliberately so.
-vonNeumannStencil :: forall cs. IsCoordList cs => Int -> Stencil cs
+vonNeumannStencil :: forall cs. (IsCoordList cs) => Int -> Stencil cs
 vonNeumannStencil r = stencilBounded (mooreUpperBound @cs r) (vonNeumannNeighbours r)
-{-# INLINABLE vonNeumannStencil #-}
+{-# INLINEABLE vonNeumannStencil #-}
 
 -- | Lay a table out at a caller-supplied upper bound on the width, fill it in
 -- one pass recording the width actually seen, and compact to that width if
@@ -328,19 +335,20 @@ vonNeumannStencil r = stencilBounded (mooreUpperBound @cs r) (vonNeumannNeighbou
 -- 'vonNeumannStencil', never an under-estimate for either, so both call sites
 -- satisfy it.
 stencilBounded ::
-       forall cs. IsCoordList cs
-    => Int
-    -> (Coord cs -> [Coord cs])
-    -> Stencil cs
+  forall cs.
+  (IsCoordList cs) =>
+  Int ->
+  (Coord cs -> [Coord cs]) ->
+  Stencil cs
 stencilBounded ub neighbourhood =
-    runST $ do
-        buf <- VUM.new (n * ub)
-        w <- fillAll buf
-        positions <-
-            if w == ub
-                then VU.unsafeFreeze buf
-                else compact buf w
-        pure (Stencil w positions)
+  runST $ do
+    buf <- VUM.new (n * ub)
+    w <- fillAll buf
+    positions <-
+      if w == ub
+        then VU.unsafeFreeze buf
+        else compact buf w
+    pure (Stencil w positions)
   where
     n = coordSpaceSize @cs
     -- One pass over every cell, each row written straight into its slot and
@@ -350,31 +358,31 @@ stencilBounded ub neighbourhood =
     fillAll buf = go 0 0
       where
         go !i !seen
-            | i >= n = pure seen
-            | otherwise = do
-                len <- fillRow buf (i * ub) (rowOf i)
-                go (i + 1) (max seen len)
+          | i >= n = pure seen
+          | otherwise = do
+              len <- fillRow buf (i * ub) (rowOf i)
+              go (i + 1) (max seen len)
     rowOf i = map coordPosition (neighbourhood (unsafeCoordFromPosition i))
     fillRow :: forall s. VUM.MVector s Int -> Int -> [Int] -> ST s Int
     fillRow buf base = write base
       where
         end = base + ub
-        write !j []     = pad j >> pure (j - base)
-        write !j (p:ps) = VUM.unsafeWrite buf j p >> write (j + 1) ps
+        write !j [] = pad j >> pure (j - base)
+        write !j (p : ps) = VUM.unsafeWrite buf j p >> write (j + 1) ps
         pad !j
-            | j >= end = pure ()
-            | otherwise = VUM.unsafeWrite buf j (-1) >> pad (j + 1)
+          | j >= end = pure ()
+          | otherwise = VUM.unsafeWrite buf j (-1) >> pad (j + 1)
     -- Narrow a table laid out at stride @ub@ to stride @w@, once the fill
     -- above has found @w@ to be smaller: freed as soon as this returns, so
     -- the two tables are never both reachable at once.
     compact :: forall s. VUM.MVector s Int -> Int -> ST s (VU.Vector Int)
     compact buf w = do
-        out <- VUM.new (n * w)
-        forM_ [0 .. n - 1] $ \i ->
-            VUM.unsafeCopy
-                (VUM.unsafeSlice (i * w) w out)
-                (VUM.unsafeSlice (i * ub) w buf)
-        VU.unsafeFreeze out
+      out <- VUM.new (n * w)
+      forM_ [0 .. n - 1] $ \i ->
+        VUM.unsafeCopy
+          (VUM.unsafeSlice (i * w) w out)
+          (VUM.unsafeSlice (i * ub) w buf)
+      VU.unsafeFreeze out
 
 -- | Rebuild a grid from each cell and its neighbours.
 --
@@ -391,13 +399,14 @@ stencilBounded ub neighbourhood =
 -- @take@, a short-circuiting fold --- does not pay for the rest of it. See
 -- 'gatherRow' for why reading it needs no bounds check.
 stencilGrid ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 stencilGrid (Stencil w tbl) f g =
-    unsafeGridFromVector $ VG.generate n (\i -> gatherAt tbl w v f i)
+  unsafeGridFromVector $ VG.generate n (\i -> gatherAt tbl w v f i)
   where
     v = gridVector g
     -- The grid's own length rather than 'coordSpaceSize', which are the same
@@ -455,14 +464,15 @@ stencilGrid (Stencil w tbl) f g =
 -- vectors and nothing else; boxed, it still writes a boxed @b@ per cell, and
 -- no pragma can remove that.
 stencilFoldGrid ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 stencilFoldGrid (Stencil w tbl) step seed g =
-    unsafeGridFromVector $ VG.generate n (\i -> foldAt tbl w v step seed i)
+  unsafeGridFromVector $ VG.generate n (\i -> foldAt tbl w v step seed i)
   where
     v = gridVector g
     n = VG.length v
@@ -506,13 +516,14 @@ stencilFoldGrid (Stencil w tbl) step seed g =
 -- them. That is the whole difference between the two, and it is why this is a
 -- second entry point rather than a change to the first.
 stencilGrid' ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (a -> [a] -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (a -> [a] -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 stencilGrid' (Stencil w tbl) f g =
-    unsafeGridFromVector $ fillStrict n (\i -> gatherAt tbl w v f i)
+  unsafeGridFromVector $ fillStrict n (\i -> gatherAt tbl w v f i)
   where
     v = gridVector g
     n = VG.length v
@@ -563,14 +574,15 @@ stencilGrid' (Stencil w tbl) f g =
 -- single pass and nothing on a boxed loop, this is worth nothing on an
 -- unboxed single pass and 5x on a boxed loop.
 stencilFoldGrid' ::
-       forall v cs a b. (VG.Vector v a, VG.Vector v b)
-    => Stencil cs
-    -> (b -> a -> b)
-    -> (a -> b)
-    -> GridOf v cs a
-    -> GridOf v cs b
+  forall v cs a b.
+  (VG.Vector v a, VG.Vector v b) =>
+  Stencil cs ->
+  (b -> a -> b) ->
+  (a -> b) ->
+  GridOf v cs a ->
+  GridOf v cs b
 stencilFoldGrid' (Stencil w tbl) step seed g =
-    unsafeGridFromVector $ fillStrict n (\i -> foldAt tbl w v step seed i)
+  unsafeGridFromVector $ fillStrict n (\i -> foldAt tbl w v step seed i)
   where
     v = gridVector g
     n = VG.length v
@@ -593,13 +605,14 @@ stencilFoldGrid' (Stencil w tbl) step seed g =
 -- saved --- the per-neighbour coordinate arithmetic and the boundary policy
 -- behind it.
 stencilAt ::
-       forall v cs a. VG.Vector v a
-    => Stencil cs
-    -> GridOf v cs a
-    -> Coord cs
-    -> [a]
+  forall v cs a.
+  (VG.Vector v a) =>
+  Stencil cs ->
+  GridOf v cs a ->
+  Coord cs ->
+  [a]
 stencilAt (Stencil w tbl) g c = gatherRow tbl w (gridVector g) (coordPosition c)
-{-# INLINABLE stencilAt #-}
+{-# INLINEABLE stencilAt #-}
 
 -- | Cell @i@ of a `stencilGrid` pass: the rule applied to the cell and its
 -- neighbours.
@@ -609,15 +622,15 @@ stencilAt (Stencil w tbl) g c = gatherRow tbl w (gridVector g) (coordPosition c)
 -- "same result, forced earlier" a fact about the source and not only a
 -- property `Test.Stencil` checks.
 gatherAt ::
-       VG.Vector v a => VU.Vector Int -> Int -> v a -> (a -> [a] -> b) -> Int -> b
+  (VG.Vector v a) => VU.Vector Int -> Int -> v a -> (a -> [a] -> b) -> Int -> b
 gatherAt tbl w v f i = f (VG.unsafeIndex v i) (gatherRow tbl w v i)
 {-# INLINE gatherAt #-}
 
 -- | Cell @i@ of a `stencilFoldGrid` pass, shared with `stencilFoldGrid'` for
 -- the reason 'gatherAt' gives.
 foldAt ::
-       VG.Vector v a
-    => VU.Vector Int -> Int -> v a -> (b -> a -> b) -> (a -> b) -> Int -> b
+  (VG.Vector v a) =>
+  VU.Vector Int -> Int -> v a -> (b -> a -> b) -> (a -> b) -> Int -> b
 foldAt tbl w v step seed i = foldRow' tbl w v i step (seed (VG.unsafeIndex v i))
 {-# INLINE foldAt #-}
 
@@ -634,15 +647,15 @@ foldAt tbl w v step seed i = foldRow' tbl w v i step (seed (VG.unsafeIndex v i))
 -- can observe it in a partly-filled state. 'VGM.unsafeNew' and
 -- 'VGM.unsafeWrite' are licensed by @go@ writing exactly @[0, n)@ once each,
 -- and 'VG.unsafeFreeze' by @mv@ being dead after it.
-fillStrict :: VG.Vector v b => Int -> (Int -> b) -> v b
+fillStrict :: (VG.Vector v b) => Int -> (Int -> b) -> v b
 fillStrict n at =
-    runST $ do
-        mv <- VGM.unsafeNew n
-        let go !i
-                | i >= n = pure ()
-                | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
-        go 0
-        VG.unsafeFreeze mv
+  runST $ do
+    mv <- VGM.unsafeNew n
+    let go !i
+          | i >= n = pure ()
+          | otherwise = (VGM.unsafeWrite mv i $! at i) >> go (i + 1)
+    go 0
+    VG.unsafeFreeze mv
 {-# INLINE fillStrict #-}
 
 -- | The half-open span of 'stencilPositions' that holds row @i@ of a stencil
@@ -663,16 +676,16 @@ rowSpan w i = (i * w, (i + 1) * w)
 -- `coordPosition` on a real @'Coord' cs@, so it is in
 -- @[0, 'coordSpaceSize' \@cs)@, and the grid has exactly that many elements.
 -- Both halves are facts about @cs@, which is why the stencil is indexed by it.
-gatherRow :: VG.Vector v a => VU.Vector Int -> Int -> v a -> Int -> [a]
+gatherRow :: (VG.Vector v a) => VU.Vector Int -> Int -> v a -> Int -> [a]
 gatherRow tbl w v i = go start
   where
     (start, end) = rowSpan w i
     go !j
-        | j >= end = []
-        | otherwise =
-            case VU.unsafeIndex tbl j of
-                -1 -> []
-                p  -> VG.unsafeIndex v p : go (j + 1)
+      | j >= end = []
+      | otherwise =
+          case VU.unsafeIndex tbl j of
+            -1 -> []
+            p -> VG.unsafeIndex v p : go (j + 1)
 {-# INLINE gatherRow #-}
 
 -- | Row @i@ of the table, folded left instead of gathered into a list.
@@ -681,14 +694,14 @@ gatherRow tbl w v i = go start
 -- --- see there for why every entry is in range. Strict in the accumulator, so
 -- `stencilFoldGrid` never builds a thunk chain across a row; the one it cannot
 -- avoid is the outer 'VG.generate', which `stencilGrid` pays too.
-foldRow' :: VG.Vector v a => VU.Vector Int -> Int -> v a -> Int -> (b -> a -> b) -> b -> b
+foldRow' :: (VG.Vector v a) => VU.Vector Int -> Int -> v a -> Int -> (b -> a -> b) -> b -> b
 foldRow' tbl w v i step = go start
   where
     (start, end) = rowSpan w i
     go !j !acc
-        | j >= end = acc
-        | otherwise =
-            case VU.unsafeIndex tbl j of
-                -1 -> acc
-                p  -> go (j + 1) (step acc (VG.unsafeIndex v p))
+      | j >= end = acc
+      | otherwise =
+          case VU.unsafeIndex tbl j of
+            -1 -> acc
+            p -> go (j + 1) (step acc (VG.unsafeIndex v p))
 {-# INLINE foldRow' #-}
