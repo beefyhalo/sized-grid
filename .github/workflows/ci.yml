@@ -32,6 +32,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # hlint + ormolu over the whole tree, from the flake's `preCommit` check
+  # (flake.nix) -- the same definition that installs the git pre-commit hook
+  # in `nix develop`, so local and CI cannot disagree. Its own job rather than
+  # a step in flake-check: it shares nothing with the GHC builds, closes in
+  # seconds against the public cache (no cache-nix-action needed -- hlint,
+  # ormolu and pre-commit are all in cache.nixos.org), and a formatting nit
+  # should not wait on two GHC toolchains to report.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - run: nix build --print-build-logs .#checks.x86_64-linux.preCommit
+
   flake-check:
     runs-on: ubuntu-latest
     steps:

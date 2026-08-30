@@ -4,9 +4,17 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    # hlint + ormolu as a git pre-commit hook and a `nix flake check`, both
+    # from one config -- see `preCommit` below. `follows` so the hook tools
+    # (ormolu especially) are the same build as the devShell's, not a second
+    # nixpkgs' version that would reformat differently.
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, ... }:
+  outputs = { self, nixpkgs, flake-utils, git-hooks, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -37,12 +45,42 @@
           # withHoogle builds haddocks for every dependency; far too slow to pay
           # on each `nix develop`.
           withHoogle = false;
+          # Installs the git pre-commit hook on first `nix develop`; a no-op
+          # afterwards. enabledPackages puts hlint/ormolu on PATH so `hlint .`
+          # and `ormolu` in the shell are the exact builds the hook and CI use.
+          inherit (preCommit) shellHook;
           nativeBuildInputs = [
             hsPkgs.haskell-language-server
             hsPkgs.cabal-install
             pkgs.pkg-config
             pkgs.zlib
-          ];
+          ] ++ preCommit.enabledPackages;
+        };
+
+        # hlint + ormolu, run three ways from one definition: the git
+        # pre-commit hook (via mkShell's shellHook), `nix flake check` /
+        # `nix build .#checks.<system>.preCommit` in CI (ci.yml's lint job),
+        # and `nix develop -c pre-commit run --all-files` by hand.
+        #
+        # hlint reads .hlint.yaml at the repo root (scope excludes, the
+        # deliberate-lambda ignores); spike/** is dropped here too so the hook
+        # never lints the frozen ADR spikes even when one is touched. ormolu
+        # covers every .hs file -- the tree was reformatted wholesale in
+        # a597a4b (see .git-blame-ignore-revs).
+        preCommit = git-hooks.lib.${system}.run {
+          src = ./.;
+          excludes = [ "^dist-" "^\\.direnv/" "^result" ];
+          hooks = {
+            hlint = {
+              enable = true;
+              package = pkgs.hlint;
+              excludes = [ "^spike/" ];
+            };
+            ormolu = {
+              enable = true;
+              package = pkgs.ormolu;
+            };
+          };
         };
 
         # The type-checker plugins the library compiles against.
@@ -116,6 +154,7 @@
         checks = {
           ghc912 = mkPackage ghc912;
           ghc914 = mkPackage ghc914;
+          preCommit = preCommit;
         };
 
         devShells = {

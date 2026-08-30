@@ -1,0 +1,6 @@
+# Revisions to skip in `git blame`. Enable locally with:
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub and the JetBrains/VS Code blame views honour this file automatically.
+
+# Reformat every source file with ormolu 0.8.0.2 (sized-grid-rzvi).
+a597a4b95835c0b6e24ae2e08237f990c9c282aa

@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/haskell-lint.sh\"",
+            "statusMessage": "Linting Haskell (hlint + ormolu)"
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [

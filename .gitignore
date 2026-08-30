@@ -45,16 +45,24 @@ dist-newstyle/
 .vscode/
 
 # Claude Code session state. The worktrees directory is per-session scratch and
-# must never be committed; settings.json is deliberately shared and stays
-# tracked.
+# must never be committed; settings.json and the hooks/ scripts it points at
+# are deliberately shared and stay tracked.
 #
 # '.claude/*' rather than '.claude/': git does not descend into an excluded
-# directory, so under '.claude/' the negation below silently does nothing and
+# directory, so under '.claude/' the negations below silently do nothing and
 # even 'git add .claude/settings.json' is refused. Matching the contents
-# instead leaves the directory traversable, which is what makes the negation
-# work.
+# instead leaves the directory traversable, which is what makes the negations
+# work. The same applies one level down: '.claude/hooks' must be un-excluded
+# before '.claude/hooks/*' can be.
 .claude/*
 !.claude/settings.json
+!.claude/hooks
+.claude/hooks/*
+!.claude/hooks/*.sh
+
+# Symlink into the nix store that git-hooks.nix writes on `nix develop` (see
+# flake.nix's `preCommit`). Generated from flake.nix -- not a source file.
+/.pre-commit-config.yaml
 
 # sokoban-shot writes a PPM of the game's own window, and defaults to writing
 # it into whatever directory it was run from. They are 7MB each and are working
