@@ -13,8 +13,8 @@ import Data.Set qualified as Set
 import Sokoban.Board
 import Sokoban.Flat
 import Sokoban.Level
-import Sokoban.Render (run)
 import Sokoban.Rules
+import Sokoban.Shell (run)
 import Sokoban.Solve
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
@@ -59,8 +59,12 @@ usage prog =
       "            cylinder of the same shape and on a plain rectangle --",
       "            and report whether the twist was needed",
       "",
-      "keys, in the window: arrows or wasd / hjkl move, u undo, r restart,",
-      "      n / p change level, v change view, f change frame",
+      "the window opens on a title screen: space plays, l is the level",
+      "screen, escape is one screen back, and q leaves.",
+      "",
+      "keys, in a level: arrows or wasd / hjkl move, u undo, r restart,",
+      "      n / p change level, v change view, f change frame,",
+      "      esc the level screen, q quit",
       "",
       "  v cycles three views: the strip flat with the far side of each edge",
       "  drawn past it, the same surface centred on the player, and the strip",
@@ -130,21 +134,25 @@ start levels = do
       when finished $ go rest
 
 -- | Returns whether the level was finished, as opposed to quit out of.
+--
+-- The end of input is a way out from both prompts, and it did not used to be
+-- from the second: a level solved by a script rather than by a person got as
+-- far as \"press return\" and then died on the read. Which is the same
+-- complaint sized-grid-lopy.8 is about, one screen over.
 loop :: (KnownStrip w h) => Frame -> Game w h -> IO Bool
 loop frame game = do
   putStr (render frame game)
-  if solved game
-    then
-      putStrLn "\nSolved. Press return for the next level."
-        >> getLine
-        >> pure True
+  when done (putStrLn "\nSolved. Press return for the next level.")
+  eof <- isEOF
+  if eof
+    then pure False
     else do
-      eof <- isEOF
-      if eof
-        then pure False
-        else do
-          line <- getLine
-          keys (map toLower line) frame game
+      line <- getLine
+      if done
+        then pure True
+        else keys (map toLower line) frame game
+  where
+    done = solved game
 
 keys :: (KnownStrip w h) => String -> Frame -> Game w h -> IO Bool
 keys [] frame game = loop frame game

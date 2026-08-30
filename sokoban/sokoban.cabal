@@ -14,6 +14,13 @@ description:
   crate pushed off one end of the board arrives at the other end in the row on
   the far side of the middle, and levels are built out of exactly that.
   .
+  The window opens on a title screen, because what a Mobius strip is has to be
+  said before a level is on screen rather than after. Behind the sentence that
+  says it, the strip turns as an actual band. Finishing a level sends a marker
+  twice around the strip --- which is what it takes to come home --- and then
+  on to the next one, and a level screen shows all eight at once, ticked where
+  they are done.
+  .
   Plays in a window or at a terminal, and both draw the strip the same way: the
   chart as a rectangle, with the far side of each edge drawn past it, dimmed,
   in the row the seam sends it to. The consequence of a push through the seam
@@ -77,6 +84,7 @@ library
     Sokoban.Level
     Sokoban.Render
     Sokoban.Rules
+    Sokoban.Shell
     Sokoban.Solve
 
   build-depends:
@@ -121,10 +129,12 @@ test-suite tests
     Test.Levels
     Test.Rules
     Test.Seam
+    Test.Shell
 
   build-depends:
     , base
     , containers
+    , gloss
     , grid-atlas
     , grid-sized
     , HUnit             >=1.6  && <1.7

@@ -31,6 +31,7 @@ import Graphics.Rendering.OpenGL qualified as GL
 import Sokoban.Band (Band, bandDistance, bandGirth, bandSpin, bandTilt, defaultBand)
 import Sokoban.Level
 import Sokoban.Render
+import Sokoban.Shell
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hPutStrLn, stderr)
@@ -46,6 +47,11 @@ data Options = Options
     -- for: a band is a picture, and picking a picture's proportions by
     -- rebuilding between guesses is how sized-grid-23y3 went wrong.
     optBand :: Band,
+    -- | Which screen to photograph. The keys are always fed with the game
+    -- playing --- that is what they mean --- and the stage is set afterwards,
+    -- so @--level 3 --stage levels@ is the level screen with the cursor on the
+    -- third one.
+    optStage :: Stage,
     optKeys :: String
   }
 
@@ -57,6 +63,7 @@ defaults =
       optView = Flat,
       optFrame = False,
       optBand = defaultBand,
+      optStage = Playing,
       optKeys = ""
     }
 
@@ -74,6 +81,13 @@ parse ("--spin" : v : as) o = number "--spin" v as o (\x b -> b {bandSpin = x})
 parse ("--girth" : v : as) o = number "--girth" v as o (\x b -> b {bandGirth = x})
 parse ("--tilt" : v : as) o = number "--tilt" v as o (\x b -> b {bandTilt = x})
 parse ("--dist" : v : as) o = number "--dist" v as o (\x b -> b {bandDistance = x})
+parse ("--stage" : "title" : as) o = parse as o {optStage = Title}
+parse ("--stage" : "levels" : as) o = parse as o {optStage = Levels}
+parse ("--stage" : "play" : as) o = parse as o {optStage = Playing}
+parse ("--cleared" : v : as) o =
+  case reads v of
+    [(t, "")] -> parse as o {optStage = Cleared t}
+    _ -> Left ("--cleared wants a number of seconds, got " ++ v)
 parse ("--frame" : "player" : as) o = parse as o {optFrame = True}
 parse ("--frame" : "chart" : as) o = parse as o {optFrame = False}
 parse ("--keys" : v : as) o = parse as o {optKeys = v}
@@ -92,8 +106,15 @@ main = do
   case parse args defaults of
     Left err -> hPutStrLn stderr err >> exitFailure
     Right o -> do
-      let app0 = (newApp defaultWindow builtinLevels) {appBand = optBand o}
-          app1 = feed (levelKeys (optLevel o) ++ viewKeys o ++ optKeys o) app0
+      let app0 =
+            (newApp defaultWindow builtinLevels)
+              { appBand = optBand o,
+                appStage = Playing
+              }
+          app1 =
+            (feed (levelKeys (optLevel o) ++ viewKeys o ++ optKeys o) app0)
+              { appStage = optStage o
+              }
       frames <- newIORef (0 :: Int)
       G.playIO
         (G.InWindow "sokoban shot" defaultWindow (40, 40))
