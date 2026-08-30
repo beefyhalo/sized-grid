@@ -160,6 +160,7 @@ module Data.Grid.Sized.Coord
     AllSizedKnown (..),
     SizeProof (..),
     IsCoordList,
+    IsCoordLifted (..),
   )
 where
 

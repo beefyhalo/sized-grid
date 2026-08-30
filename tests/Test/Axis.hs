@@ -21,6 +21,7 @@ import Control.Lens (itoListOf, toListOf)
 import Data.Foldable (toList)
 import Data.Grid.Sized
 import Data.Maybe (fromJust)
+import Data.Vector.Generic qualified as VG
 import GHC.TypeLits (KnownNat, type (<=))
 import Test.Arbitrary ()
 import Test.Tasty
@@ -95,6 +96,82 @@ refFlat1 f g =
   tabulateGrid $ \(i :| j :| _) ->
     f (fibre [indexGrid g (i :| j' :| EmptyCoord) | j' <- axisValues]) `at` j
 
+-- | References for foldAxis': fold each fibre and return a lower-dimensional grid
+--
+-- These fold along one axis and produce a grid with that axis removed.
+refFoldFlat0 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Flat Int ->
+  Grid '[Ordinal 5] Int
+refFoldFlat0 f z g =
+  tabulateGrid $ \(j :| _) ->
+    foldl' f z [indexGrid g (i' :| j :| EmptyCoord) | i' <- axisValues]
+
+refFoldFlat1 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Flat Int ->
+  Grid '[Ordinal 3] Int
+refFoldFlat1 f z g =
+  tabulateGrid $ \(i :| _) ->
+    foldl' f z [indexGrid g (i :| j' :| EmptyCoord) | j' <- axisValues]
+
+refFoldCube0 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Cube Int ->
+  Grid '[Ordinal 3, Ordinal 4] Int
+refFoldCube0 f z g =
+  tabulateGrid $ \(j :| k :| _) ->
+    foldl' f z [indexGrid g (i' :| j :| k :| EmptyCoord) | i' <- axisValues]
+
+refFoldCube1 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Cube Int ->
+  Grid '[Ordinal 2, Ordinal 4] Int
+refFoldCube1 f z g =
+  tabulateGrid $ \(i :| k :| _) ->
+    foldl' f z [indexGrid g (i :| j' :| k :| EmptyCoord) | j' <- axisValues]
+
+refFoldCube2 ::
+  (Int -> Int -> Int) ->
+  Int ->
+  Grid Cube Int ->
+  Grid '[Ordinal 2, Ordinal 3] Int
+refFoldCube2 f z g =
+  tabulateGrid $ \(i :| j :| _) ->
+    foldl' f z [indexGrid g (i :| j :| k' :| EmptyCoord) | k' <- axisValues]
+
+refReduceFlat0 :: (Int -> Int -> Int) -> Grid Flat Int -> Grid '[Ordinal 5] Int
+refReduceFlat0 f g =
+  tabulateGrid $ \(j :| _) ->
+    foldl1 f [indexGrid g (i' :| j :| EmptyCoord) | i' <- axisValues]
+
+refReduceFlat1 :: (Int -> Int -> Int) -> Grid Flat Int -> Grid '[Ordinal 3] Int
+refReduceFlat1 f g =
+  tabulateGrid $ \(i :| _) ->
+    foldl1 f [indexGrid g (i :| j' :| EmptyCoord) | j' <- axisValues]
+
+refReduceCube0 ::
+  (Int -> Int -> Int) -> Grid Cube Int -> Grid '[Ordinal 3, Ordinal 4] Int
+refReduceCube0 f g =
+  tabulateGrid $ \(j :| k :| _) ->
+    foldl1 f [indexGrid g (i' :| j :| k :| EmptyCoord) | i' <- axisValues]
+
+refReduceCube1 ::
+  (Int -> Int -> Int) -> Grid Cube Int -> Grid '[Ordinal 2, Ordinal 4] Int
+refReduceCube1 f g =
+  tabulateGrid $ \(i :| k :| _) ->
+    foldl1 f [indexGrid g (i :| j' :| k :| EmptyCoord) | j' <- axisValues]
+
+refReduceCube2 ::
+  (Int -> Int -> Int) -> Grid Cube Int -> Grid '[Ordinal 2, Ordinal 3] Int
+refReduceCube2 f g =
+  tabulateGrid $ \(i :| j :| _) ->
+    foldl1 f [indexGrid g (i :| j :| k' :| EmptyCoord) | k' <- axisValues]
+
 --------------------------------------------------------------------------------
 
 axisTests :: TestTree
@@ -125,10 +202,10 @@ axisTests =
                     [3, 8, 13],
                     [4, 9, 14]
                   ],
-       testCase "axisFold returns each fibre's ordinal offset" $
-         let g = tabulateGrid coordPosition :: Grid Flat Int
-          in map (fmap toList) (itoListOf (axisFold 0) g)
-               @?= [ (unsafeOrdinal 0 :| EmptyCoord, [0, 5, 10]),
+      testCase "axisFold returns each fibre's ordinal offset" $
+        let g = tabulateGrid coordPosition :: Grid Flat Int
+         in map (fmap toList) (itoListOf (axisFold 0) g)
+              @?= [ (unsafeOrdinal 0 :| EmptyCoord, [0, 5, 10]),
                     (unsafeOrdinal 1 :| EmptyCoord, [1, 6, 11]),
                     (unsafeOrdinal 2 :| EmptyCoord, [2, 7, 12]),
                     (unsafeOrdinal 3 :| EmptyCoord, [3, 8, 13]),
@@ -184,7 +261,99 @@ axisTests =
               ],
           testProperty "acting on one axis leaves the row sums of the others alone, 3D" $ \(g :: Grid Cube Int) ->
             sum (mapAxis 1 reverseFibre g) === sum g
-        ]
+        ],
+      testGroup
+        "the identities that hold for every axis"
+        [ testProperty "mapAxis n id == id, 3D" $ \(g :: Grid Cube Int) ->
+            conjoin
+              [ mapAxis 0 id g === g,
+                mapAxis 1 id g === g,
+                mapAxis 2 id g === g
+              ],
+          -- Reversing twice is the identity fibre by fibre, so it is also the
+          -- identity on the grid -- unless the gather and the scatter
+          -- disagree about which fibre is which.
+          testProperty "reversing each fibre twice is the identity, 3D" $ \(g :: Grid Cube Int) ->
+            conjoin
+              [ mapAxis 0 reverseFibre (mapAxis 0 reverseFibre g) === g,
+                mapAxis 1 reverseFibre (mapAxis 1 reverseFibre g) === g,
+                mapAxis 2 reverseFibre (mapAxis 2 reverseFibre g) === g
+              ],
+          testProperty "acting on one axis leaves the row sums of the others alone, 3D" $ \(g :: Grid Cube Int) ->
+            sum (mapAxis 1 reverseFibre g) === sum g
+        ],
+      testGroup
+        "foldAxis' agrees with the reference, on every axis"
+        [ testProperty "2D, axis 0 (strided)" $ \(g :: Grid Flat Int) ->
+            conjoin
+              [foldAxis' 0 f z g === refFoldFlat0 f z g | f <- foldOps, z <- seeds],
+          testProperty "2D, axis 1 (contiguous)" $ \(g :: Grid Flat Int) ->
+            conjoin
+              [foldAxis' 1 f z g === refFoldFlat1 f z g | f <- foldOps, z <- seeds],
+          testProperty "3D, axis 0 (outermost)" $ \(g :: Grid Cube Int) ->
+            conjoin [foldAxis' 0 f z g === refFoldCube0 f z g | f <- foldOps, z <- seeds],
+          testProperty "3D, axis 1 (the middle axis no transpose reaches)" $ \(g :: Grid Cube Int) ->
+            conjoin [foldAxis' 1 f z g === refFoldCube1 f z g | f <- foldOps, z <- seeds],
+          testProperty "3D, axis 2 (innermost)" $ \(g :: Grid Cube Int) ->
+            conjoin [foldAxis' 2 f z g === refFoldCube2 f z g | f <- foldOps, z <- seeds]
+        ],
+      testGroup
+        "foldAxis' order and grouping are pinned with non-associative operators"
+        [ testProperty "2D, axis 0, order is left-to-right" $ \(g :: Grid Flat Int) ->
+            conjoin [foldAxis' 0 f z g === refFoldFlat0 f z g | f <- nonAssocOps, z <- seeds],
+          testProperty "2D, axis 1, order is left-to-right" $ \(g :: Grid Flat Int) ->
+            conjoin [foldAxis' 1 f z g === refFoldFlat1 f z g | f <- nonAssocOps, z <- seeds],
+          testProperty "3D, axis 1, order is left-to-right" $ \(g :: Grid Cube Int) ->
+            conjoin [foldAxis' 1 f z g === refFoldCube1 f z g | f <- nonAssocOps, z <- seeds]
+        ],
+      testGroup
+        "foldAxis' agrees with the published-API spelling"
+        [ testProperty "2D, axis 0" $ \(g :: Grid Flat Int) ->
+            foldAxis' 0 (+) 0 g
+              === (fromJust . gridFromVector . VG.fromList . map (foldlGrid' (+) 0) . axisFibres 0) g,
+          testProperty "2D, axis 1" $ \(g :: Grid Flat Int) ->
+            foldAxis' 1 (+) 0 g
+              === (fromJust . gridFromVector . VG.fromList . map (foldlGrid' (+) 0) . axisFibres 1) g,
+          testProperty "3D, axis 0" $ \(g :: Grid Cube Int) ->
+            foldAxis' 0 (+) 0 g
+              === (fromJust . gridFromVector . VG.fromList . map (foldlGrid' (+) 0) . axisFibres 0) g,
+          testProperty "3D, axis 1" $ \(g :: Grid Cube Int) ->
+            foldAxis' 1 (+) 0 g
+              === (fromJust . gridFromVector . VG.fromList . map (foldlGrid' (+) 0) . axisFibres 1) g,
+          testProperty "3D, axis 2" $ \(g :: Grid Cube Int) ->
+            foldAxis' 2 (+) 0 g
+              === (fromJust . gridFromVector . VG.fromList . map (foldlGrid' (+) 0) . axisFibres 2) g
+        ],
+      testGroup
+        "foldAxis' on one-axis grids"
+        [ testCase "foldAxis' 0 reduces axis to a sum" $
+            let g = fibre [1, 2, 3] :: Grid '[Ordinal 3] Int
+                result = foldAxis' 0 (+) (0 :: Int) g
+             in gridVector result @?= VG.fromList [6]
+        ],
+      testGroup
+        "foldAxis' with non-associative operators shows order"
+        [ testCase "foldAxis' 0 with (-) shows left-to-right evaluation" $
+            let g = fibre [1, 2, 3] :: Grid '[Ordinal 3] Int
+                result = foldAxis' 0 (-) 10 g
+             in gridVector result @?= VG.fromList [4]
+        ],
+      testGroup
+        "reduceAxis agrees with the seedless coordinate reference, on every axis"
+        [ testProperty "2D, axis 0 (strided)" $ \(g :: Grid Flat Int) ->
+            conjoin [reduceAxis 0 f g === refReduceFlat0 f g | f <- nonAssocOps],
+          testProperty "2D, axis 1 (contiguous)" $ \(g :: Grid Flat Int) ->
+            conjoin [reduceAxis 1 f g === refReduceFlat1 f g | f <- nonAssocOps],
+          testProperty "3D, axis 0 (outermost)" $ \(g :: Grid Cube Int) ->
+            conjoin [reduceAxis 0 f g === refReduceCube0 f g | f <- nonAssocOps],
+          testProperty "3D, axis 1 (middle)" $ \(g :: Grid Cube Int) ->
+            conjoin [reduceAxis 1 f g === refReduceCube1 f g | f <- nonAssocOps],
+          testProperty "3D, axis 2 (innermost)" $ \(g :: Grid Cube Int) ->
+            conjoin [reduceAxis 2 f g === refReduceCube2 f g | f <- nonAssocOps]
+        ],
+      testCase "reduceAxis seeds each fibre from its first element" $
+        let g = fibre [1, 2, 3] :: Grid '[Ordinal 3] Int
+         in gridVector (reduceAxis 0 (-) g) @?= VG.fromList [-4]
     ]
   where
     -- One transform that reorders the fibre, one that folds along it
@@ -195,3 +364,7 @@ axisTests =
     cubeFibre1 = [scanl1Grid (-), reverseFibre, mapGrid (* 2)]
     cubeFibre2 = [scanl1Grid (-), reverseFibre, mapGrid (* 2)]
     ops = [(-), (+)]
+    -- Non-associative and non-commutative operators for foldAxis' testing
+    foldOps = [(+), (-), (*)]
+    nonAssocOps = [(-), \acc x -> 2 * acc - x]
+    seeds = [0, 1, 10]

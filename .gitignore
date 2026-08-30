@@ -69,3 +69,4 @@ dist-newstyle/
 # output, not evidence to keep: capture/ppm2png.py turns one into something to
 # look at, and the shot can always be retaken.
 *.ppm
+repomix-output.xml
