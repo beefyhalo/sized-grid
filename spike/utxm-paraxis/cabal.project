@@ -1,0 +1,7 @@
+-- sized-grid-utxm spike. Two packages: this throwaway one, and the real
+-- library, so the control (the library's own mapAxis/scanAxis) and the
+-- experiments are the same binary, built by the same compiler, measured back
+-- to back.
+packages:
+  .
+  ../..
