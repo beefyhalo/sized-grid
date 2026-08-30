@@ -11,7 +11,7 @@ module Test.Windows
 where
 
 import Control.Comonad (extract)
-import Control.Lens (toListOf)
+import Control.Lens (itoListOf, toListOf)
 import Data.Foldable (toList)
 import Data.Grid.Sized
 import Data.Maybe (fromJust)
@@ -218,6 +218,14 @@ windowsIsGridWindows :: Grid '[Ordinal 5] Int -> Property
 windowsIsGridWindows src =
   toListOf (windows @3) src === gridWindows @3 src
 
+windowsCarryOffsets :: Property
+windowsCarryOffsets =
+  map (fmap toList) (itoListOf (windows @3) sourceOfFive)
+    === [ (unsafeOrdinal 0 :| EmptyCoord, [1, 2, 3]),
+          (unsafeOrdinal 1 :| EmptyCoord, [2, 3, 4]),
+          (unsafeOrdinal 2 :| EmptyCoord, [3, 4, 5])
+        ]
+
 windowTests :: TestTree
 windowTests =
   testGroup
@@ -235,6 +243,7 @@ windowTests =
         "gridWindows agrees with shrinkGrid, 2D with the second axis fixed"
         windowIsShrinkGrid2D,
       testProperty "toListOf windows == gridWindows" windowsIsGridWindows,
+      testProperty "windows carry their offsets" windowsCarryOffsets,
       movementInsideAWindow,
       testGroup
         "a restriction destroys the boundary policy"
