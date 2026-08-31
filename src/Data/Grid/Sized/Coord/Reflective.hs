@@ -10,6 +10,7 @@ import Control.Lens (iso)
 import Data.Aeson
 import Data.AffineSpace
 import Data.Grid.Sized.Coord.Class
+import Data.Grid.Sized.Coord.Internal.Reflect
 import Data.Grid.Sized.Ordinal
 import Data.Hashable (Hashable)
 import Data.Ix (Ix)
@@ -23,6 +24,10 @@ import System.Random (Random (..))
 -- ball: index @-1@ becomes @0@, @-2@ becomes @1@; past the top, index @n@
 -- becomes @n - 1@, @n + 1@ becomes @n - 2@. The reflection is at the wall,
 -- not around the edge cell, so the edge cell is visited twice in a row.
+--
+-- The mirror choice ('AtWall') is the only thing separating this from
+-- "Data.Grid.Sized.Coord.Reflect101"; the shared body is in
+-- "Data.Grid.Sized.Coord.Internal.Reflect".
 newtype Reflective (n :: Nat) = Reflective
   { unReflective :: Ordinal n
   }
@@ -42,7 +47,7 @@ newtype Reflective (n :: Nat) = Reflective
 deriving newtype instance (KnownNat n, 1 <= n) => Random (Reflective n)
 
 instance (KnownNat n, 1 <= n) => Enum (Reflective n) where
-  toEnum x = Reflective $ unsafeOrdinal $ fst (bounceAt @n 0 x)
+  toEnum = reflectToEnum AtWall
   fromEnum (Reflective o) = ordinalToInt o
 
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflective n)
@@ -58,32 +63,16 @@ instance IsCoord Reflective where
   zeroPosition = Reflective minBound
 
   -- \| A billiard bounce reverses direction on an odd number of wall hits,
-  -- which 'bounceAt' already computes for ('.+^').
+  -- which 'reflectFlips' computes for ('.+^').
   axisFrameFlipsIsCoord :: forall n. (KnownNat n) => Reflective n -> Int -> Bool
-  axisFrameFlipsIsCoord (Reflective a) d =
-    snd (bounceAt @n (ordinalToInt a) d)
+  axisFrameFlipsIsCoord = reflectFlips AtWall
 
--- | ('.-.') is not bounced: doing so would break @b .+^ (a .-. b) == a@.
 instance (1 <= n, KnownNat n) => AffineSpace (Reflective n) where
   type Diff (Reflective n) = Int
-  Reflective a .-. Reflective b = ordinalToInt a - ordinalToInt b
 
-  -- This is a retraction of the partial interior action; associativity fails
-  -- when a displacement reaches a wall.
-  Reflective a .+^ d = Reflective $ unsafeOrdinal $ fst (bounceAt @n (ordinalToInt a) d)
+  -- \| ('.-.') is not bounced: doing so would break @b .+^ (a .-. b) == a@.
+  (.-.) = ordinalDelta
 
--- | Closed form of a recursive billiard bounce, computed as a triangle wave
--- over one period (@2 * size@) instead of recursing. The displacement is
--- reduced modulo the period first so the addition cannot overflow. @r >=
--- size@ means the remainder landed in the mirrored half, which is exactly
--- when the bounce count's parity flips.
-bounceAt :: forall n. (KnownNat n) => Int -> Int -> (Int, Bool)
-bounceAt i d =
-  if r < size
-    then (r, False)
-    else (period - 1 - r, True)
-  where
-    size = ordinalSize @n
-    period = 2 * size
-    dx = d `mod` period
-    r = (i + dx) `mod` period
+  -- ('.+^') is a retraction of the partial interior action; associativity
+  -- fails when a displacement reaches a wall.
+  a .+^ d = reflectPlus AtWall a d

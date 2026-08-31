@@ -242,6 +242,7 @@ library
   -- to it; see the header of either module.
   other-modules:
     Data.Grid.Sized.Coord.Internal
+    Data.Grid.Sized.Coord.Internal.Reflect
     Data.Grid.Sized.Internal.Error
     Data.Grid.Sized.Internal.Grid
     Data.Grid.Sized.Internal.Grid.Axis
