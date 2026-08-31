@@ -40,3 +40,7 @@ watch *ARGS:
 # drop cabal build artifacts
 clean:
     cabal clean
+
+# pack the tree into repomix-output.xml for external review tools
+repomix:
+    repomix

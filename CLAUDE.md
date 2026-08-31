@@ -143,6 +143,8 @@ flake checks.
 
 ## Repomix
 
-`repomix` packs the tree into `repomix-output.xml` (config: `repomix.config.json`)
-for feeding the repo to external review tools. It ignores `.beads/`, `ChangeLog.md`,
-and golden files; regenerate before sharing.
+`just repomix` packs the tree into `repomix-output.xml` (config:
+`repomix.config.json`) for feeding the repo to external review tools. It ignores
+`.beads/`, `ChangeLog.md`, and golden files; regenerate before sharing. `repomix`
+is provided by the flake devShell — `repomix-output.xml` is gitignored, so it is
+never a tracked artifact and there is no commit/push hook that regenerates it.

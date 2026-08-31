@@ -54,6 +54,8 @@
             hsPkgs.cabal-install
             pkgs.pkg-config
             pkgs.zlib
+            # `just repomix` -- packs the tree for external review tools.
+            pkgs.repomix
           ] ++ preCommit.enabledPackages;
         };
 
