@@ -89,6 +89,7 @@ module Data.Grid.Sized.Coord
     coordPosition,
     coordIndices,
     coordIndices2,
+    coordFromIndices,
     coordFromPosition,
     unsafeCoordFromPosition,
     coordSpaceSize,

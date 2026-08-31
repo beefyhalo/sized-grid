@@ -2,7 +2,7 @@
 
 -- | The row-major fold over a list of axes.
 --
--- 'IsCoordList' is one class whose thirteen methods are the whole of
+-- 'IsCoordList' is one class whose fourteen methods are the whole of
 -- 'Data.Grid.Sized.Coord.Coord'\'s arithmetic: build a position from a list of
 -- axis values, take one apart again, read off its per-axis indices, offset it,
 -- enumerate what is within a radius, report which edges it touches, measure
@@ -175,6 +175,17 @@ class (IsCoordListF cs, All IsCoordLifted cs) => IsCoordList cs where
   -- builds a value of every axis type on the way to taking its index again.
   posIndices :: Int -> [Int]
 
+  -- | The inverse of 'posIndices': one plain 'Int' per axis, first axis
+  -- first, folded back into a row-major position. 'Nothing' if the list is
+  -- not exactly one entry per axis, or if any entry is outside @[0, size)@
+  -- for its own axis. The fold behind
+  -- 'Data.Grid.Sized.Coord.coordFromIndices'.
+  --
+  -- The bounds check is against the axis /size/, not its boundary policy: a
+  -- caller that wants clamping or wrapping composes that itself. On
+  -- in-range input @'posIndices' . 'posFromIndices'@ round-trips.
+  posFromIndices :: [Int] -> Maybe Int
+
   -- | Offset each axis by its own step count, or 'Nothing' if any axis
   -- refuses. The fold behind 'Data.Grid.Sized.Coord.offsetCoord'.
   --
@@ -242,6 +253,11 @@ instance IsCoordList '[] where
   -- in, where a bad position can still be rejected.
   npFromPosition _ = Nil
   posIndices _ = []
+
+  -- A well-formed call has run out of axes exactly when it runs out of
+  -- indices; anything left over is a length mismatch.
+  posFromIndices [] = Just 0
+  posFromIndices _ = Nothing
   posOffset p Nil = Just p
 
   -- One way to take no steps at all, at a distance of zero. This is what
@@ -259,6 +275,7 @@ instance IsCoordList '[] where
   {-# INLINE npToPosition #-}
   {-# INLINE npFromPosition #-}
   {-# INLINE posIndices #-}
+  {-# INLINE posFromIndices #-}
   {-# INLINE posOffset #-}
   {-# INLINE posStepsWithin #-}
   {-# INLINE posBoundaries #-}
@@ -287,6 +304,11 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
   posIndices p =
     case p `quotRem` coordListSize @xs of
       (i, r) -> i : posIndices @xs r
+
+  posFromIndices [] = Nothing
+  posFromIndices (i : is)
+    | i < 0 || i >= ordinalSize @(CoordNat x) = Nothing
+    | otherwise = (\r -> i * coordListSize @xs + r) <$> posFromIndices @xs is
 
   -- The displacement drives the match: ':*' on it is what refines @xs@ far
   -- enough for 'MapStep' to reduce, the job the coord's own ':*' used to do
@@ -366,6 +388,7 @@ instance (IsCoordLifted x, IsCoordList xs) => IsCoordList (x ': xs) where
   {-# INLINE npToPosition #-}
   {-# INLINE npFromPosition #-}
   {-# INLINE posIndices #-}
+  {-# INLINE posFromIndices #-}
   {-# INLINE posOffset #-}
   {-# INLINE posStepsWithin #-}
   {-# INLINE posBoundaries #-}

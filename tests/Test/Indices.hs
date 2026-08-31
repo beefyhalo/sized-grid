@@ -22,7 +22,7 @@ import GHC.TypeLits (KnownNat)
 import Test.Arbitrary ()
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck (testProperty, (===))
+import Test.Tasty.QuickCheck (NonNegative (..), testProperty, (===))
 
 hwOf :: (KnownNat n) => Int -> Clamped n
 hwOf = Clamped . fromJust . numToOrdinal
@@ -102,6 +102,38 @@ roundTripTests =
     rebuild :: [Int] -> [Int] -> Int
     rebuild sizes is = foldl' (\acc (n, i) -> acc * n + i) 0 (zip sizes is)
 
+-- | 'coordFromIndices' is the inverse: one plain 'Int' per axis back into a
+-- 'Coord', rejecting anything off the grid rather than folding it through a
+-- boundary policy. The round-trip against 'coordIndices' is the property; the
+-- rejections are the point of it for a parser.
+coordFromIndicesTests :: TestTree
+coordFromIndicesTests =
+  testGroup
+    "coordFromIndices is the inverse of coordIndices"
+    [ testProperty "coordIndices then coordFromIndices round-trips, two axes" $
+        \(c :: Coord Mixed) ->
+          coordFromIndices (coordIndices c) === Just c,
+      testProperty "coordIndices then coordFromIndices round-trips, three axes" $
+        \(c :: Coord Cube) ->
+          coordFromIndices (coordIndices c) === Just c,
+      testCase "a concrete pair reaches the cell it names" $
+        assertEqual "" (Just (mixc 2 4)) (coordFromIndices [2, 4]),
+      testCase "no axes: the empty list is the empty coord" $
+        assertEqual "" (Just EmptyCoord) (coordFromIndices @'[] []),
+      testCase "a negative index is rejected, not clamped" $
+        assertEqual "" Nothing (coordFromIndices @Mixed [-1, 0]),
+      testCase "an index at the axis size is rejected, not wrapped" $
+        assertEqual "" Nothing (coordFromIndices @Mixed [0, 5]),
+      testCase "too few indices is a length mismatch" $
+        assertEqual "" Nothing (coordFromIndices @Cube [1, 2]),
+      testCase "too many indices is a length mismatch" $
+        assertEqual "" Nothing (coordFromIndices @Mixed [1, 2, 3]),
+      testProperty "any out-of-range axis rejects the whole list" $
+        \(c :: Coord Cube) (NonNegative k) ->
+          coordFromIndices @Cube (zipWith (+) (coordIndices c) [0, 0, k + 4])
+            === Nothing
+    ]
+
 -- | Every index is a position on its own axis, so none of them is negative and
 -- none reaches that axis's size. This is the property the two demos broke
 -- before sized-grid-23y3 by asking @('.-.')@ instead: on a torus a
@@ -144,6 +176,7 @@ indicesTests =
     "coordIndices"
     [ coordIndicesTests,
       roundTripTests,
+      coordFromIndicesTests,
       inRangeTests,
       coordIndices2Tests
     ]

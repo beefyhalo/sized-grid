@@ -31,6 +31,7 @@ module Data.Grid.Sized.Coord.Internal
     coordPosition,
     coordIndices,
     coordIndices2,
+    coordFromIndices,
     coordFromPosition,
     unsafeCoordFromPosition,
     coordSpaceSize,
@@ -542,6 +543,24 @@ coordIndices2 ::
   (Int, Int)
 coordIndices2 (Coord p) = p `quotRem` coordListSize @'[b]
 {-# INLINE coordIndices2 #-}
+
+-- | The inverse of 'coordIndices': one plain 'Int' per axis, first axis
+-- first, into a 'Coord'. 'Nothing' unless the list has exactly one entry per
+-- axis and every entry is in @[0, size)@ for its own axis.
+--
+-- The dual a char-grid parser or a screen-space hit test wants: it holds an
+-- @(x, y)@ of 'Int's and needs a coordinate, rejecting anything off the
+-- grid. The bounds check is against the axis /size/, not its boundary
+-- policy --- a caller that wants @Clamped@\/@Periodic@ behaviour composes
+-- @numToOrdinal@-then-policy itself (sized-grid-h0vd). On in-range input
+-- @'coordIndices' . 'coordFromIndices'@ round-trips.
+coordFromIndices ::
+  forall cs.
+  (IsCoordList cs) =>
+  [Int] ->
+  Maybe (Coord cs)
+coordFromIndices = fmap Coord . posFromIndices @cs
+{-# INLINE coordFromIndices #-}
 
 -- | The product of axis sizes: the length of the vector inside a @'Grid' cs@.
 -- Needs only 'IsCoordList', not @KnownNat@, so it works in the indexed
