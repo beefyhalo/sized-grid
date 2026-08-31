@@ -100,7 +100,7 @@ data App = App
     -- must not.
     appPick :: !Int,
     appView :: View,
-    appFrame :: Frame,
+    appFrame :: ReadFrame,
     -- | How the band is drawn and how far round it has turned, which is the
     -- only thing in this game that moves without a key being pressed.
     --
@@ -261,7 +261,7 @@ nextView v
   | v == maxBound = minBound
   | otherwise = succ v
 
-flipFrame :: Frame -> Frame
+flipFrame :: ReadFrame -> ReadFrame
 flipFrame ChartFrame = PlayerFrame
 flipFrame PlayerFrame = ChartFrame
 

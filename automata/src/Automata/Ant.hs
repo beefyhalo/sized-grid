@@ -59,7 +59,7 @@ type Ant cs =
     AllSizedKnown cs,
     SListI cs,
     TransportCoordList cs,
-    StepFrameFlips cs,
+    FrameAfterStep cs,
     AllDiffSame Int cs,
     All CentredAxis cs,
     MapDiff cs ~ '[Int, Int]
@@ -86,7 +86,7 @@ stepAnt (Walker fg heading _) =
         | onBlack = turnLeft heading
         | otherwise = turnRight heading
       fg' = fg & gridIndex (pos fg) %~ not
-   in stepWalker (Walker fg' heading' False)
+   in stepWalker (Walker fg' heading' identityFrame)
 
 -- * The window
 
@@ -111,7 +111,7 @@ startWorld win rate name =
           -- Heading @(0, 1)@: along the second axis, which is the one
           -- drawn upwards.
           (0 :^ 1 :^ NoDelta)
-          False,
+          identityFrame,
       worldSteps = 0,
       worldRunning = True,
       worldRate = rate,

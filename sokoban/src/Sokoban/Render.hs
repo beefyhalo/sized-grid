@@ -179,7 +179,7 @@ tile = 34
 -- the ghost columns too, and that is the point of it: a marked cell shows up
 -- at both ends of the seam at once, which is exactly what the ghosts exist to
 -- say.
-cellPicture :: (KnownStrip w h) => Frame -> Maybe (Spot w h) -> Game w h -> Spot w h -> Picture
+cellPicture :: (KnownStrip w h) => ReadFrame -> Maybe (Spot w h) -> Game w h -> Spot w h -> Picture
 cellPicture frame mark game s =
   pictures $
     [color (base here) (rectangleSolid tile tile)]
@@ -253,7 +253,7 @@ drawFlat ::
   forall w h.
   (KnownStrip w h) =>
   Surface ->
-  Frame ->
+  ReadFrame ->
   Maybe (Spot w h) ->
   Game w h ->
   Picture
@@ -364,7 +364,7 @@ drawCentred ::
   forall w h.
   (KnownStrip w h) =>
   Surface ->
-  Frame ->
+  ReadFrame ->
   Maybe (Spot w h) ->
   Game w h ->
   Picture
@@ -471,7 +471,7 @@ boardBox = (860, 470)
 -- The @mark@ is a cell to call out, and every view draws it in its own terms:
 -- a ring on the flat board and in its ghosts, a ring in the player's frame, a
 -- white facet on the band. It is 'Nothing' for all of ordinary play.
-drawView :: (KnownStrip w h) => View -> Band -> Frame -> Maybe (Spot w h) -> Game w h -> Picture
+drawView :: (KnownStrip w h) => View -> Band -> ReadFrame -> Maybe (Spot w h) -> Game w h -> Picture
 drawView view band frame mark g =
   translate 0 (-20) $
     case view of

@@ -155,7 +155,7 @@ start levels = do
 -- from the second: a level solved by a script rather than by a person got as
 -- far as \"press return\" and then died on the read. Which is the same
 -- complaint sized-grid-lopy.8 is about, one screen over.
-loop :: (KnownStrip w h) => Frame -> Game w h -> IO Bool
+loop :: (KnownStrip w h) => ReadFrame -> Game w h -> IO Bool
 loop frame game = do
   putStr (render frame game)
   when done (putStrLn "\nSolved. Press return for the next level.")
@@ -170,7 +170,7 @@ loop frame game = do
   where
     done = solved game
 
-keys :: (KnownStrip w h) => String -> Frame -> Game w h -> IO Bool
+keys :: (KnownStrip w h) => String -> ReadFrame -> Game w h -> IO Bool
 keys [] frame game = loop frame game
 keys (c : cs) frame game =
   case c of
@@ -208,7 +208,7 @@ dirKey _ = Nothing
 -- plane it means all four. A player who can plan a seam crossing from this
 -- does not need a window; if this is unreadable, that is what the window has
 -- to fix.
-render :: forall w h. (KnownStrip w h) => Frame -> Game w h -> String
+render :: forall w h. (KnownStrip w h) => ReadFrame -> Game w h -> String
 render frame game =
   unlines $
     [ levelName lvl ++ "   on " ++ surfaceTitle surface,

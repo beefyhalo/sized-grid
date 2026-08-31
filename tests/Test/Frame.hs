@@ -55,11 +55,7 @@ afterStepTests :: TestTree
 afterStepTests =
   testGroup
     "frameAfterStep"
-    [ testProperty "its parity is stepFrameFlips" $
-        \(c :: C2) (a, b) ->
-          frameParity (frameAfterStep c (d2 a b) identityFrame)
-            === stepFrameFlips c (d2 a b),
-      testProperty "accumulating agrees with composing" $
+    [ testProperty "accumulating agrees with composing" $
         \(c :: C2) (a, b) (u, v) ->
           frameAfterStep c (d2 a b) (f2 u v)
             === f2 u v <> frameAfterStep c (d2 a b) identityFrame,

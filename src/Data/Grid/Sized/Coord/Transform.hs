@@ -156,8 +156,7 @@ instance (SListI cs) => Show (Frame cs) where
       showString "frameFromReversals " . showsPrec 11 (frameReversals f)
 
 -- | Fold one step's per-axis reversals into a bit mask, bit @i@ for the @i@th
--- axis. Mirrors 'Data.Grid.Sized.Focused.StepFrameFlips' but keeps the axis
--- structure instead of collapsing it to a parity.
+-- axis, keeping the axis structure instead of collapsing it to a parity.
 class FrameAfterStep cs where
   frameStepMask :: (AllDiffSame Int cs) => Int -> NP I (MapDiff cs) -> Int
 
@@ -180,10 +179,10 @@ instance
 -- | Compose a step into an accumulated frame: for each axis, @xor@ in whether
 -- this step reversed that axis's own sense (which only
 -- 'Data.Grid.Sized.Coord.Reflective.Reflective' and
--- 'Data.Grid.Sized.Coord.Reflect101.Reflect101' ever do). The generalisation
--- of 'Data.Grid.Sized.Focused.walkerFrameFlips' from a parity bit to the whole
--- group element: @'Data.Grid.Sized.Focused.stepFrameFlips' c d ==
--- 'frameParity' ('frameAfterStep' c d 'identityFrame')@.
+-- 'Data.Grid.Sized.Coord.Reflect101.Reflect101' ever do). The whole group
+-- element behind the parity bit 'Data.Grid.Sized.Focused.walkerFrameFlips'
+-- reports: @'Data.Grid.Sized.Focused.stepWalker'@ folds each step through this,
+-- and @'Data.Grid.Sized.Focused.walkerFrameFlips' == 'frameParity' . 'Data.Grid.Sized.Focused.walkerFrame'@.
 frameAfterStep ::
   forall cs.
   (FrameAfterStep cs, AllDiffSame Int cs) =>

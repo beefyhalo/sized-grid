@@ -34,7 +34,7 @@
 --
 --   * That reflection turns the walker over. 'PlayerFrame' says so;
 --     'ChartFrame' does not, and the difference between them is the whole of
---     what 'Frame' is for.
+--     what 'ReadFrame' is for.
 --
 -- The second is a bit the game has to carry, and it comes out of the step:
 -- 'stepSpot' returns a 'Crossing', and 'reversedFrame' is 'True' for exactly
@@ -87,7 +87,7 @@ module Sokoban.Board
     Dir (..),
     allDirs,
     dirName,
-    Frame (..),
+    ReadFrame (..),
     Turn (..),
     square,
     turnAfter,
@@ -115,10 +115,7 @@ import Data.Grid.Atlas.Klein (kleinAtlas, kleinStep)
 import Data.Grid.Atlas.Mobius (mobiusAtlas, mobiusStep)
 import Data.Grid.Atlas.Projective (projectiveAtlas, projectiveStep)
 import Data.Grid.Atlas.Rect
--- 'Frame' hidden: this module has its own 'Frame' (chart vs. player), older
--- than the library's accumulated-reflection 'Frame' (sized-grid-dse0).
--- sized-grid-t8rw folds this hand-rolled 'Turn' \/ 'Frame' into that type.
-import Data.Grid.Sized hiding (Frame)
+import Data.Grid.Sized
 import Data.List (find)
 import GHC.TypeLits (KnownNat, type (<=))
 
@@ -371,7 +368,7 @@ dirName DirDown = "down"
 --     only playable with a view that turns over with the player: in a fixed
 --     view the same key press walks the opposite way after a lap, for a reason
 --     nothing on screen shows.
-data Frame
+data ReadFrame
   = ChartFrame
   | PlayerFrame
   deriving (Eq, Show)
@@ -432,7 +429,7 @@ throughTurn t (Heading V side) = Heading V (if turnV t then flipSide side else s
 -- In 'ChartFrame' the player's own turn is not consulted at all, which is what
 -- makes that frame plannable from a fixed picture. In 'PlayerFrame' each axis
 -- is read the player's way round.
-headingFor :: Frame -> Turn -> Dir -> Heading
+headingFor :: ReadFrame -> Turn -> Dir -> Heading
 headingFor ChartFrame _ = chartHeading
 headingFor PlayerFrame t = throughTurn t . chartHeading
 
@@ -453,7 +450,7 @@ flipSide AtMax = AtMin
 --
 -- Its own inverse, since reversing an axis twice is reversing it not at all,
 -- which is why one function serves both ways round.
-dirOf :: Frame -> Turn -> Heading -> Dir
+dirOf :: ReadFrame -> Turn -> Heading -> Dir
 dirOf ChartFrame _ = chartDir
 dirOf PlayerFrame t = chartDir . throughTurn t
 
@@ -486,7 +483,7 @@ stepSpot surface here heading = surfaceStep surface here heading
 stepDir ::
   (KnownStrip w h) =>
   Surface ->
-  Frame ->
+  ReadFrame ->
   (Spot w h, Turn) ->
   Dir ->
   Maybe (Spot w h, Turn)
@@ -500,7 +497,7 @@ stepDir surface frame (here, t) dir = do
 walkFrom ::
   (KnownStrip w h) =>
   Surface ->
-  Frame ->
+  ReadFrame ->
   (Spot w h, Turn) ->
   [Dir] ->
   Maybe (Spot w h, Turn)

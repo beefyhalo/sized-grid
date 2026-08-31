@@ -57,9 +57,7 @@ module Sokoban.Rules
   )
 where
 
--- 'Frame' hidden: the one this module means is 'Sokoban.Board.Frame' (chart
--- vs. player), not the library's accumulated-reflection 'Frame'.
-import Data.Grid.Sized hiding (Frame)
+import Data.Grid.Sized
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Sokoban.Board
@@ -207,7 +205,7 @@ solved g = levelGoals (gameLevel g) `Set.isSubsetOf` playCrates (gamePlay g)
 -- The game comes back changed only if the move happened; the outcome says
 -- what happened either way, so a refusal can be shown as the reason it was
 -- refused rather than as nothing at all.
-move :: (KnownStrip w h) => Frame -> Dir -> Game w h -> (Game w h, Outcome)
+move :: (KnownStrip w h) => ReadFrame -> Dir -> Game w h -> (Game w h, Outcome)
 move frame dir g =
   case stepSpot surface here heading of
     Nothing -> (g, OffTheEdge)
@@ -257,7 +255,7 @@ move frame dir g =
 -- is checked with, and what a recorded solution is played back through.
 replay ::
   (KnownStrip w h) =>
-  Frame ->
+  ReadFrame ->
   [Dir] ->
   Game w h ->
   (Game w h, [Outcome])

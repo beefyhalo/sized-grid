@@ -8,8 +8,7 @@ module Data.Grid.Sized.Focused
     tracePath,
     walkEverywhere,
     Walker (..),
-    StepFrameFlips (..),
-    stepFrameFlips,
+    walkerFrameFlips,
     stepWalker,
     partitionFocus,
   )
@@ -24,7 +23,6 @@ import Control.DeepSeq (NFData (..))
 import Data.AffineSpace (Diff)
 import Data.Functor.Rep
 import Data.Grid.Sized.Coord
-import Data.Grid.Sized.Coord.Class (coordListSize, unsafeFromAxisIndex)
 import Data.Grid.Sized.Internal.Grid (Grid)
 import Generics.SOP
 
@@ -105,14 +103,26 @@ walkEverywhere ::
   FocusedGrid cs (Maybe a)
 walkEverywhere p = extend (tracePath p)
 
--- | A 'FocusedGrid' paired with a heading and the frame-flip parity of the
--- step that produced it.
+-- | A 'FocusedGrid' paired with a heading and the 'Frame' the walk has
+-- accumulated --- for each axis, whether the walker's own sense of it now runs
+-- backwards against the chart's, @xor@-composed step by step.
+--
+-- 'walkerFrameFlips' is the parity of that frame, which is all an /orientation/
+-- question needs; a consumer that reads direction keys in the walker's own
+-- frame needs the whole element and reads it through 'throughFrame'.
 data Walker cs a = Walker
   { walkerGrid :: FocusedGrid cs a,
     walkerHeading :: Diff (Coord cs),
-    walkerFrameFlips :: Bool
+    walkerFrame :: Frame cs
   }
   deriving stock (Functor)
+
+-- | Whether an odd number of axes have been reversed along the walk --- the
+-- parity of 'walkerFrame'. A field before the walker carried the whole 'Frame'
+-- (sized-grid-t8rw); kept as the projection 'stepWalker'\'s coarser consumers
+-- (the ant, which only asks whether its handedness has flipped) actually want.
+walkerFrameFlips :: Walker cs a -> Bool
+walkerFrameFlips = frameParity . walkerFrame
 
 deriving stock instance (Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
 
@@ -124,40 +134,6 @@ deriving stock instance
   ) =>
   Show (Walker cs a)
 
--- | Whether a step reversed the walker's own sense of direction. Reflective
--- axes turn a walker's frame around at the wall, and a diagonal bounce on two
--- axes flips both of them at once, so the parity matters rather than the raw
--- heading comparison.
-class StepFrameFlips cs where
-  stepFrameFlipsNP :: Int -> NP I (MapDiff cs) -> Bool
-
-instance StepFrameFlips '[] where
-  stepFrameFlipsNP _ Nil = False
-  {-# INLINE stepFrameFlipsNP #-}
-
-instance
-  ( IsCoordLifted x,
-    IsCoordList xs,
-    StepFrameFlips xs,
-    AllDiffSame Int (x ': xs)
-  ) =>
-  StepFrameFlips (x ': xs)
-  where
-  stepFrameFlipsNP p (I d :* ds) =
-    case p `quotRem` coordListSize @xs of
-      (i, r) ->
-        let x = unsafeFromAxisIndex @x i
-         in axisFrameFlips x d /= stepFrameFlipsNP @xs r ds
-  {-# INLINE stepFrameFlipsNP #-}
-
-stepFrameFlips ::
-  forall cs.
-  (StepFrameFlips cs) =>
-  Coord cs ->
-  Diff (Coord cs) ->
-  Bool
-stepFrameFlips c d = stepFrameFlipsNP @cs (coordPosition c) (unDelta d)
-
 -- | Take one step in the walker's own heading, transporting the heading
 -- through 'transportCoord' so the boundary policy decides what the heading
 -- becomes when the walker crosses a seam.
@@ -167,13 +143,13 @@ stepFrameFlips c d = stepFrameFlipsNP @cs (coordPosition c) (unDelta d)
 stepWalker ::
   ( TransportCoordList cs,
     AllDiffSame Int cs,
-    StepFrameFlips cs
+    FrameAfterStep cs
   ) =>
   Walker cs a ->
   Walker cs a
-stepWalker (Walker (FocusedGrid g p) h _) =
+stepWalker (Walker (FocusedGrid g p) h fr) =
   case transportCoord p h of
-    (p', h') -> Walker (FocusedGrid g p') h' (stepFrameFlips p h)
+    (p', h') -> Walker (FocusedGrid g p') h' (frameAfterStep p h fr)
 
 -- | Split a self-contained window into its centre value and a function
 -- naming every other cell's value.
