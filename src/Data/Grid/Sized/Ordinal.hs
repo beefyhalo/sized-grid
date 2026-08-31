@@ -16,6 +16,7 @@ module Data.Grid.Sized.Ordinal
     -- * Sizes and evidence
     ordinalSize,
     reifyOrdinal,
+    reifySize,
     strengthenOrdinal,
     weakenOrdinal,
   )
@@ -182,6 +183,35 @@ reifyOrdinal (UnsafeOrdinal i) func =
         LTI -> func k
         EQI -> func k
         GTI -> invariantViolated i (ordinalSize @n)
+
+-- | Turn a size known only at run time -- read from a level file, a header, an
+-- image -- into the @('KnownNat' n, 1 '<=' n)@ that every axis type in this
+-- library asks for before it can stand in a 'Data.Grid.Sized.Coord.Coord', and
+-- hand it to the continuation as a required type argument, so the caller writes
+-- @reifySize w $ \\w -> ...@ and @w@ is a type.
+--
+-- 'Nothing' when the size is zero or negative, which is not an axis. A file can
+-- always say zero, so the answer is 'Maybe' rather than a precondition; a
+-- caller whose size is positive by construction matches on 'Just' and moves on.
+--
+-- This is 'reifyOrdinal' with a different bound. 'reifyOrdinal' reifies a
+-- position /inside/ a known axis and proves @m + 1 <= n@; this reifies the size
+-- of an axis that does not exist yet and proves @1 <= n@. 'someNatVal' is the
+-- shared half. The @1 <= n@ is the half that is not just 'someNatVal', and it
+-- is the half every axis type needs: without it no 'Data.Grid.Sized.Coord.Coord',
+-- no 'Data.Grid.Sized.Grid', nothing.
+reifySize ::
+  Int ->
+  (forall n -> (KnownNat n, 1 <= n) => x) ->
+  Maybe x
+reifySize n func =
+  case someNatVal (toInteger n) of
+    Nothing -> Nothing
+    Just (SomeNat (_ :: Proxy k)) ->
+      case cmpNat (Proxy @1) (Proxy @k) of
+        LTI -> Just (func k)
+        EQI -> Just (func k)
+        GTI -> Nothing
 
 -- | The 'unsafeOrdinal' failure branch. Nullary on purpose: see the note
 -- there. It cannot name the index or the size, and that is the price.

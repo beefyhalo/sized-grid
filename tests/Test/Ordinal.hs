@@ -22,6 +22,7 @@ ordinalTests =
     [ testGroup "numToOrdinal is the range check" numToOrdinalTests,
       testGroup "Enum covers the range and stops at the end" enumTests,
       testGroup "reifyCoord recovers the value" sizeProxyTests,
+      testGroup "reifySize turns a run-time size into an axis type" reifySizeTests,
       testGroup "Coord arithmetic stays in range" arithmeticTests
     ]
 
@@ -103,6 +104,40 @@ sizeProxyTests =
             (\m -> natVal (Proxy @m)) ::
             Integer
         )
+  ]
+
+-- The same annotation the note above 'sizeProxyTests' explains: @x@ in
+-- @reifySize@'s continuation is untouchable under GHC 9.10, so each result is
+-- pinned with a signature before the continuation is checked.
+reifySizeTests :: [TestTree]
+reifySizeTests =
+  [ testCase "recovers a positive size as a type-level Nat" $
+      assertEqual
+        ""
+        (Just 7)
+        (reifySize 7 (\n -> natVal (Proxy @n)) :: Maybe Integer),
+    -- @maxBound :: Ordinal n@ needs @(KnownNat n, 1 <= n)@; this compiles only
+    -- because reifySize hands the continuation both, which is the whole point.
+    testCase "the reified size carries 1 <= n" $
+      assertEqual
+        ""
+        (Just 6)
+        (reifySize 7 (\n -> ordinalToInt (maxBound :: Ordinal n)) :: Maybe Int),
+    testCase "accepts a size of 1, the smallest axis" $
+      assertEqual
+        ""
+        (Just 1)
+        (reifySize 1 (\n -> natVal (Proxy @n)) :: Maybe Integer),
+    testCase "rejects zero" $
+      assertEqual
+        ""
+        Nothing
+        (reifySize 0 (\n -> natVal (Proxy @n)) :: Maybe Integer),
+    testCase "rejects a negative size" $
+      assertEqual
+        ""
+        Nothing
+        (reifySize (-3) (\n -> natVal (Proxy @n)) :: Maybe Integer)
   ]
 
 arithmeticTests :: [TestTree]

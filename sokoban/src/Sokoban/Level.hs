@@ -34,7 +34,6 @@ module Sokoban.Level
 
     -- * Levels
     SomeLevel (..),
-    withPositive,
     parseLevel,
     parseLevelAt,
     parseLevels,
@@ -49,17 +48,8 @@ import Data.Grid.Sized
 import Data.List (isPrefixOf, sort)
 import Data.Map.Strict qualified as M
 import Data.Maybe (fromMaybe, isNothing)
-import Data.Proxy (Proxy (..))
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Type.Ord (OrderingI (..))
-import GHC.TypeLits
-  ( KnownNat,
-    SomeNat (..),
-    cmpNat,
-    someNatVal,
-    type (<=),
-  )
 import Sokoban.Board
 import Sokoban.Rules
 
@@ -67,26 +57,6 @@ import Sokoban.Rules
 -- from text.
 data SomeLevel where
   SomeLevel :: (KnownStrip w h) => Level w h -> SomeLevel
-
--- | Reify a positive 'Int' as the @('KnownNat' n, 1 '<=' n)@ a 'Clamped' axis
--- asks for. 'Nothing' for zero or less, which is not a strip.
---
--- The @1 <= n@ half is the part that is not just 'someNatVal': 'cmpNat' is
--- what turns a run-time comparison into the type-level evidence, and both
--- 'LTI' and 'EQI' discharge it.
-withPositive ::
-  Int ->
-  ( forall n.
-    (KnownNat n, 1 <= n) =>
-    Proxy n -> r
-  ) ->
-  Maybe r
-withPositive n k = do
-  SomeNat (p :: Proxy n) <- someNatVal (fromIntegral (max 0 n))
-  case cmpNat (Proxy @1) p of
-    LTI -> Just (k p)
-    EQI -> Just (k p)
-    GTI -> Nothing
 
 -- | What one character of a picture says: the terrain, and what is standing
 -- on it.
@@ -144,9 +114,9 @@ parseLevel src = do
   lay <- readLayout src
   let bad = Left "a level must be at least one cell each way"
   fromMaybe bad $
-    withPositive (layoutWidth lay) $ \(_ :: Proxy w) ->
+    reifySize (layoutWidth lay) $ \w ->
       fromMaybe bad $
-        withPositive (layoutHeight lay) $ \(_ :: Proxy h) ->
+        reifySize (layoutHeight lay) $ \h ->
           SomeLevel <$> assemble @w @h lay
 
 -- | Read one level at a size the caller already has in hand, failing if the

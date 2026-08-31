@@ -60,9 +60,14 @@ extra-source-files:  capture/ppm2png.py
 -- type-level naturals, and 'Coord' asks for KnownNat evidence about their
 -- product. The plugins discharge that instead of the game proving it by hand.
 -- Common stanzas are not shared between .cabal files, so this repeats them.
+--
+-- RequiredTypeArguments is here for the same reason grid-atlas has it: a level
+-- read from text turns its width and height into type-level naturals through
+-- 'reifySize', whose continuation takes the size as a required type argument.
 common lang
   default-language:   GHC2024
   default-extensions:
+    RequiredTypeArguments
     TypeAbstractions
     TypeFamilies
     UndecidableInstances
