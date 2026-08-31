@@ -12,6 +12,7 @@
     "customPatterns": [
       ".beads/**",
       "ChangeLog.md",
+      "spike/**",
       "dist-rule-check/**",
       "bench/*.csv",
       "**/*.golden"
