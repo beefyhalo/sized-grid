@@ -141,8 +141,7 @@ candidateAllowed point board symbol =
     && notElem symbol (catMaybes (toList (squareAtPoint point board)))
 
 placeSymbol :: Coord Cs -> Maybe Symbol -> Board -> Board
-placeSymbol point symbol =
-  set (cell point) symbol
+placeSymbol point = set (cell point)
 
 -- * Reading and writing
 

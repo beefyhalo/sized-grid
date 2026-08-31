@@ -170,15 +170,15 @@ gridOpticTests =
       testGroup
         "lowerDim"
         [ traversalLaws
-           (lowerDim :: IndexedTraversal' (Coord '[Ordinal 5]) Grid2 (Grid '[Ordinal 7] Int)),
-         testProperty "returns each sub-grid's ordinal offset" $
-           \(g :: Grid2) ->
-             map (fmap toList) (itoListOf lowerDim g)
-               == zipWith
-                 (\off row -> (unsafeOrdinal off :| EmptyCoord, toList row))
-                 [0 ..]
-                 (toListOf lowerDim g)
-       ],
+            (lowerDim :: IndexedTraversal' (Coord '[Ordinal 5]) Grid2 (Grid '[Ordinal 7] Int)),
+          testProperty "returns each sub-grid's ordinal offset" $
+            \(g :: Grid2) ->
+              map (fmap toList) (itoListOf lowerDim g)
+                == zipWith
+                  (\off row -> (unsafeOrdinal off :| EmptyCoord, toList row))
+                  [0 ..]
+                  (toListOf lowerDim g)
+        ],
       lensLaws "cell" (cell (zeroCoord :: Coord2) :: Lens' Grid2 Int),
       lensLaws "slice" (slice 1 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int)),
       lensLaws "prefix" (prefix 2 :: Lens' (Grid '[Ordinal 5] Int) (Grid '[Ordinal 2] Int)),
