@@ -30,7 +30,7 @@ import System.Random
   ( StdGen,
     newStdGen,
     randoms,
-    split,
+    splitGen,
   )
 
 data TileState
@@ -272,7 +272,7 @@ randomBoard ::
   StdGen ->
   (UGrid cs TileState, StdGen)
 randomBoard g0 =
-  let (gA, gB) = split g0
+  let (gA, gB) = splitGen g0
       v :: VU.Vector TileState
       v =
         VU.fromListN
