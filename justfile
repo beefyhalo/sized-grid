@@ -35,7 +35,7 @@ check:
 
 # re-run the tests on every Haskell change
 watch *ARGS:
-    watchexec -e hs -- cabal test all {{ARGS}}
+    watchexec -e hs -- just test {{ARGS}}
 
 # drop cabal build artifacts
 clean:
