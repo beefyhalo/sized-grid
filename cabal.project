@@ -59,5 +59,15 @@ allow-newer:
 -- packages: GLFW-b, bindings-GLFW (which bundles the GLFW C source and links
 -- the Cocoa frameworks, so there is no system library to install),
 -- bindings-DSL and hsc2hs.
-package gloss
-  flags: -GLUT +GLFW
+--
+-- sized-grid-vyjt: scoped to macOS. The HiDPI quarter-screen bug this works
+-- around is a macOS-points-vs-pixels problem, so the GLFW backend only buys
+-- anything there. On Linux, bindings-GLFW's bundled C source is not
+-- self-contained the way it is on macOS (Cocoa): it needs the X11/GL dev
+-- headers (libxrandr, libxi, libxinerama, libxcursor, libxxf86vm, ...) at its
+-- configure step, which the CI runners do not carry, so `cabal build all`
+-- died before the tests on every GHC. Keeping GLUT on non-Darwin sidesteps
+-- that with no loss: the bug it papers over does not occur off macOS.
+if os(darwin)
+  package gloss
+    flags: -GLUT +GLFW
