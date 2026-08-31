@@ -30,10 +30,11 @@ import Data.Grid.Sized.Class (IsGrid (..))
 import Data.Grid.Sized.Coord (AllSizedKnown, Coord, MaxCoordSize, unsafeCoordFromPosition)
 import Data.Grid.Sized.Coord.Class (CoordNat, IsCoord, IsCoordList)
 import Data.Grid.Sized.Internal.Grid
-  ( CollapseGrid,
+  ( AxisAt,
+    CollapseGrid,
     Grid,
     GridOf (..),
-    MapAxis (..),
+    KnownAxis,
     axisFibres,
     cellLens,
     collapseGrid,
@@ -58,10 +59,10 @@ import Data.Vector.Generic qualified as VG
 import GHC.TypeLits
   ( KnownNat,
     natVal,
+    type Div,
     type (+),
     type (-),
     type (<=),
-    type Div,
   )
 
 -- | Lift a bijective coordinate optic to a grid permutation. Each direction
@@ -213,15 +214,15 @@ lowerDim =
 -- read-only direction lazy and retains at most the foci demanded by its
 -- consumer.
 axisFold ::
-  forall v cs a c.
+  forall v cs a.
   forall n ->
-  (MapAxis n cs c, VG.Vector v a) =>
+  (KnownAxis n cs, VG.Vector v a) =>
   IndexedFold
-    (Coord '[Ordinal (MaxCoordSize cs `Div` CoordNat c)])
+    (Coord '[Ordinal (MaxCoordSize cs `Div` CoordNat (AxisAt n cs))])
     (GridOf v cs a)
-    (GridOf v '[c] a)
+    (GridOf v '[AxisAt n cs] a)
 axisFold n =
-  reindexed (unsafeCoordFromPosition @'[Ordinal (MaxCoordSize cs `Div` CoordNat c)])
+  reindexed (unsafeCoordFromPosition @'[Ordinal (MaxCoordSize cs `Div` CoordNat (AxisAt n cs))])
     . indexing
     $ folding (axisFibres n)
 {-# INLINEABLE axisFold #-}

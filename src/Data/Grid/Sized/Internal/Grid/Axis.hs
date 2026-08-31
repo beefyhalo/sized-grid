@@ -1,13 +1,17 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 -- | Reaching one named axis of a grid by position, and walking its fibres.
 --
 -- A fibre along axis @n@ is the elements that differ only in axis @n@. In a
 -- flat row-major vector those sit a fixed stride apart, so every operation
--- here is the same loop over @(axisSize, stride)@ -- which 'MapAxis' computes
--- from the axis list, and which is two literals once that list is concrete.
+-- here is the same loop over @(axisSize, stride)@ -- which 'AxisSize' and
+-- 'AxisStride' read off the axis list, and which is two literals once that
+-- list is concrete.
 module Data.Grid.Sized.Internal.Grid.Axis
-  ( MapAxis (..),
+  ( AxisAt,
+    AxisSize,
+    AxisStride,
+    KnownAxis,
     mapAxis,
     axisFibres,
     axis,
@@ -21,61 +25,66 @@ where
 import Control.Lens hiding (index)
 import Data.Grid.Sized.Coord
 import Data.Grid.Sized.Internal.Grid.Core
-import Data.Kind (Type)
+import Data.Grid.Sized.Internal.Type (requiring)
+import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy (..))
 import Data.Vector.Generic qualified as VG
 import Data.Vector.Generic.Mutable qualified as VGM
 import GHC.TypeLits
 import GHC.TypeLits qualified as GHC
 
--- | The geometry of one axis inside a flat row-major vector: how many
--- elements the axis has, and how far apart consecutive ones are.
+-- | The type of axis @n@ of @cs@: the element 'mapAxis' hands its function,
+-- as @'GridOf' v '['AxisAt' n cs] x@.
 --
--- Row-major means the axes below @n@ vary fastest, so the elements of a
--- fibre along axis @n@ sit @'MaxCoordSize'@-of-the-axes-below apart, and
--- @'MaxCoordSize'@ of the axes at @n@ and below is the block that one
--- combination of the axes /above/ @n@ occupies. Both are products of
--- statically known sizes, so at a concrete axis list this pair is two
--- literals.
+-- Deliberately a closed type family, not an associated type of a class. An
+-- associated type was tried and does not work: inside a recursive class
+-- instance at an abstract @n@, GHC checks the instances' equations for
+-- confluence the way it would for any open family, and @c@ against
+-- @AxisAt (n - 1) as@ does not pass that check even with
+-- 'OVERLAPPING'\/'OVERLAPPABLE' on the instances. A standalone closed family
+-- has no such check -- each call either matches an equation or is stuck.
+type family AxisAt (n :: Nat) (cs :: [Type]) :: Type where
+  AxisAt 0 (c ': _) = c
+  AxisAt n (_ ': cs) = AxisAt (n - 1) cs
+
+-- | The size of axis @n@ of @cs@: how many elements a fibre along it has.
+type family AxisSize (n :: Nat) (cs :: [Type]) :: Nat where
+  AxisSize 0 (_ m ': _) = m
+  AxisSize n (_ ': cs) = AxisSize (n - 1) cs
+
+-- | The stride of axis @n@ of @cs@ inside a flat row-major vector: how far
+-- apart consecutive elements of a fibre along it sit.
 --
--- @c@, the axis type 'mapAxis' hands its function, is a plain (fundep-determined)
--- class parameter rather than an associated type family. An associated type
--- was tried first and does not work: at the abstract @n@ inside the recursive
--- instance below, GHC has to check the two instances' @AxisAt@ equations for
--- confluence the same way it would for any other open family, and @c@ against
--- @AxisAt (n - 1) as@ do not look equal to that check even though the
--- 'OVERLAPPING'\/'OVERLAPPABLE' pragmas make the /instances/ unambiguous.
--- Plain unification through nested instance resolution has no such check --
--- the base instance ties @c@ to the head axis by construction, and every
--- recursive instance forwards the very same @c@ -- so it is what determines
--- @c@ here instead.
-class MapAxis (n :: Nat) (cs :: [Type]) (c :: Type) | n cs -> c where
-  -- | The size of axis @n@ and its stride, in that order. See 'mapAxis'.
-  --
-  -- This is all the recursion produces now. It used to carry the whole
-  -- operation -- a @mapAxisImpl@ that peeled one axis per level with
-  -- @mapLowerDim@, splitting and re-concatenating the vector at every one
-  -- (sized-grid-adr.5).
-  axisSizeAndStride :: (Int, Int)
+-- Row-major means the axes below @n@ vary fastest, so a fibre's elements sit
+-- @'MaxCoordSize'@-of-the-axes-below apart. Peeling an axis off the front
+-- leaves that untouched -- the dropped axis is above @n@ -- so the recursive
+-- equation just forwards. Both this and 'AxisSize' are products of statically
+-- known sizes, so at a concrete axis list each is a literal.
+type family AxisStride (n :: Nat) (cs :: [Type]) :: Nat where
+  AxisStride 0 (_ ': cs) = MaxCoordSize cs
+  AxisStride n (_ ': cs) = AxisStride (n - 1) cs
 
--- | The target axis is the head, so the axes below it are all of @as@.
-instance
-  {-# OVERLAPPING #-}
-  (KnownNat n, AllSizedKnown as) =>
-  MapAxis 0 (c n ': as) (c n)
-  where
-  axisSizeAndStride =
-    ( fromIntegral (GHC.natVal (Proxy @n)),
-      fromIntegral (GHC.natVal (Proxy @(MaxCoordSize as)))
-    )
-  {-# INLINE axisSizeAndStride #-}
+-- | Enough statically known sizes to turn axis @n@ of @cs@ into the
+-- @(axisSize, stride)@ pair every function here loops over. At a concrete
+-- axis list both components reduce to literals and this is discharged for
+-- free.
+type KnownAxis (n :: Nat) (cs :: [Type]) =
+  ( KnownNat (AxisSize n cs),
+    KnownNat (AxisStride n cs)
+  ) ::
+    Constraint
 
--- | Peeling an axis off the front changes neither the target axis's size nor
--- its stride: both are products over the axes at or below it, and the one
--- being dropped is above.
-instance {-# OVERLAPPABLE #-} (MapAxis (n - 1) as c) => MapAxis n (c0 ': as) c where
-  axisSizeAndStride = axisSizeAndStride @(n - 1) @as @c
-  {-# INLINE axisSizeAndStride #-}
+-- | The size of axis @n@ of @cs@ and its stride, in that order: one 'natVal'
+-- each off 'AxisSize' and 'AxisStride'. See 'mapAxis'.
+axisSizeAndStride ::
+  forall n cs ->
+  (KnownAxis n cs) =>
+  (Int, Int)
+axisSizeAndStride n cs =
+  ( fromIntegral (GHC.natVal (Proxy @(AxisSize n cs))),
+    fromIntegral (GHC.natVal (Proxy @(AxisStride n cs)))
+  )
+{-# INLINE axisSizeAndStride #-}
 
 -- | One fibre, gathered: the @axisSize@ elements of @v@ that start at @base@
 -- and sit @stride@ apart, copied out contiguous.
@@ -351,26 +360,26 @@ scanAxisStrided axisSize stride f v
 --
 -- 'axis' is the same operation as a 'Setter'.
 mapAxis ::
-  forall v cs x y c.
+  forall v cs x y.
   forall n ->
-  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
-  (GridOf v '[c] x -> GridOf v '[c] y) ->
+  (KnownAxis n cs, VG.Vector v x, VG.Vector v y) =>
+  (GridOf v '[AxisAt n cs] x -> GridOf v '[AxisAt n cs] y) ->
   GridOf v cs x ->
   GridOf v cs y
 mapAxis n f (Grid v) =
-  let (axisSize, stride) = axisSizeAndStride @n @cs @c
+  let (axisSize, stride) = axisSizeAndStride n cs
    in Grid (mapAxisStrided axisSize stride (unGrid . f . Grid) v)
 {-# INLINE mapAxis #-}
 
 -- | Enumerate the fibres along one named axis in row-major order.
 axisFibres ::
-  forall v cs a c.
+  forall v cs a.
   forall n ->
-  (MapAxis n cs c, VG.Vector v a) =>
+  (KnownAxis n cs, VG.Vector v a) =>
   GridOf v cs a ->
-  [GridOf v '[c] a]
+  [GridOf v '[AxisAt n cs] a]
 axisFibres n (Grid v) =
-  let (axisSize, stride) = axisSizeAndStride @n @cs @c
+  let (axisSize, stride) = axisSizeAndStride n cs
    in eachFibreBase
         v
         axisSize
@@ -403,10 +412,10 @@ axisFibres n (Grid v) =
 -- where the loop below holds one, so @'over' ('axis' n)@ would pay for a
 -- generality it never uses. See sized-grid-0s1d.
 axis ::
-  forall v cs x y c.
+  forall v cs x y.
   forall n ->
-  (MapAxis n cs c, VG.Vector v x, VG.Vector v y) =>
-  Setter (GridOf v cs x) (GridOf v cs y) (GridOf v '[c] x) (GridOf v '[c] y)
+  (KnownAxis n cs, VG.Vector v x, VG.Vector v y) =>
+  Setter (GridOf v cs x) (GridOf v cs y) (GridOf v '[AxisAt n cs] x) (GridOf v '[AxisAt n cs] y)
 axis n = sets (mapAxis n)
 {-# INLINEABLE axis #-}
 
@@ -428,14 +437,14 @@ axis n = sets (mapAxis n)
 -- where before the rewrite it was 2.8x and 3.2x /slower/ than the same
 -- pipeline.
 scanAxis ::
-  forall v cs a c.
+  forall v cs a.
   forall n ->
-  (MapAxis n cs c, VG.Vector v a) =>
+  (KnownAxis n cs, VG.Vector v a) =>
   (a -> a -> a) ->
   GridOf v cs a ->
   GridOf v cs a
 scanAxis n f (Grid v) =
-  let (axisSize, stride) = axisSizeAndStride @n @cs @c
+  let (axisSize, stride) = axisSizeAndStride n cs
    in Grid (scanAxisStrided axisSize stride f v)
 {-# INLINE scanAxis #-}
 
@@ -460,7 +469,7 @@ type family DropAxis (n :: Nat) (cs :: [Type]) :: [Type] where
 -- boundary policy -- the result has the same axis types in the same
 -- positions, just with one removed.
 --
--- The constraint @'IsCoordLifted' c@ excludes the empty axis (zero-sized),
+-- The constraint @'IsCoordLifted' ('AxisAt' n cs)@ excludes the empty axis (zero-sized),
 -- because the fold divides the output size by the axis size, which would
 -- divide by zero for a zero-sized axis. On a grid built through the safe API,
 -- every axis satisfies 'IsCoordLifted' by construction.
@@ -470,17 +479,18 @@ type family DropAxis (n :: Nat) (cs :: [Type]) :: [Type] where
 -- cell at a time, gathering its fibre with a strided inner loop that keeps
 -- the accumulator in an argument, forcing before the write.
 foldAxis' ::
-  forall v cs x y c.
+  forall v cs x y.
   forall n ->
-  (MapAxis n cs c, IsCoordLifted c, VG.Vector v x, VG.Vector v y) =>
+  (KnownAxis n cs, IsCoordLifted (AxisAt n cs), VG.Vector v x, VG.Vector v y) =>
   (y -> x -> y) ->
   y ->
   GridOf v cs x ->
   GridOf v (DropAxis n cs) y
 foldAxis' n f z (Grid v) =
-  Grid (VG.fromList (eachFibreBase v axisSize stride step []))
+  requiring @(IsCoordLifted (AxisAt n cs)) $
+    Grid (VG.fromList (eachFibreBase v axisSize stride step []))
   where
-    (axisSize, stride) = axisSizeAndStride @n @cs @c
+    (axisSize, stride) = axisSizeAndStride n cs
     -- One output cell: the strict left fold of the fibre based at base.
     step base rest = foldFibre base 0 z : rest
     foldFibre base i acc
@@ -493,7 +503,7 @@ foldAxis' n f z (Grid v) =
 -- > reduceAxis 1 max g   -- rather than reduceAxis (Proxy @1) max g
 --
 -- Like 'foldAxis'', but the first element of each fibre seeds the fold.  The
--- @'IsCoordLifted' c@ constraint guarantees that every fibre has that first
+-- @'IsCoordLifted' ('AxisAt' n cs)@ constraint guarantees that every fibre has that first
 -- element, so no @Maybe@ or identity is needed.  This is useful for
 -- reductions such as @min@ and @max@ which have no suitable identity.
 --
@@ -502,30 +512,31 @@ foldAxis' n f z (Grid v) =
 -- wrapper around 'foldAxis'': seeding from the first element starts its inner
 -- loop at index one, avoiding an extra application of @f@ per fibre.
 reduceAxis ::
-  forall v cs a c.
+  forall v cs a.
   forall n ->
-  (MapAxis n cs c, IsCoordLifted c, VG.Vector v a) =>
+  (KnownAxis n cs, IsCoordLifted (AxisAt n cs), VG.Vector v a) =>
   (a -> a -> a) ->
   GridOf v cs a ->
   GridOf v (DropAxis n cs) a
 reduceAxis n f (Grid v) =
-  Grid $
-    VG.create $ do
-      out <- VGM.unsafeNew (len `quot` axisSize)
-      let reduceFibre base i acc
-            | i >= axisSize = acc
-            | otherwise =
-                reduceFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
-          -- Write one output cell, seeded by the fibre's first element, and
-          -- carry the running output index forward.
-          step outIndex base = do
-            let !first = VG.unsafeIndex v base
-                !result = reduceFibre base 1 first
-            VGM.unsafeWrite out outIndex result
-            pure (outIndex + 1)
-      _ <- eachFibreBaseM v axisSize stride step (0 :: Int)
-      pure out
+  requiring @(IsCoordLifted (AxisAt n cs)) $
+    Grid $
+      VG.create $ do
+        out <- VGM.unsafeNew (len `quot` axisSize)
+        let reduceFibre base i acc
+              | i >= axisSize = acc
+              | otherwise =
+                  reduceFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
+            -- Write one output cell, seeded by the fibre's first element, and
+            -- carry the running output index forward.
+            step outIndex base = do
+              let !first = VG.unsafeIndex v base
+                  !result = reduceFibre base 1 first
+              VGM.unsafeWrite out outIndex result
+              pure (outIndex + 1)
+        _ <- eachFibreBaseM v axisSize stride step (0 :: Int)
+        pure out
   where
-    (axisSize, stride) = axisSizeAndStride @n @cs @c
+    (axisSize, stride) = axisSizeAndStride n cs
     len = VG.length v
 {-# INLINE reduceAxis #-}
