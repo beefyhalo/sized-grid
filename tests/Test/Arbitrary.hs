@@ -18,6 +18,7 @@ import Test.QuickCheck
     Arbitrary1 (..),
     Gen,
     chooseInt,
+    vectorOf,
   )
 
 -- | Pick one position on an axis, in constant time -- rather than
@@ -54,6 +55,12 @@ instance (IsCoordList cs, All Arbitrary cs) => Arbitrary (Coord cs) where
 
 instance (All Arbitrary ds, SListI ds) => Arbitrary (Delta ds) where
   arbitrary = Delta <$> arbitrary
+
+-- | One reversal bit per axis, drawn independently. Shrinks through the
+-- @[Bool]@; 'frameFromReversals' ignores a short or long list.
+instance (SListI cs) => Arbitrary (Frame cs) where
+  arbitrary = frameFromReversals <$> vectorOf (lengthSList (Proxy @cs)) arbitrary
+  shrink f = frameFromReversals <$> shrink (frameReversals f)
 
 instance (AllSizedKnown cs) => Arbitrary1 (Grid cs) where
   liftArbitrary g = sequenceA (pure g)

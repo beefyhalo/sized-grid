@@ -57,7 +57,9 @@ module Sokoban.Rules
   )
 where
 
-import Data.Grid.Sized
+-- 'Frame' hidden: the one this module means is 'Sokoban.Board.Frame' (chart
+-- vs. player), not the library's accumulated-reflection 'Frame'.
+import Data.Grid.Sized hiding (Frame)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Sokoban.Board

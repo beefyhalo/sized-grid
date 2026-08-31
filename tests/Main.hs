@@ -22,6 +22,7 @@ import Test.Axis
 import Test.Boundary
 import Test.CompileFail
 import Test.Focused
+import Test.Frame
 import Test.Indices
 import Test.Invariant
 import Test.Neighbours
@@ -485,6 +486,16 @@ main =
           lawsToTest $ ordLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
           lawsToTest $ showLaws (Proxy @(Coord '[Periodic 10, Periodic 20]))
         ]
+      frameLaws =
+        [ lawsToTest $ eqLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ ordLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ showLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ semigroupLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ monoidLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ semigroupMonoidLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ commutativeSemigroupLaws (Proxy @(Frame '[Reflective 5, Reflective 5])),
+          lawsToTest $ commutativeMonoidLaws (Proxy @(Frame '[Reflective 5, Reflective 5]))
+        ]
    in defaultMain $
         testGroup
           "tests"
@@ -670,6 +681,8 @@ main =
             rayTests,
             pathTests,
             focusedTests,
+            frameTests,
+            testGroup "Frame laws" frameLaws,
             cellTests,
             invariantTests,
             opticTests,

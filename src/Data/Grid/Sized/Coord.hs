@@ -147,6 +147,15 @@ module Data.Grid.Sized.Coord
     axisFrameFlips,
     transportCoord,
     TransportCoordList,
+    Frame,
+    identityFrame,
+    frameParity,
+    frameReversals,
+    frameFromReversals,
+    FrameAfterStep,
+    frameAfterStep,
+    ThroughFrame,
+    throughFrame,
 
     -- * Changing the size of a coord
     WeakenCoord (..),

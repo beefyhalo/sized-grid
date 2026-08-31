@@ -285,6 +285,7 @@ test-suite tests
     Test.Boundary
     Test.CompileFail
     Test.Focused
+    Test.Frame
     Test.Indices
     Test.Invariant
     Test.Neighbours

@@ -115,7 +115,10 @@ import Data.Grid.Atlas.Klein (kleinAtlas, kleinStep)
 import Data.Grid.Atlas.Mobius (mobiusAtlas, mobiusStep)
 import Data.Grid.Atlas.Projective (projectiveAtlas, projectiveStep)
 import Data.Grid.Atlas.Rect
-import Data.Grid.Sized
+-- 'Frame' hidden: this module has its own 'Frame' (chart vs. player), older
+-- than the library's accumulated-reflection 'Frame' (sized-grid-dse0).
+-- sized-grid-t8rw folds this hand-rolled 'Turn' \/ 'Frame' into that type.
+import Data.Grid.Sized hiding (Frame)
 import Data.List (find)
 import GHC.TypeLits (KnownNat, type (<=))
 
