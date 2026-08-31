@@ -125,6 +125,80 @@ fibreAt axisSize stride v base =
   VG.generate axisSize (\k -> VG.unsafeIndex v (base + k * stride))
 {-# INLINE fibreAt #-}
 
+-- | The block\/fibre walk every strided operation here is built on, as one
+-- @INLINE@ combinator instead of a hand-rolled copy per caller.
+--
+-- The fibre heads along an axis of the given size and stride are the @stride@
+-- bases @[blockStart, blockStart + stride)@ of each block, and the blocks tile
+-- the vector in steps of @axisSize * stride@. This visits those bases in
+-- row-major order, threading @f@'s accumulator through them; @len@ and the
+-- block width are computed here, once, from the vector and the pair.
+--
+-- The strict monadic left fold, for the @ST@ callers that fuse the walk and
+-- allocate nothing but the result -- 'mapAxisStrided', 'reduceAxis'.
+-- 'eachFibreBase' is the lazy counterpart for the list-producing callers.
+--
+-- @INLINE@, so at each call site @f@ is known and the walk is as tight as the
+-- copy it replaces -- unboxed counters, no per-fibre allocation. This is the
+-- CPS combinator sized-grid-6kor.7's note leaves open, not the lazy
+-- @[Int] >>= @ form that note measured and rejected.
+eachFibreBaseM ::
+  forall v x m a.
+  (VG.Vector v x, Monad m) =>
+  -- | The whole flat row-major vector: gives @len@.
+  v x ->
+  -- | The axis's size.
+  Int ->
+  -- | The axis's stride.
+  Int ->
+  -- | Per-base action, accumulator first.
+  (a -> Int -> m a) ->
+  -- | Seed accumulator.
+  a ->
+  m a
+eachFibreBaseM v axisSize stride f = goBlocks 0
+  where
+    len = VG.length v
+    block = axisSize * stride
+    goBlocks blockStart acc
+      | blockStart >= len = pure acc
+      | otherwise = goBases blockStart blockStart acc
+    goBases blockStart base acc
+      | base >= blockStart + stride = goBlocks (blockStart + block) acc
+      | otherwise = f acc base >>= goBases blockStart (base + 1)
+{-# INLINE eachFibreBaseM #-}
+
+-- | The lazy right-fold form of 'eachFibreBaseM': visit the fibre heads in
+-- row-major order, folding each into the tail of the result with @f@. Left
+-- lazy in that tail, so a caller that conses gets a lazy list back -- the
+-- contract 'axisFibres' and 'foldAxis'' rely on, against 'mapAxisStrided''s
+-- strict @ST@ walk.
+eachFibreBase ::
+  forall v x b.
+  (VG.Vector v x) =>
+  -- | The whole flat row-major vector: gives @len@.
+  v x ->
+  -- | The axis's size.
+  Int ->
+  -- | The axis's stride.
+  Int ->
+  -- | Per-base step, result tail second.
+  (Int -> b -> b) ->
+  -- | Tail once every fibre is folded in.
+  b ->
+  b
+eachFibreBase v axisSize stride f z = goBlocks 0
+  where
+    len = VG.length v
+    block = axisSize * stride
+    goBlocks blockStart
+      | blockStart >= len = z
+      | otherwise = goBases blockStart blockStart
+    goBases blockStart base
+      | base >= blockStart + stride = goBlocks (blockStart + block)
+      | otherwise = f base (goBases blockStart (base + 1))
+{-# INLINE eachFibreBase #-}
+
 -- | The engine under 'mapAxis': apply @f@ to every fibre of a flat row-major
 -- vector along an axis of the given size and stride.
 --
@@ -166,22 +240,12 @@ mapAxisStrided axisSize stride f v
   | stride == 1 && axisSize > 0 = VG.concat (map f (splitVectorBySize axisSize v))
   | otherwise =
       VG.create $ do
-        out <- VGM.unsafeNew len
+        out <- VGM.unsafeNew (VG.length v)
         let scatterFrom base =
               VG.imapM_ (\k -> VGM.unsafeWrite out (base + k * stride)) $
                 f (fibreAt axisSize stride v base)
-            fibresOf blockStart base
-              | base >= blockStart + stride = pure ()
-              | otherwise = scatterFrom base >> fibresOf blockStart (base + 1)
-            blocks blockStart
-              | blockStart >= len = pure ()
-              | otherwise =
-                  fibresOf blockStart blockStart >> blocks (blockStart + block)
-        blocks 0
+        eachFibreBaseM v axisSize stride (\() base -> scatterFrom base) ()
         pure out
-  where
-    len = VG.length v
-    block = axisSize * stride
 {-# INLINE mapAxisStrided #-}
 
 -- | 'scanAxis''s engine, and the reason it does not go through
@@ -307,17 +371,12 @@ axisFibres ::
   [GridOf v '[c] a]
 axisFibres n (Grid v) =
   let (axisSize, stride) = axisSizeAndStride @n @cs @c
-      block = axisSize * stride
-      len = VG.length v
-      fibre blockStart base
-        | base >= blockStart + stride = []
-        | otherwise =
-            Grid (fibreAt axisSize stride v base)
-              : fibre blockStart (base + 1)
-      blocks blockStart
-        | blockStart >= len = []
-        | otherwise = fibre blockStart blockStart ++ blocks (blockStart + block)
-   in blocks 0
+   in eachFibreBase
+        v
+        axisSize
+        stride
+        (\base rest -> Grid (fibreAt axisSize stride v base) : rest)
+        []
 {-# INLINEABLE axisFibres #-}
 
 -- | 'mapAxis' as an optic: a 'Setter' whose foci are the fibres along axis
@@ -419,23 +478,14 @@ foldAxis' ::
   GridOf v cs x ->
   GridOf v (DropAxis n cs) y
 foldAxis' n f z (Grid v) =
-  Grid (VG.fromList (blocks 0))
+  Grid (VG.fromList (eachFibreBase v axisSize stride step []))
   where
     (axisSize, stride) = axisSizeAndStride @n @cs @c
-    len = VG.length v
-    block = axisSize * stride
-    -- Fold a single fibre starting from base
+    -- One output cell: the strict left fold of the fibre based at base.
+    step base rest = foldFibre base 0 z : rest
     foldFibre base i acc
       | i >= axisSize = acc
       | otherwise = foldFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
-    -- Process all fibres in a block
-    fibresOf blockStart base
-      | base >= blockStart + stride = []
-      | otherwise = foldFibre base 0 z : fibresOf blockStart (base + 1)
-    -- Process all blocks
-    blocks blockStart
-      | blockStart >= len = []
-      | otherwise = fibresOf blockStart blockStart ++ blocks (blockStart + block)
 {-# INLINE foldAxis' #-}
 
 -- | Seedless strict left fold along one named axis, removing it.
@@ -466,22 +516,16 @@ reduceAxis n f (Grid v) =
             | i >= axisSize = acc
             | otherwise =
                 reduceFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
-          fibresOf blockStart base outIndex
-            | base >= blockStart + stride = pure outIndex
-            | otherwise = do
-                let !first = VG.unsafeIndex v base
-                    !result = reduceFibre base 1 first
-                VGM.unsafeWrite out outIndex result
-                fibresOf blockStart (base + 1) (outIndex + 1)
-          blocks blockStart outIndex
-            | blockStart >= len = pure ()
-            | otherwise = do
-                nextOutIndex <- fibresOf blockStart blockStart outIndex
-                blocks (blockStart + block) nextOutIndex
-      blocks 0 0
+          -- Write one output cell, seeded by the fibre's first element, and
+          -- carry the running output index forward.
+          step outIndex base = do
+            let !first = VG.unsafeIndex v base
+                !result = reduceFibre base 1 first
+            VGM.unsafeWrite out outIndex result
+            pure (outIndex + 1)
+      _ <- eachFibreBaseM v axisSize stride step (0 :: Int)
       pure out
   where
     (axisSize, stride) = axisSizeAndStride @n @cs @c
     len = VG.length v
-    block = axisSize * stride
 {-# INLINE reduceAxis #-}
