@@ -12,10 +12,7 @@ module Test.Utils
   ( eq1Laws,
     aesonLaws,
     jsonKeyLaws,
-    semigroupLaws,
-    monoidLaws,
     groupLaws,
-    abelianLaws,
     additiveGroupLaws,
     pseudoAffineLaws,
     interiorActionLaws,
@@ -53,7 +50,7 @@ import Data.AdditiveGroup
 import Data.Aeson
 import Data.AffineSpace
 import Data.Distributive
-import Data.Foldable (fold, toList)
+import Data.Foldable (toList)
 import Data.Foldable1 qualified as F1
 import Data.Functor.Bind (Apply (..), Bind (..))
 import Data.Functor.Classes
@@ -62,7 +59,7 @@ import Data.Functor.Compose
 import Data.Functor.Rep
 import Data.Grid.Sized.Coord.Class
 import Data.Grid.Sized.Ordinal
-import Data.Group (Abelian, Group (..))
+import Data.Group (Group (..))
 import Data.Hashable (Hashable (..))
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
@@ -110,33 +107,6 @@ jsonKeyLaws =
         "JSON Key Laws"
         [testProperty "Encode decode via Map key" encodeDecode]
 
-semigroupLaws ::
-  forall a.
-  (Show a, Eq a, Semigroup a, Arbitrary a) =>
-  TestTree
-semigroupLaws =
-  let assoc :: a -> a -> a -> Property
-      assoc a b c = a <> (b <> c) === (a <> b) <> c
-   in testGroup "Semigroup Laws" [testProperty "Associative" assoc]
-
-monoidLaws ::
-  forall a.
-  (Show a, Eq a, Monoid a, Arbitrary a) =>
-  TestTree
-monoidLaws =
-  let assoc :: a -> a -> a -> Property
-      assoc a b c = mappend a (mappend b c) === mappend (mappend a b) c
-      memptyId :: a -> Property
-      memptyId a = (a === mappend mempty a) .&&. (a === mappend a mempty)
-      concatIsFold :: [a] -> Property
-      concatIsFold as = mconcat as === fold as
-   in testGroup
-        "Monoid laws"
-        [ testProperty "Associative" assoc,
-          testProperty "Mempty Id" memptyId,
-          testProperty "Concat is Fold" concatIsFold
-        ]
-
 -- | The 'Data.Group.Group' laws: 'invert' is a two-sided inverse for '<>'.
 groupLaws ::
   forall a.
@@ -152,16 +122,6 @@ groupLaws =
         [ testProperty "a <> invert a == mempty" invertRight,
           testProperty "invert a <> a == mempty" invertLeft
         ]
-
--- | The single 'Data.Group.Abelian' law: '<>' commutes.
-abelianLaws ::
-  forall a.
-  (Show a, Eq a, Abelian a, Arbitrary a) =>
-  TestTree
-abelianLaws =
-  let commute :: a -> a -> Property
-      commute a b = a <> b === b <> a
-   in testGroup "Abelian laws" [testProperty "a <> b == b <> a" commute]
 
 additiveGroupLaws ::
   forall a.

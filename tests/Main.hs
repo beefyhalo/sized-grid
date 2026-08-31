@@ -41,6 +41,7 @@ import Test.QuickCheck.Classes
     applyLaws,
     boundedEnumLaws,
     commutativeMonoidLaws,
+    commutativeSemigroupLaws,
     enumLaws,
     eqLaws,
     foldableLaws,
@@ -49,7 +50,9 @@ import Test.QuickCheck.Classes
     ixLaws,
     jsonLaws,
     monadLaws,
+    monoidLaws,
     ordLaws,
+    semigroupLaws,
     semigroupMonoidLaws,
     showLaws,
     traversableLaws,
@@ -383,16 +386,16 @@ main =
           jsonKeyLaws @(Ordinal 10)
         ]
       periodic =
-        [ semigroupLaws @(Periodic 10),
+        [ lawsToTest $ semigroupLaws (Proxy @(Periodic 10)),
           lawsToTest $ ixLaws (Proxy @(Periodic 10)),
-          monoidLaws @(Periodic 10),
+          lawsToTest $ monoidLaws (Proxy @(Periodic 10)),
           lawsToTest $ commutativeMonoidLaws (Proxy @(Periodic 10)),
           lawsToTest $ semigroupMonoidLaws (Proxy @(Periodic 10)),
           lawsToTest $ boundedEnumLaws (Proxy @(Periodic 10)),
           lawsToTest $ enumLaws (Proxy @(Periodic 10)),
           additiveGroupLaws @(Periodic 10),
           groupLaws @(Periodic 10),
-          abelianLaws @(Periodic 10),
+          lawsToTest $ commutativeSemigroupLaws (Proxy @(Periodic 10)),
           pseudoAffineLaws @(Periodic 10),
           interiorActionLaws @Periodic @10,
           coordRangeLaws @Periodic @10,
@@ -405,9 +408,9 @@ main =
           zeroPositionAdditiveGroupLaws @Periodic @10
         ]
       clamped =
-        [ semigroupLaws @(Clamped 10),
+        [ lawsToTest $ semigroupLaws (Proxy @(Clamped 10)),
           lawsToTest $ ixLaws (Proxy @(Clamped 10)),
-          monoidLaws @(Clamped 10),
+          lawsToTest $ monoidLaws (Proxy @(Clamped 10)),
           lawsToTest $ commutativeMonoidLaws (Proxy @(Clamped 10)),
           lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10)),
           pseudoAffineLaws @(Clamped 10),
@@ -443,8 +446,8 @@ main =
           isCoordLaws @Reflect101 @10
         ]
       coord =
-        [ semigroupLaws @(Coord '[Clamped 10, Periodic 20]),
-          monoidLaws @(Coord '[Clamped 10, Periodic 20]),
+        [ lawsToTest $ semigroupLaws (Proxy @(Coord '[Clamped 10, Periodic 20])),
+          lawsToTest $ monoidLaws (Proxy @(Coord '[Clamped 10, Periodic 20])),
           lawsToTest $
             commutativeMonoidLaws (Proxy @(Coord '[Clamped 10, Periodic 20])),
           lawsToTest $
@@ -463,8 +466,8 @@ main =
           lawsToTest $ showLaws (Proxy @(Coord '[Clamped 10, Periodic 20]))
         ]
       coord2 =
-        [ semigroupLaws @(Coord '[Periodic 10, Periodic 20]),
-          monoidLaws @(Coord '[Periodic 10, Periodic 20]),
+        [ lawsToTest $ semigroupLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
+          lawsToTest $ monoidLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
           lawsToTest $
             commutativeMonoidLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
           lawsToTest $
@@ -472,7 +475,7 @@ main =
           pseudoAffineLaws @(Coord '[Periodic 10, Periodic 20]),
           additiveGroupLaws @(Coord '[Periodic 10, Periodic 20]),
           groupLaws @(Coord '[Periodic 10, Periodic 20]),
-          abelianLaws @(Coord '[Periodic 10, Periodic 20]),
+          lawsToTest $ commutativeSemigroupLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
           aesonLaws @(Coord '[Periodic 10, Periodic 20]),
           lawsToTest $ jsonLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
           lawsToTest $ boundedEnumLaws (Proxy @(Coord '[Periodic 10, Periodic 20])),
@@ -545,8 +548,12 @@ main =
                        lawsToTest $
                          hashableLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int))
                      ]
-                  ++ [ semigroupLaws @(Grid '[Periodic 10, Periodic 11] (Sum Int)),
-                       monoidLaws @(Grid '[Periodic 10, Periodic 11] (Sum Int)),
+                  ++ [ lawsToTest $
+                         semigroupLaws
+                           (Proxy @(Grid '[Periodic 10, Periodic 11] (Sum Int))),
+                       lawsToTest $
+                         monoidLaws
+                           (Proxy @(Grid '[Periodic 10, Periodic 11] (Sum Int))),
                        lawsToTest $
                          semigroupMonoidLaws
                            (Proxy @(Grid '[Periodic 10, Periodic 11] (Sum Int)))
