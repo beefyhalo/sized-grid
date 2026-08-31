@@ -12,7 +12,7 @@ import Graphics.Gloss.Interface.Pure.Game
 import Maze.Generate
 import Maze.Model
 import Maze.Solve
-import System.Random (StdGen, split)
+import System.Random (StdGen, splitGen)
 
 -- | What a cell looks like now, which is more than what it /is/: the search
 -- paints over the maze rather than changing it.
@@ -139,7 +139,7 @@ onGlossEvent _ v = v
 onKey :: Char -> View -> View
 onKey 't' v = v {viewRunning = not (viewRunning v)}
 onKey 'r' v = startView (viewWin v) (viewRate v) (viewSeed v)
-onKey 'n' v = startView (viewWin v) (viewRate v) (snd (split (viewSeed v)))
+onKey 'n' v = startView (viewWin v) (viewRate v) (snd (splitGen (viewSeed v)))
 onKey k v
   | k `elem` ("+=" :: String) = v {viewRate = min 20000 (viewRate v * 2)}
   | k `elem` ("-_" :: String) = v {viewRate = max 1 (viewRate v / 2)}
