@@ -77,9 +77,13 @@ pre-commit hook load on first `cd`.
   and the pre-commit config is missing (commits then need
   `PRE_COMMIT_ALLOW_NO_CONFIG=1`).
 - If your cwd is already a `wt` worktree you are isolated — do not nest another.
-- Commit and push the worktree branch; let a human merge to master. When pushing,
-  fast-forward — do **not** `git pull --rebase` when master carries merge commits,
-  it rewrites history.
+- This is a solo project — **no pull requests, no waiting for review**. When the
+  worktree branch is committed and the quality gates are green, merge it to
+  master yourself and clean up: `wt merge --no-squash --no-rebase` (keeps the
+  individual commits, fast-forwards master, removes the worktree), then push
+  master.
+- Fast-forward only. Do **not** `git pull --rebase` when master carries merge
+  commits — it rewrites history. Never force-push.
 
 ## Build, Test & Lint
 
