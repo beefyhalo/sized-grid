@@ -13,6 +13,22 @@ packages:
   sokoban
   grid-atlas
 
+-- sized-grid-q5fc. Force every package's test suites into the build plan.
+--
+-- Without this the default solver plan carries test components only for
+-- packages whose test deps are already needed by a non-test component --
+-- which is sudoko alone (base, grid-sized, lens). Every other suite pulls
+-- tasty/QuickCheck/HUnit, so the solver leaves it out, and `cabal test all`
+-- then reports "1 of 1 test suites passed" with exit 0 -- the documented
+-- quality gate silently skipping the `tests`, `downstream` and `readme`
+-- suites it names, plus sokoban's, grid-atlas's and atlas-topology's.
+-- `cabal test sokoban` on its own fails [Cabal-7043] rather than enabling
+-- them. `tests: True` makes the plan always carry them, so a future genuine
+-- solver conflict surfaces as an error instead of a skip. The `just test`
+-- recipe also passes --enable-tests so the gate holds if this line is
+-- dropped.
+tests: True
+
 -- sized-grid-8hx. GHC 9.14.1 ships containers-0.8, but the gloss stack still
 -- caps containers <0.8 and has no 9.14 release upstream. containers is
 -- non-reinstallable -- the `ghc` package, pulled in by ghc-typelits-natnormalise,

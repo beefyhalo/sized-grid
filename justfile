@@ -9,9 +9,9 @@ default:
 build *ARGS:
     cabal build all {{ARGS}}
 
-# run every test suite
+# run every test suite (--enable-tests so a missing plan errors, never a silent skip -- sized-grid-q5fc)
 test *ARGS:
-    cabal test all {{ARGS}}
+    cabal test all --enable-tests {{ARGS}}
 
 # run benchmarks
 bench *ARGS:

@@ -92,7 +92,7 @@ pre-commit hook load on first `cd`.
 | Recipe | Runs |
 | --- | --- |
 | `just build` | `cabal build all` |
-| `just test` | `cabal test all` — suites `tests`, `downstream`, `readme` (README.lhs doctest) |
+| `just test` | `cabal test all --enable-tests` — all seven suites: the root's `tests`, `downstream` and `readme` (README.lhs doctest), plus `sudoko-test`, `sokoban:tests`, `grid-atlas:tests`, `atlas-topology:tests` |
 | `just bench` | `cabal bench all` (`benchmark benchmarks`) |
 | `just repl [pkg]` | `cabal repl` (default `grid-sized`) |
 | `just fmt` | ormolu, in place — same build as the hook |
