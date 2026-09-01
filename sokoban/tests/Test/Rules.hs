@@ -7,6 +7,7 @@ module Test.Rules
   )
 where
 
+import Data.Grid.Sized (frameFromReversals)
 import Data.Maybe (fromMaybe, isNothing)
 import Data.Set qualified as Set
 import Sokoban.Board
@@ -20,8 +21,8 @@ import Test.Tasty.QuickCheck as QC
 -- as grid-building code. Fixed at the one size every test here uses; a picture
 -- of the wrong shape fails now rather than somewhere confusing later.
 -- | A player who has crossed one mirrored sideways seam.
-upsideDown :: Turn
-upsideDown = Turn False True
+upsideDown :: Frame (Strip 6 5)
+upsideDown = frameFromReversals [False, True]
 
 level :: [String] -> Level 6 5
 level rows =
@@ -61,9 +62,9 @@ crateGoesAround =
       (playPlayer (levelStart lvl))
       (playPlayer (gamePlay afterLap))
     assertBool "one lap leaves the player upside down" $
-      turnV (playTurn (gamePlay afterLap))
+      axisReversed (playFrame (gamePlay afterLap)) V
     assertBool "two laps put the player back up" $
-      not (turnV (playTurn (gamePlay afterTwo)))
+      not (axisReversed (playFrame (gamePlay afterTwo)) V)
 
 crateOffTheMiddleRow :: TestTree
 crateOffTheMiddleRow =
@@ -110,7 +111,7 @@ straddlingTheSeam =
       "crate came out on the other side, in the mirrored row"
       [(0, 1)]
       (crateCells g')
-    assertBool "the player has not crossed yet" $ playTurn play == square
+    assertBool "the player has not crossed yet" $ playFrame play == identityFrame
     -- And the next push moves the player through, onto the cell the crate
     -- has just left.
     let (g'', o') = move ChartFrame DirRight g'
@@ -121,7 +122,7 @@ straddlingTheSeam =
       "crate is one further along the mirrored row"
       [(1, 1)]
       (crateCells g'')
-    assertBool "and now the player is upside down" (turnV (playTurn play'))
+    assertBool "and now the player is upside down" (axisReversed (playFrame play') V)
 
 refusals :: TestTree
 refusals =
@@ -221,16 +222,16 @@ frames =
     [ testCase "chart frame ignores how the player is standing" $
         assertEqual
           "up is up"
-          [headingFor ChartFrame square d | d <- allDirs]
+          [headingFor ChartFrame identityFrame d | d <- allDirs]
           [headingFor ChartFrame upsideDown d | d <- allDirs],
       testCase "player frame swaps up and down once flipped, and nothing else" $ do
         assertEqual
           "left and right are untouched"
-          (map (headingFor PlayerFrame square) [DirLeft, DirRight])
+          (map (headingFor PlayerFrame identityFrame) [DirLeft, DirRight])
           (map (headingFor PlayerFrame upsideDown) [DirLeft, DirRight])
         assertEqual
           "up flipped is down"
-          (headingFor PlayerFrame square DirDown)
+          (headingFor PlayerFrame identityFrame DirDown)
           (headingFor PlayerFrame upsideDown DirUp),
       testCase "a lap turns the player over, so the same key walks the other way" $ do
         let lvl =
@@ -246,7 +247,7 @@ frames =
             -- mirror, so the player is back where it started and
             -- upside down.
             (lapped, _) = replay PlayerFrame (replicate 6 DirRight) g0
-        assertBool "upside down" (turnV (playTurn (gamePlay lapped)))
+        assertBool "upside down" (axisReversed (playFrame (gamePlay lapped)) V)
         assertEqual
           "same cell as the start"
           (spotXY (playPlayer (gamePlay g0)))

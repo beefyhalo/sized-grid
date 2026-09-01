@@ -51,7 +51,7 @@ lapOn (x, y) =
 -- is 'False' for the other two, and there is no band to check them against.
 lapTo :: (Int, Int) -> (Int, Int)
 lapTo (x, y) =
-  case walkFrom mobius ChartFrame (fromJust (spotAt @W @H x y), square) (replicate around DirRight) of
+  case walkFrom mobius ChartFrame (fromJust (spotAt @W @H x y), identityFrame) (replicate around DirRight) of
     Nothing -> error ("lapTo: a lap left the strip at " ++ show (x, y))
     Just (s, _) -> spotXY s
 

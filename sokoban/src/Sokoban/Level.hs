@@ -278,8 +278,8 @@ assemble lay = do
         levelStart =
           Play
             { playPlayer = start,
-              playTurn = square,
-              playFacing = headingFor ChartFrame square DirRight,
+              playFrame = identityFrame,
+              playFacing = headingFor ChartFrame identityFrame DirRight,
               playCrates = Set.fromList (map spotCoord crateSpots),
               playMoves = 0,
               playPushes = 0

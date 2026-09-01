@@ -114,3 +114,27 @@ walker, and the record should be opened once. That wiring is tracked in
 Once the field is swapped, `Focused.stepFrameFlips` / `StepFrameFlips` collapse
 to `frameParity . frameAfterStep`, removing the duplicated per-axis recursion.
 Left in place for now so this change breaks nothing.
+
+## The prior art, folded in (`sized-grid-qrxc`)
+
+Sokoban's copy is gone. `Sokoban.Board` no longer defines `Turn`, `square` or
+`throughTurn`: `Play` carries `playFrame :: Frame (Strip w h)`, a level starts
+at `identityFrame`, and a key press is read through the accumulator by
+`throughFrame`.
+
+Which of the two seams the issue offered --- lower Sokoban's `Heading` through
+`Diff`, or keep the `Heading` layer and touch `Frame` only where the
+accumulator is composed --- was settled by *Not a new `Heading` type* above.
+The demo keeps `Dir` / `Heading`, and a private pair `headingDelta` /
+`deltaHeading` lowers a heading to the unit displacement it is for the one call
+that needs it. `throughFrame` does the work; the `Heading` vocabulary is what
+grid-atlas's steppers take and is not asked to leave.
+
+One function stays behind, retyped and renamed `frameAfterCrossing`. It is not
+`frameAfterStep` and cannot be: a `Strip`'s axes are both `Clamped` and neither
+reflects, so `axisFrameFlips` reports nothing and the reflection arrives from
+the gluing instead, as a `Crossing`. Turning that into a frame needs the
+identity `a mirrored crossing along one axis reverses the other`, which holds
+because these charts glue an axis to itself. That is the producer-side question
+`sized-grid-c54t` asks grid-atlas to answer, and until it does, the identity
+lives at the one call site that knows it is true.

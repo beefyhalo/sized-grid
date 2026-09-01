@@ -11,7 +11,7 @@ module Test.Surface
   )
 where
 
-import Data.Grid.Sized (ordinalSize)
+import Data.Grid.Sized (frameFromReversals, ordinalSize)
 import Data.Maybe (fromJust, isJust, isNothing)
 import Sokoban.Board
 import Test.Tasty
@@ -31,9 +31,9 @@ spot (x, y) = fromJust (spotAt x y)
 
 -- | Walk from a cell, in the chart's frame, and say where it got to and how it
 -- is standing.
-from :: Surface -> (Int, Int) -> [Dir] -> ((Int, Int), Turn)
+from :: Surface -> (Int, Int) -> [Dir] -> ((Int, Int), Frame (Strip W H))
 from surface start dirs =
-  case walkFrom surface ChartFrame (spot start, square) dirs of
+  case walkFrom surface ChartFrame (spot start, identityFrame) dirs of
     Nothing -> error ("left the surface walking on a " ++ surfaceName surface)
     Just (s, t) -> (spotXY s, t)
 
@@ -58,7 +58,7 @@ edgesAreWhereTheSurfaceSaysTheyAre =
         testProperty (surfaceName surface) $
           forAll ((,) <$> everyCell <*> elements allDirs) $ \(cell, dir) ->
             let stepped =
-                  walkFrom surface ChartFrame (spot cell, square) [dir]
+                  walkFrom surface ChartFrame (spot cell, identityFrame) [dir]
                 offTheTop = dir == DirUp && snd cell == across - 1
                 offTheBottom = dir == DirDown && snd cell == 0
                 leaves = surfaceEdged surface && (offTheTop || offTheBottom)
@@ -115,7 +115,7 @@ oneLapTellsThemApart =
         assertEqual "mirrored column" (around - 1 - 2, 1) (lapUp projective (2, 1)),
       testCase "a Mobius strip has no other seam to go through" $
         assertBool "should run out" $
-          isNothing (walkFrom mobius ChartFrame (spot (2, 1), square) (replicate across DirUp))
+          isNothing (walkFrom mobius ChartFrame (spot (2, 1), identityFrame) (replicate across DirUp))
     ]
   where
     lapRight surface cell = fst (from surface cell (replicate around DirRight))
@@ -138,13 +138,13 @@ theFrameNeedsBothBits =
   testGroup
     "the walker's frame is two bits, and a projective plane uses both"
     [ testCase "a lap sideways swaps up with down" $
-        assertEqual "only turnV" (Turn False True) (turnAfterLap around DirRight),
+        assertEqual "only V" (frameFromReversals [False, True]) (frameAfterLap around DirRight),
       testCase "a lap upwards swaps left with right" $
-        assertEqual "only turnU" (Turn True False) (turnAfterLap across DirUp),
+        assertEqual "only U" (frameFromReversals [True, False]) (frameAfterLap across DirUp),
       testCase "both laps leave the player turned right around" $
         assertEqual
           "both bits"
-          (Turn True True)
+          (frameFromReversals [True, True])
           ( snd
               ( from
                   projective
@@ -154,10 +154,10 @@ theFrameNeedsBothBits =
           ),
       testCase "and a single parity bit could not have said which" $
         assertBool "the two laps differ only in the pair" $
-          turnAfterLap around DirRight /= turnAfterLap across DirUp
+          frameAfterLap around DirRight /= frameAfterLap across DirUp
     ]
   where
-    turnAfterLap n dir = snd (from projective (2, 1) (replicate n dir))
+    frameAfterLap n dir = snd (from projective (2, 1) (replicate n dir))
 
 -- | The claim in 'cellAround''s own comment, which nothing asserted until now:
 -- in the /walker's/ frame it does not matter whether you go up first or along
@@ -173,7 +173,7 @@ neighbourhoodsDoNotCareAboutOrder =
         testProperty (surfaceName surface) $
           forAll ((,,) <$> everyCell <*> choose (-7, 7) <*> choose (-7, 7)) $
             \(cell, dx, dy) ->
-              let start = (spot cell, square)
+              let start = (spot cell, identityFrame)
                   along = replicate (abs dx) (if dx >= 0 then DirRight else DirLeft)
                   up = replicate (abs dy) (if dy >= 0 then DirUp else DirDown)
                   one = walkFrom surface PlayerFrame start (up ++ along)
@@ -187,10 +187,11 @@ neighbourhoodsDoNotCareAboutOrder =
 readingKeysBothWaysAgrees :: TestTree
 readingKeysBothWaysAgrees =
   testProperty "dirOf undoes headingFor" $
-    forAll ((,,) <$> elements [ChartFrame, PlayerFrame] <*> anyTurn <*> elements allDirs) $
-      \(frame, t, dir) -> dirOf frame t (headingFor frame t dir) === dir
+    forAll ((,,) <$> elements [ChartFrame, PlayerFrame] <*> anyFrame <*> elements allDirs) $
+      \(reading, f, dir) -> dirOf reading f (headingFor reading f dir) === dir
   where
-    anyTurn = Turn <$> arbitrary <*> arbitrary
+    anyFrame :: Gen (Frame (Strip W H))
+    anyFrame = (\u v -> frameFromReversals [u, v]) <$> arbitrary <*> arbitrary
 
 -- | Where a view draws the picture carrying on past an edge, and where it
 -- refuses to.

@@ -198,7 +198,7 @@ cellPicture frame mark game s =
          | hasCrate
          ]
       ++ [color playerColour (circleSolid (tile / 2 - 5)) | isPlayer]
-      ++ [ color background (facingWedge (dirOf frame (playTurn now) (playFacing now)))
+      ++ [ color background (facingWedge (dirOf frame (playFrame now) (playFacing now)))
          | isPlayer
          ]
       ++ [color markColour (rectangleWire (tile - 3) (tile - 3)) | marked]
@@ -371,7 +371,7 @@ drawCentred ::
 drawCentred surface frame mark game = pictures (cells ++ [horizon])
   where
     now = gamePlay game
-    origin = (playPlayer now, playTurn now)
+    origin = (playPlayer now, playFrame now)
     cells =
       [ translate (tile * fromIntegral dx) (tile * fromIntegral dy) $
           case cellAround surface origin (dx, dy) of

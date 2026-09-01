@@ -535,7 +535,7 @@ lapMark t g
         <$> walkFrom
           (gameSurface g)
           ChartFrame
-          (playPlayer now, playTurn now)
+          (playPlayer now, playFrame now)
           (replicate walked DirRight)
   where
     now = gamePlay g
@@ -577,7 +577,7 @@ readout app g cleared = pictures (zipWith bodyLine [0 ..] body)
             ++ viewName (appView app)
             ++ "     frame: "
             ++ frameLabel (appFrame app)
-            ++ ( case turnNote (playTurn now) of
+            ++ ( case frameNote (playFrame now) of
                    "" -> ""
                    note -> " (the player is " ++ note ++ ")"
                )

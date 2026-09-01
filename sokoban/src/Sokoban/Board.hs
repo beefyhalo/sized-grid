@@ -56,7 +56,17 @@
 -- On a projective plane both seams mirror, so a sideways crossing swaps up
 -- with down and an up-or-down crossing swaps left with right --- and which of
 -- those happened is not in 'reversedFrame'. It /is/ recoverable, from the axis
--- the step was made along, and 'turnAfter' is where that is done. See 'Turn'.
+-- the step was made along, and 'frameAfterCrossing' is where that is done.
+--
+-- The two bits themselves are not this game's to define. They are
+-- @'Frame' ('Strip' w h)@ --- the library's accumulated frame element, one
+-- reversal bit per axis, composed with @('<>')@ and read through with
+-- 'Data.Grid.Sized.throughFrame'. This module used to carry its own @Turn@
+-- with its own @xor@ and its own @throughTurn@; sized-grid-dse0 took that
+-- design into the library and sized-grid-qrxc folded the copy onto it. What is
+-- left here is the one thing the library cannot know: that a mirrored crossing
+-- /along/ an axis reverses the /other/ one, which is a fact about how these
+-- charts are glued to themselves and not about any axis's boundary policy.
 module Sokoban.Board
   ( -- * The chart
     Strip,
@@ -88,10 +98,11 @@ module Sokoban.Board
     allDirs,
     dirName,
     ReadFrame (..),
-    Turn (..),
-    square,
-    turnAfter,
-    turnNote,
+    Frame,
+    identityFrame,
+    frameAfterCrossing,
+    axisReversed,
+    frameNote,
     Heading (..),
     Axis (..),
     headingFor,
@@ -373,65 +384,101 @@ data ReadFrame
   | PlayerFrame
   deriving (Eq, Show)
 
--- | How the player's own axes sit against the chart's: for each, whether the
--- player's sense of it runs backwards.
+-- | The frame a mirrored crossing along an axis contributes: the /other/ axis
+-- reversed, since the coordinate a seam reflects is the one running along it.
 --
--- Two bits, and the module header says why one will not do. On a Mobius strip
--- and a Klein bottle 'turnU' is never set and this is the single parity bit
--- the game used to carry; on a projective plane both are live.
---
--- Not a 'Bool' pair by accident: these are the four symmetries of the square
--- that axis-aligned seams can generate, and composing two of them is @xor@
--- componentwise, which is what 'turnAfter' does.
-data Turn = Turn
-  { turnU :: !Bool,
-    turnV :: !Bool
-  }
-  deriving (Eq, Show)
-
--- | The player as the chart sees them: nothing reversed. Where every level
--- starts.
-square :: Turn
-square = Turn False False
+-- Bit order is the library's --- outermost axis first, so @U@ then @V@ for a
+-- 'Strip'.
+mirrorAcross :: Axis -> Frame (Strip w h)
+mirrorAcross along = frameFromReversals [along == V, along == U]
 
 -- | The player's frame after a step, given the heading it was made along and
 -- what the step did.
 --
--- A mirrored crossing reflects the coordinate that runs /along/ the seam,
--- which is the axis the step was not moving along. That is the whole content
--- of this function, and it is the piece 'reversedFrame' cannot carry on its
--- own: the bit says a reflection happened, the heading says in which axis.
-turnAfter :: Heading -> Crossing -> Turn -> Turn
-turnAfter (Heading along _) crossing t
-  | not (reversedFrame crossing) = t
-  | along == U = t {turnV = not (turnV t)}
-  | otherwise = t {turnU = not (turnU t)}
+-- The atlas counterpart of the library's
+-- 'Data.Grid.Sized.frameAfterStep', which composes a step's reflections into
+-- the same accumulator by asking each axis's own boundary policy. Neither of a
+-- 'Strip's axes reflects --- both are 'Clamped', and a reflection here comes
+-- from the gluing rather than from an axis --- so the crossing has to say, and
+-- 'reversedFrame' is only half of what it has to say. The other half is the
+-- heading: a mirrored crossing reflects the coordinate that runs /along/ the
+-- seam, which is the axis the step was not moving along. That identity is the
+-- whole content of this function, and it is 'mirrorAcross'.
+frameAfterCrossing ::
+  Heading -> Crossing -> Frame (Strip w h) -> Frame (Strip w h)
+frameAfterCrossing (Heading along _) crossing f
+  | reversedFrame crossing = f <> mirrorAcross along
+  | otherwise = f
+
+-- | Whether the player's own sense of an axis runs backwards against the
+-- chart's.
+--
+-- Asked of the frame rather than stored beside it: a heading along the axis,
+-- read through the frame, either comes back as it went in or comes back
+-- turned around.
+axisReversed :: Frame (Strip w h) -> Axis -> Bool
+axisReversed f a = throughHeading f h /= h
+  where
+    h = Heading a AtMax
 
 -- | How the player is standing, for a readout. Empty when they are standing
 -- the way the chart does.
-turnNote :: Turn -> String
-turnNote (Turn False False) = ""
-turnNote (Turn False True) = "upside down"
-turnNote (Turn True False) = "left and right swapped"
-turnNote (Turn True True) = "turned all the way round"
+frameNote :: Frame (Strip w h) -> String
+frameNote f =
+  case (axisReversed f U, axisReversed f V) of
+    (False, False) -> ""
+    (False, True) -> "upside down"
+    (True, False) -> "left and right swapped"
+    (True, True) -> "turned all the way round"
+
+-- | A heading as the unit displacement it is, in the chart's own frame.
+--
+-- 'Heading' is grid-atlas's vocabulary --- the @(axis, end)@ pair a seam table
+-- labels its boundaries with --- and @'Delta' ('MapDiff' cs)@ is the
+-- library's. The two say the same thing about a single step, and this with
+-- 'deltaHeading' is the whole of the translation between them. It is a seam
+-- this module keeps rather than one the library owes anyone: sized-grid-dse0
+-- settled that a heading in @Data.Grid.Sized@ /is/ a displacement, and that
+-- 'Dir' \/ 'Heading' is demo-side ergonomics.
+headingDelta :: Heading -> Delta (MapDiff (Strip w h))
+headingDelta (Heading U side) = deltaFromTuple (sideStep side, 0)
+headingDelta (Heading V side) = deltaFromTuple (0, sideStep side)
+
+sideStep :: Extremum -> Int
+sideStep AtMin = -1
+sideStep AtMax = 1
+
+-- | The heading a unit displacement points along.
+--
+-- Only the four unit displacements name a heading, and only those ever
+-- arrive: the sole caller is 'throughHeading', which hands over what
+-- 'Data.Grid.Sized.throughFrame' made of a 'headingDelta', and that only
+-- negates components, so a unit step stays one.
+deltaHeading :: Delta (MapDiff (Strip w h)) -> Heading
+deltaHeading d =
+  case deltaToTuple d of
+    (du, 0) -> Heading U (sideOf du)
+    (_, dv) -> Heading V (sideOf dv)
+  where
+    sideOf n = if n < 0 then AtMin else AtMax
 
 -- | A heading read the player's way round, or a player's heading read the
 -- chart's way round.
 --
--- Its own inverse, since reversing an axis twice is not reversing it, and that
--- is why 'headingFor' and 'dirOf' are the same function with the ends swapped.
-throughTurn :: Turn -> Heading -> Heading
-throughTurn t (Heading U side) = Heading U (if turnU t then flipSide side else side)
-throughTurn t (Heading V side) = Heading V (if turnV t then flipSide side else side)
+-- 'Data.Grid.Sized.throughFrame' with a 'Heading' at each end. Its own
+-- inverse, because that is, and that is why 'headingFor' and 'dirOf' are the
+-- same function with the ends swapped.
+throughHeading :: Frame (Strip w h) -> Heading -> Heading
+throughHeading f = deltaHeading . throughFrame f . headingDelta
 
 -- | The chart heading a key press means.
 --
--- In 'ChartFrame' the player's own turn is not consulted at all, which is what
--- makes that frame plannable from a fixed picture. In 'PlayerFrame' each axis
--- is read the player's way round.
-headingFor :: ReadFrame -> Turn -> Dir -> Heading
+-- In 'ChartFrame' the player's own frame is not consulted at all, which is
+-- what makes that frame plannable from a fixed picture. In 'PlayerFrame' each
+-- axis is read the player's way round.
+headingFor :: ReadFrame -> Frame (Strip w h) -> Dir -> Heading
 headingFor ChartFrame _ = chartHeading
-headingFor PlayerFrame t = throughTurn t . chartHeading
+headingFor PlayerFrame f = throughHeading f . chartHeading
 
 -- | The heading a key press means to the chart itself.
 chartHeading :: Dir -> Heading
@@ -440,19 +487,15 @@ chartHeading DirLeft = Heading U AtMin
 chartHeading DirUp = Heading V AtMax
 chartHeading DirDown = Heading V AtMin
 
-flipSide :: Extremum -> Extremum
-flipSide AtMin = AtMax
-flipSide AtMax = AtMin
-
 -- | The key press that means a heading, in a frame: the inverse of
 -- 'headingFor', for a caller that has a heading in hand and wants to draw or
 -- name it the way the player would.
 --
 -- Its own inverse, since reversing an axis twice is reversing it not at all,
 -- which is why one function serves both ways round.
-dirOf :: ReadFrame -> Turn -> Heading -> Dir
+dirOf :: ReadFrame -> Frame (Strip w h) -> Heading -> Dir
 dirOf ChartFrame _ = chartDir
-dirOf PlayerFrame t = chartDir . throughTurn t
+dirOf PlayerFrame f = chartDir . throughHeading f
 
 -- | Which key a chart heading is, read in the chart's own frame.
 chartDir :: Heading -> Dir
@@ -484,13 +527,13 @@ stepDir ::
   (KnownStrip w h) =>
   Surface ->
   ReadFrame ->
-  (Spot w h, Turn) ->
+  (Spot w h, Frame (Strip w h)) ->
   Dir ->
-  Maybe (Spot w h, Turn)
-stepDir surface frame (here, t) dir = do
-  let heading = headingFor frame t dir
+  Maybe (Spot w h, Frame (Strip w h))
+stepDir surface reading (here, f) dir = do
+  let heading = headingFor reading f dir
   (there, _, crossing) <- stepSpot surface here heading
-  pure (there, turnAfter heading crossing t)
+  pure (there, frameAfterCrossing heading crossing f)
 
 -- | A run of key presses, from a cell and a frame. 'Nothing' the moment one of
 -- them leaves the surface.
@@ -498,10 +541,10 @@ walkFrom ::
   (KnownStrip w h) =>
   Surface ->
   ReadFrame ->
-  (Spot w h, Turn) ->
+  (Spot w h, Frame (Strip w h)) ->
   [Dir] ->
-  Maybe (Spot w h, Turn)
-walkFrom surface frame = foldM (stepDir surface frame)
+  Maybe (Spot w h, Frame (Strip w h))
+walkFrom surface reading = foldM (stepDir surface reading)
 
 -- | The cell @(dx, dy)@ away, as the walker at this cell would count it: up
 -- the surface first, then along it.
@@ -514,9 +557,9 @@ walkFrom surface frame = foldM (stepDir surface frame)
 cellAround ::
   (KnownStrip w h) =>
   Surface ->
-  (Spot w h, Turn) ->
+  (Spot w h, Frame (Strip w h)) ->
   (Int, Int) ->
-  Maybe (Spot w h, Turn)
+  Maybe (Spot w h, Frame (Strip w h))
 cellAround surface start (dx, dy) =
   walkFrom
     surface
@@ -557,5 +600,5 @@ spotBeyond surface (x, y)
       start <- uncurry (spotAt @w @h) from
       -- In 'ChartFrame': the chart's own right stays the chart's own right
       -- across a seam, so carrying on that way carries on the picture.
-      (there, _) <- walkFrom surface ChartFrame (start, square) (replicate n dir)
+      (there, _) <- walkFrom surface ChartFrame (start, identityFrame) (replicate n dir)
       pure there

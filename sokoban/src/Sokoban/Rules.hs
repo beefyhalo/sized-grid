@@ -96,7 +96,12 @@ data Play w h = Play
     -- mirrored seam changes. Only 'PlayerFrame' reads it, but it is state of
     -- the game and not of the view: it is a fact about where the player has
     -- been, and undo has to put it back.
-    playTurn :: !Turn,
+    --
+    -- The library's accumulated frame element, one reversal bit per chart
+    -- axis. Not to be confused with the 'ReadFrame' a caller passes to 'move':
+    -- that is a choice about how to read the keys, this is where the player
+    -- has got to.
+    playFrame :: !(Frame (Strip w h)),
     -- | Which way the last move pointed, for drawing. Not consulted by any
     -- rule --- a Sokoban pushes by walking into a crate, so facing is never
     -- an input --- but on these surfaces the player needs to see which way
@@ -234,7 +239,7 @@ move frame dir g =
     play = gamePlay g
     surface = gameSurface g
     here = playPlayer play
-    heading = headingFor frame (playTurn play) dir
+    heading = headingFor frame (playFrame play) dir
     -- The crate's own crossing is not consulted. A crate has no frame to
     -- reverse --- it is a box, and a box looks the same either way round ---
     -- so the only frame in the game is the player's, and it comes from the
@@ -244,7 +249,7 @@ move frame dir g =
         { gamePlay =
             p
               { playPlayer = landed,
-                playTurn = turnAfter heading crossing (playTurn p),
+                playFrame = frameAfterCrossing heading crossing (playFrame p),
                 playFacing = heading,
                 playMoves = playMoves p + 1
               },

@@ -225,7 +225,7 @@ render frame game =
              ++ "   pushes "
              ++ show (playPushes play)
              ++ "   facing "
-             ++ dirName (dirOf frame (playTurn play) (playFacing play))
+             ++ dirName (dirOf frame (playFrame play) (playFacing play))
              ++ "   frame "
              ++ frameName
              ++ standing
@@ -243,7 +243,7 @@ render frame game =
         ChartFrame -> "chart"
         PlayerFrame -> "player"
     standing =
-      case turnNote (playTurn play) of
+      case frameNote (playFrame play) of
         "" -> ""
         note -> " (" ++ note ++ ")"
     (around, across) = stripSize @w @h
