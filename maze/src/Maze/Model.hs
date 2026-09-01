@@ -23,6 +23,7 @@ module Maze.Model
   )
 where
 
+import Control.Comonad (extract)
 import Control.Comonad.Store (pos)
 import Control.Lens (review)
 import Data.Grid.Sized
@@ -96,11 +97,11 @@ twoSteps d = Path [d, d]
 -- | Walk a 'Path' from the focus and report both where it landed and what is
 -- there.
 --
--- 'tracePath' gives the second half and 'walkPath' the first;  this is the
--- pair, from one walk, because every caller here wants both.
+-- A thin wrapper over 'walkFocus', which moves the focus along the 'Path' and
+-- keeps the grid; every caller here wants the landed coordinate and its value,
+-- so this reads both back off the moved 'FocusedGrid' (sized-grid-qbal).
 traceTo :: Path Cs -> FocusedGrid Cs Tile -> Maybe (Coord Cs, Tile)
-traceTo p fg =
-  (\c -> (c, indexGrid (focusedGrid fg) c)) <$> walkPath (pos fg) p
+traceTo p fg = (\fg' -> (pos fg', extract fg')) <$> walkFocus p fg
 
 -- | One move of either phase, for the viewer to replay.
 data Move

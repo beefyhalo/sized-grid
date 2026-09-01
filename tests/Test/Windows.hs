@@ -14,7 +14,7 @@ import Control.Comonad (extract)
 import Control.Lens (itoListOf, toListOf)
 import Data.Foldable (toList)
 import Data.Grid.Sized
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isNothing)
 import Test.Arbitrary ()
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -199,7 +199,30 @@ movementInsideAWindow =
               (Just 21)
               ( extract
                   (walkEverywhere (Path [d2 1 1]) (focusedAtZero windowOf9x9))
-              )
+              ),
+          -- sized-grid-qbal: a Walker can be written down and stepped inside a
+          -- window --- its heading is a MapStep now, not the stuck
+          -- Diff (Ordinal 3). It steps in bounds and stops at the window's own
+          -- edge, never wrapping to the Periodic source it was cut from.
+          testCase "a walker steps across the window and stops at its edge" $
+            let w0 =
+                  Walker
+                    (FocusedGrid windowOf9x9 (ord2 0 0))
+                    (d2 0 1)
+                    identityFrame
+             in do
+                  assertEqual
+                    "the row it walks"
+                    [11, 12, 13]
+                    (map (extract . walkerGrid) (walkerTrail w0))
+                  assertBool "the checked step never turns the heading" $
+                    all ((== d2 0 1) . walkerHeading) (walkerTrail w0),
+          testCase "a walker step off the window's edge is Nothing, not a wrap" $
+            assertBool "" $
+              isNothing
+                ( stepWalkerWithin
+                    (Walker (FocusedGrid windowOf9x9 (ord2 0 2)) (d2 0 1) identityFrame)
+                )
         ]
     ]
 

@@ -11,11 +11,11 @@ import Control.Comonad (extract)
 import Data.AffineSpace ((.+^))
 import Data.Functor.Rep (index, tabulate)
 import Data.Grid.Sized
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Test.Arbitrary ()
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck (testProperty, (===))
+import Test.Tasty.QuickCheck (property, testProperty, (===))
 
 -- | A two-dimensional displacement, the shape a single 'Path' step or a
 -- 'traceOffset' argument takes on a two-axis grid.
@@ -79,6 +79,88 @@ tracePathTests =
     hw :: Int -> Clamped 5
     hw = Clamped . fromMaybe (error "in range") . numToOrdinal
 
+-- | The position-preserving lifting the pointing family was missing
+-- (sized-grid-qbal). 'traceOffset' is now its @'fmap' 'extract'@, so the two
+-- must agree, and a moved focus must carry the same grid.
+offsetFocusTests :: TestTree
+offsetFocusTests =
+  testGroup
+    "offsetFocus"
+    [ testProperty "the zero displacement is the identity" $
+        \(fg :: FG) -> offsetFocus (d2 0 0) fg === Just fg,
+      testProperty "moves the focus by offsetCoord and keeps the grid" $
+        \(fg :: FG) (a, b) ->
+          offsetFocus (d2 a b) fg
+            === ( FocusedGrid (focusedGrid fg)
+                    <$> offsetCoord (focusedGridPosition fg) (d2 a b)
+                ),
+      testProperty "traceOffset is fmap extract . offsetFocus" $
+        \(fg :: FG) (a, b) ->
+          traceOffset (d2 a b) fg === (extract <$> offsetFocus (d2 a b) fg),
+      testCase "a step off the edge is Nothing" $
+        let fg =
+              FocusedGrid
+                (tabulate (const (0 :: Int)))
+                (hw 0 :| hw 0 :| EmptyCoord) ::
+                FG
+         in assertBool "" (isNothing (offsetFocus (d2 (-1) 0) fg))
+    ]
+  where
+    hw :: Int -> Clamped 5
+    hw = Clamped . fromMaybe (error "in range") . numToOrdinal
+
+walkFocusTests :: TestTree
+walkFocusTests =
+  testGroup
+    "walkFocus"
+    [ testProperty "the empty path is the identity" $
+        \(fg :: FG) -> walkFocus mempty fg === Just fg,
+      testProperty "moves the focus by walkPath and keeps the grid" $
+        \(fg :: FG) (steps :: [(Int, Int)]) ->
+          let p = Path (map (uncurry d2) steps)
+           in walkFocus p fg
+                === ( FocusedGrid (focusedGrid fg)
+                        <$> walkPath (focusedGridPosition fg) p
+                    ),
+      testProperty "tracePath is fmap extract . walkFocus" $
+        \(fg :: FG) (steps :: [(Int, Int)]) ->
+          let p = Path (map (uncurry d2) steps)
+           in tracePath p fg === (extract <$> walkFocus p fg),
+      testCase "a route a wall interrupts fails even though its steps cancel" $
+        let fg =
+              FocusedGrid
+                (tabulate (const (0 :: Int)))
+                (hw 0 :| hw 0 :| EmptyCoord) ::
+                FG
+         in assertBool "" (isNothing (walkFocus (Path [d2 (-1) 0, d2 1 0]) fg))
+    ]
+  where
+    hw :: Int -> Clamped 5
+    hw = Clamped . fromMaybe (error "in range") . numToOrdinal
+
+focusRayTests :: TestTree
+focusRayTests =
+  testGroup
+    "focusRay"
+    [ testProperty "its cells are coordRay's cells, grid unchanged" $
+        \(fg :: FG) (a, b) ->
+          -- a bounded prefix: the zero displacement makes both rays infinite.
+          take 12 (map extract (focusRay (d2 a b) fg))
+            === take
+              12
+              ( map
+                  (index (focusedGrid fg))
+                  (coordRay (focusedGridPosition fg) (d2 a b))
+              ),
+      testCase "does not include the starting focus" $
+        let fg = focusedAtZero (tabulate (const (0 :: Int))) :: FG
+         in case focusRay (d2 0 1) fg of
+              [] -> assertFailure "the ray is empty"
+              (first : _) ->
+                assertBool "first cell is a step along, not the focus itself" $
+                  focusedGridPosition first /= focusedGridPosition fg
+    ]
+
 walkEverywhereTests :: TestTree
 walkEverywhereTests =
   testGroup
@@ -129,6 +211,84 @@ stepWalkerTests =
               assertEqual "frame flip" True (walkerFrameFlips w')
     ]
 
+-- | The 3x3 grid @[[0,1,2],[3,4,5],[6,7,8]]@ on two 'Ordinal' axes --- the
+-- shape a window has, and the one 'stepWalker' cannot be written on.
+ordinalBoard :: Grid '[Ordinal 3, Ordinal 3] Int
+ordinalBoard = fromJust (gridFromList [[0, 1, 2], [3, 4, 5], [6, 7, 8]])
+
+o3 :: Int -> Ordinal 3
+o3 = fromMaybe (error "in range") . numToOrdinal
+
+cl :: Int -> Clamped 5
+cl = Clamped . fromMaybe (error "in range") . numToOrdinal
+
+-- | The checked, position-preserving walker step (sized-grid-qbal). Unlike
+-- 'stepWalker' it needs only 'IsCoordList', so it runs on an 'Ordinal' axis.
+stepWalkerWithinTests :: TestTree
+stepWalkerWithinTests =
+  testGroup
+    "stepWalkerWithin"
+    [ testCase "the spike's ordinalWalk: crosses an Ordinal grid, stops at the edge" $
+        let w0 =
+              Walker
+                (FocusedGrid ordinalBoard (o3 1 :| o3 0 :| EmptyCoord))
+                (d2 0 1)
+                identityFrame
+         in assertEqual
+              ""
+              [3, 4, 5]
+              (map (extract . walkerGrid) (walkerTrail w0)),
+      testCase "a Clamped wall is reported with Nothing, not clamped onto" $
+        let g = tabulate (const (0 :: Int)) :: Grid '[Clamped 5, Clamped 5] Int
+            atWall = Walker (FocusedGrid g (cl 4 :| cl 0 :| EmptyCoord)) (d2 1 0) identityFrame
+         in assertBool "" (isNothing (stepWalkerWithin atWall)),
+      testProperty "the heading and the frame pass through unchanged" $
+        \(fg :: FG) (a, b) (u, v) ->
+          let fr = frameFromReversals [u, v]
+           in case stepWalkerWithin (Walker fg (d2 a b) fr) of
+                Nothing -> property True
+                Just w' -> (walkerHeading w', walkerFrame w') === (d2 a b, fr),
+      testProperty "agrees with stepWalker wherever the step stays in bounds" $
+        \(fg :: FG) (a, b) ->
+          let w = Walker fg (d2 a b) identityFrame
+           in case stepWalkerWithin w of
+                Nothing -> property True
+                Just w' ->
+                  ( focusedGridPosition (walkerGrid w'),
+                    walkerHeading w'
+                  )
+                    === ( focusedGridPosition (walkerGrid (stepWalker w)),
+                          walkerHeading (stepWalker w)
+                        )
+    ]
+
+-- | The walker's own trail, and that it terminates where a checked step does.
+walkerTrailTests :: TestTree
+walkerTrailTests =
+  testGroup
+    "walkerTrail"
+    [ testProperty "starts with the walker itself" $
+        \(fg :: FG) (a, b) ->
+          let w = Walker fg (d2 a b) identityFrame
+           in take 1 (walkerTrail w) === [w],
+      testProperty "each step is stepWalkerWithin of the one before" $
+        \(fg :: FG) (a, b) ->
+          let w = Walker fg (d2 a b) identityFrame
+              t = take 6 (walkerTrail w)
+           in and (zipWith (\x y -> stepWalkerWithin x == Just y) t (drop 1 t)),
+      testCase "is finite on a Clamped grid and ends at the wall" $
+        let g = tabulate (const (0 :: Int)) :: Grid '[Clamped 5, Clamped 5] Int
+            w = Walker (FocusedGrid g (cl 0 :| cl 0 :| EmptyCoord)) (d2 0 1) identityFrame
+            t = walkerTrail w
+         in do
+              assertEqual "one walker per cell up to the edge" 5 (length t)
+              case drop 4 t of
+                (wLast : _) ->
+                  assertBool "the last cannot step again" $
+                    isNothing (stepWalkerWithin wLast)
+                [] -> assertFailure "the trail is shorter than the axis"
+    ]
+
 partitionFocusTests :: TestTree
 partitionFocusTests =
   testGroup
@@ -155,7 +315,12 @@ focusedTests =
     "Focused"
     [ traceOffsetTests,
       tracePathTests,
+      offsetFocusTests,
+      walkFocusTests,
+      focusRayTests,
       walkEverywhereTests,
       stepWalkerTests,
+      stepWalkerWithinTests,
+      walkerTrailTests,
       partitionFocusTests
     ]

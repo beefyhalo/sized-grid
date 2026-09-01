@@ -62,7 +62,13 @@ type Ant cs =
     FrameAfterStep cs,
     AllDiffSame Int cs,
     All CentredAxis cs,
-    MapDiff cs ~ '[Int, Int]
+    -- The heading is a @'Delta' ('MapStep' cs)@ now (sized-grid-qbal), and
+    -- 'turnRight' \/ 'turnLeft' are written on @'Delta' '[Int, Int]@ -- hence
+    -- the first equality, which every 101x101 board here satisfies. The second
+    -- is 'stepWalker'\'s own bridge (it stays total, so it still takes the
+    -- affine 'MapDiff'); it was @MapDiff cs ~ '[Int, Int]@ before.
+    MapStep cs ~ '[Int, Int],
+    MapStep cs ~ MapDiff cs
   )
 
 -- | Turn ninety degrees. A heading is a 'Delta', which is indexed by the

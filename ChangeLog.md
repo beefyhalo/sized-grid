@@ -49,6 +49,43 @@ part of this release. The dated 0.1.x sections beneath those are upstream
   being total is something the axis type has to license. Two compile-fail
   tests hold that line.
 
+* **New: the checked movement vocabulary, lifted through `FocusedGrid` and
+  `Walker`.** `traceOffset` and `tracePath` were the pointing family's only
+  checked operations and both threw away the position they computed, so
+  nothing moved a focus and reported failure. Added, position-preserving
+  (sized-grid-qbal):
+
+  ```haskell
+  offsetFocus      :: Delta (MapStep cs) -> FocusedGrid cs a -> Maybe (FocusedGrid cs a)
+  walkFocus        :: Path cs            -> FocusedGrid cs a -> Maybe (FocusedGrid cs a)
+  focusRay         :: Delta (MapStep cs) -> FocusedGrid cs a -> [FocusedGrid cs a]
+  stepWalkerWithin :: Walker cs a -> Maybe (Walker cs a)
+  walkerTrail      :: Walker cs a -> [Walker cs a]
+  ```
+
+  `traceOffset` and `tracePath` keep their types and are now
+  `fmap extract . offsetFocus` and `fmap extract . walkFocus`. `stepWalkerWithin`
+  is `offsetCoord` on the position with the heading and the accumulated `Frame`
+  passed through unchanged — the checked-step law that sized-grid-c0s9 put in
+  force means a step the bounds check accepts never turns the frame, so no new
+  fold or class is needed. Unlike `stepWalker` it carries only `IsCoordList`,
+  so it moves a walker inside a window.
+
+* **`Walker`'s heading is re-indexed by `MapStep`.** `walkerHeading` was a
+  `Diff (Coord cs)`, which is stuck on `Ordinal` — so a `Walker` could not be
+  written down in a window at all, and no `gridWindows`/`shrinkGrid`/… result
+  could hold one. It is a `Delta (MapStep cs)` now (sized-grid-qbal).
+  Source-compatible by the same argument as sized-grid-i0ob.2: under
+  `AllDiffSame Int cs`, which every call site already carries, `MapStep cs` and
+  `MapDiff cs` are the same type. `stepWalker` stays total, so it keeps
+  `MapDiff` internally and bridges with `MapStep cs ~ MapDiff cs` the way
+  `walkPathTotal` does; `Automata.Ant`'s constraint bundle swaps its
+  `MapDiff cs ~ '[Int, Int]` for the `MapStep` equivalent. `../aoc/src/2017/19.hs`,
+  a `Walker` in all but name that stepped with `(.+^)` on a `Clamped` axis and
+  looped forever at the true grid edge, is ported to `Walker` and
+  `stepWalkerWithin` and now terminates on unpadded input; maze's `traceTo` is
+  a wrapper over `walkFocus`.
+
 * **New.** `coordIndices` and `coordIndices2` ask a coordinate where it is:
   one `Int` per axis, first axis first (sized-grid-bzzy). `coordIndices` is a
   new `IsCoordList` method, `posIndices`, wrapped -- the same stride decode

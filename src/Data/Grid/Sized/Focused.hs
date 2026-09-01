@@ -6,10 +6,15 @@ module Data.Grid.Sized.Focused
     focusedAtZero,
     traceOffset,
     tracePath,
+    offsetFocus,
+    walkFocus,
+    focusRay,
     walkEverywhere,
     Walker (..),
     walkerFrameFlips,
     stepWalker,
+    stepWalkerWithin,
+    walkerTrail,
     partitionFocus,
   )
 where
@@ -20,7 +25,6 @@ where
 import Control.Comonad
 import Control.Comonad.Store
 import Control.DeepSeq (NFData (..))
-import Data.AffineSpace (Diff)
 import Data.Functor.Rep
 import Data.Grid.Sized.Coord
 import Data.Grid.Sized.Internal.Grid (Grid)
@@ -73,6 +77,11 @@ instance
 
 -- | The cell a single displacement away from the focus, or 'Nothing' if the
 -- step would leave the grid.
+--
+-- @'fmap' 'extract' . 'offsetFocus' d@: the position 'offsetFocus' moves to,
+-- read off. Kept because every existing call site wants the value rather than
+-- the moved grid; that it falls out of 'offsetFocus' in one line is the check
+-- that the position-preserving lifting is the primitive one.
 traceOffset ::
   ( AllSizedKnown cs,
     IsCoordList cs
@@ -80,10 +89,13 @@ traceOffset ::
   Delta (MapStep cs) ->
   FocusedGrid cs a ->
   Maybe a
-traceOffset d (FocusedGrid g p) = index g <$> offsetCoord p d
+traceOffset d = fmap extract . offsetFocus d
 
 -- | The cell a 'Path' away from the focus, walked one step at a time through
 -- 'walkPath' rather than summed first.
+--
+-- @'fmap' 'extract' . 'walkFocus' p@, for the reason 'traceOffset' is
+-- @'fmap' 'extract' . 'offsetFocus'@.
 tracePath ::
   ( AllSizedKnown cs,
     IsCoordList cs
@@ -91,7 +103,45 @@ tracePath ::
   Path cs ->
   FocusedGrid cs a ->
   Maybe a
-tracePath p (FocusedGrid g focusPos) = index g <$> walkPath focusPos p
+tracePath p = fmap extract . walkFocus p
+
+-- | Move the focus one checked step in the given direction, or 'Nothing' if
+-- the step would leave the grid --- 'offsetCoord' with the payload carried
+-- along.
+--
+-- The position-preserving counterpart of 'traceOffset', and the one nothing
+-- in the pointing family offered before (sized-grid-qbal): 'traceOffset' and
+-- 'tracePath' both computed a new position and then threw it away. Indexed by
+-- @'MapStep' cs@, so it works inside a window --- an
+-- 'Data.Grid.Sized.Ordinal.Ordinal' axis included.
+offsetFocus ::
+  (IsCoordList cs) =>
+  Delta (MapStep cs) ->
+  FocusedGrid cs a ->
+  Maybe (FocusedGrid cs a)
+offsetFocus d (FocusedGrid g p) = FocusedGrid g <$> offsetCoord p d
+
+-- | Walk the focus along a 'Path', one checked step at a time through
+-- 'walkPath', stopping with 'Nothing' as soon as a step would leave the grid
+-- --- so a route can fail even where its steps cancel out net.
+--
+-- The position-preserving counterpart of 'tracePath'.
+walkFocus ::
+  (IsCoordList cs) =>
+  Path cs ->
+  FocusedGrid cs a ->
+  Maybe (FocusedGrid cs a)
+walkFocus p (FocusedGrid g focusPos) = FocusedGrid g <$> walkPath focusPos p
+
+-- | The focus stepped repeatedly in one direction: the grid focused at each
+-- cell of 'coordRay' from the current focus, not including the current focus
+-- itself. Infinite on a torus or with a zero displacement.
+focusRay ::
+  (IsCoordList cs) =>
+  Delta (MapStep cs) ->
+  FocusedGrid cs a ->
+  [FocusedGrid cs a]
+focusRay d (FocusedGrid g p) = FocusedGrid g <$> coordRay p d
 
 -- | Start a walker at every cell and follow the same 'Path' from each.
 walkEverywhere ::
@@ -110,9 +160,20 @@ walkEverywhere p = extend (tracePath p)
 -- 'walkerFrameFlips' is the parity of that frame, which is all an /orientation/
 -- question needs; a consumer that reads direction keys in the walker's own
 -- frame needs the whole element and reads it through 'throughFrame'.
+--
+-- The heading is a @'Delta' ('MapStep' cs)@ --- one signed step count per axis
+-- --- and not the affine @'Data.AffineSpace.Diff' ('Coord' cs)@ it was
+-- (sized-grid-qbal). That is what lets a walker be written down inside a
+-- window: every restriction narrows its axis to
+-- 'Data.Grid.Sized.Ordinal.Ordinal', @'Data.AffineSpace.Diff'
+-- ('Data.Grid.Sized.Ordinal.Ordinal' n)@ is stuck, and so the old heading
+-- field had no values there. At every axis list where both reduce they are the
+-- same list, so no call site that compiled before changed. 'stepWalker' is
+-- still total and still needs the affine action, so it bridges the two with
+-- @'MapStep' cs ~ 'MapDiff' cs@ the way 'walkPathTotal' does.
 data Walker cs a = Walker
   { walkerGrid :: FocusedGrid cs a,
-    walkerHeading :: Diff (Coord cs),
+    walkerHeading :: Delta (MapStep cs),
     walkerFrame :: Frame cs
   }
   deriving stock (Functor)
@@ -124,13 +185,13 @@ data Walker cs a = Walker
 walkerFrameFlips :: Walker cs a -> Bool
 walkerFrameFlips = frameParity . walkerFrame
 
-deriving stock instance (Eq a, Eq (Diff (Coord cs))) => Eq (Walker cs a)
+deriving stock instance (Eq a, Eq (Delta (MapStep cs))) => Eq (Walker cs a)
 
 deriving stock instance
   ( IsCoordList cs,
     All Show cs,
     Show a,
-    Show (Diff (Coord cs))
+    Show (Delta (MapStep cs))
   ) =>
   Show (Walker cs a)
 
@@ -139,17 +200,47 @@ deriving stock instance
 -- becomes when the walker crosses a seam.
 --
 -- Total, unlike 'traceOffset'\/ 'tracePath': a walker with a heading always
--- lands somewhere.
+-- lands somewhere. Being total is what the axis type licenses, so this keeps
+-- the affine @'MapDiff' cs@ that 'transportCoord' takes and bridges it to the
+-- heading's @'MapStep' cs@ with an equality, the way 'walkPathTotal' does ---
+-- free at a concrete axis list, and still refused on
+-- 'Data.Grid.Sized.Ordinal.Ordinal'. The checked, position-preserving
+-- counterpart that /does/ work in a window is 'stepWalkerWithin'.
 stepWalker ::
   ( TransportCoordList cs,
     AllDiffSame Int cs,
-    FrameAfterStep cs
+    FrameAfterStep cs,
+    MapStep cs ~ MapDiff cs
   ) =>
   Walker cs a ->
   Walker cs a
 stepWalker (Walker (FocusedGrid g p) h fr) =
   case transportCoord p h of
     (p', h') -> Walker (FocusedGrid g p') h' (frameAfterStep p h fr)
+
+-- | Take one /checked/ step in the walker's own heading: 'offsetCoord' on the
+-- position, with the heading and the accumulated 'Frame' passed through
+-- unchanged. 'Nothing' if the step would leave the grid.
+--
+-- The heading does not turn, because a checked step that succeeds has not hit
+-- a wall --- the law 'axisFrameFlipsIsCoord' now states and sized-grid-c0s9
+-- put in force. So there is no fold and no class here beyond 'IsCoordList',
+-- which is what lets this run where 'stepWalker' cannot: inside a window, on
+-- an 'Data.Grid.Sized.Ordinal.Ordinal' axis, anywhere a restriction reaches.
+-- On a 'Data.Grid.Sized.Coord.Clamped.Clamped' axis it reports the wall with
+-- 'Nothing' rather than clamping the walker onto it.
+stepWalkerWithin ::
+  (IsCoordList cs) =>
+  Walker cs a ->
+  Maybe (Walker cs a)
+stepWalkerWithin (Walker (FocusedGrid g p) h fr) =
+  (\p' -> Walker (FocusedGrid g p') h fr) <$> offsetCoord p h
+
+-- | The walker's trail: itself, then every walker 'stepWalkerWithin' reaches
+-- from it, stopping when a checked step would leave the grid. Finite unless
+-- the heading wraps forever on a torus.
+walkerTrail :: (IsCoordList cs) => Walker cs a -> [Walker cs a]
+walkerTrail w = w : maybe [] walkerTrail (stepWalkerWithin w)
 
 -- | Split a self-contained window into its centre value and a function
 -- naming every other cell's value.
