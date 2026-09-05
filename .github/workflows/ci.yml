@@ -46,7 +46,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
@@ -56,7 +56,7 @@ jobs:
   flake-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
@@ -128,7 +128,7 @@ jobs:
         # API uses throughout, arrived in GHC 9.10.
         ghc: ["9.10.1", "9.12.3", "9.14.1"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # gameOfLife and ising-example depend on gloss, which pulls in
       # OpenGLRaw/GLURaw/OpenGL/GLUT. Without these, GLUT fails to configure
@@ -145,7 +145,7 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: latest
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ${{ steps.setup-haskell.outputs.cabal-store }}
@@ -210,7 +210,7 @@ jobs:
     # the whole suite at once.
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # One GHC, not the matrix: a baseline is per-compiler, and three of them
       # would triple the runtime to gate the same code three times. 9.12.3 is
@@ -227,7 +227,7 @@ jobs:
           ghc-version: "9.12.3"
           cabal-version: latest
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ${{ steps.setup-haskell.outputs.cabal-store }}
@@ -242,7 +242,7 @@ jobs:
       # The restore-keys prefix then picks the most recently created match,
       # which is the newest baseline master recorded.
       - name: Restore benchmark baseline
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: bench-baseline.csv
           key: bench-baseline-ghc9.12.3-ubuntu-24.04-${{ github.run_id }}
@@ -299,7 +299,7 @@ jobs:
       # that failed it, rather than only the percentages in the log.
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-results-ghc9.12.3-ubuntu-24.04
           path: bench-results*.csv
@@ -320,7 +320,7 @@ jobs:
 
       - name: Save benchmark baseline
         if: success() && github.ref == 'refs/heads/master'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: bench-baseline.csv
           key: bench-baseline-ghc9.12.3-ubuntu-24.04-${{ github.run_id }}
