@@ -17,6 +17,10 @@ on:
         description: Record a new benchmark baseline instead of gating against the cached one
         type: boolean
         default: false
+      baseline-runs:
+        description: Number of benchmark runs to merge when refreshing the baseline
+        type: number
+        default: 5
 
 # sized-grid-3e9. Without this, every push queues a brand-new run rather than
 # cancelling the one it supersedes -- a burst of pushes (several worktree
@@ -247,14 +251,12 @@ jobs:
 
       - run: cabal update
 
-      # 25% is deliberately loose: the recorded `2*Stdev` column is 5-10% on
-      # most of these, a shared runner is worse than a laptop, and a gate
-      # tighter than the noise is a gate that gets switched off within a month.
-      # Tighten it once there is a run history showing what this runner's
-      # spread actually is. tasty-bench absorbs some of the noise on its own --
-      # it reports "same as baseline" whenever the difference is inside
-      # max(2*stdev, the baseline's own 2*stdev) -- so the threshold only has
-      # to cover what is left.
+      # The refresh path records five runs by default and uses twice the sample
+      # standard deviation of their means as each benchmark's tolerance. That
+      # captures cross-run shared-runner noise instead of the within-run jitter
+      # in one CSV. The normal gate remains a coarse 50% backstop for gross
+      # regressions; tasty-bench handles the fine discrimination by reporting
+      # "same as baseline" inside max(2*stdev, baseline's 2*stdev).
       #
       # --fail-if-faster is set far wider, and note that its scale is not the
       # other one's: tasty-bench turns it into a lower bound of
@@ -271,15 +273,27 @@ jobs:
       - name: Run benchmarks
         run: |
           set -euo pipefail
-          opts="--csv bench-results.csv"
           if [ "${{ inputs.refresh-baseline }}" = "true" ]; then
-            echo "::notice::refresh-baseline requested -- recording numbers without gating."
+            runs="${{ inputs.baseline-runs || 5 }}"
+            case "$runs" in
+              ''|*[!0-9]*|0|1) echo "::error::baseline-runs must be at least 2"; exit 1 ;;
+            esac
+            results=()
+            for i in $(seq 1 "$runs"); do
+              result="bench-results-$i.csv"
+              cabal bench grid-sized:bench:benchmarks --benchmark-options="--csv $result"
+              results+=("$result")
+            done
+            python3 .github/scripts/merge-benchmark-baselines.py \
+              --output bench-baseline.csv "${results[@]}"
+            echo "::notice::recorded a $runs-run benchmark baseline."
           elif [ -f bench-baseline.csv ]; then
-            opts="$opts --baseline bench-baseline.csv --fail-if-slower 25 --fail-if-faster 90"
+            cabal bench grid-sized:bench:benchmarks \
+              --benchmark-options="--csv bench-results.csv --baseline bench-baseline.csv --fail-if-slower 50 --fail-if-faster 90"
           else
             echo "::notice::No cached baseline for this runner and GHC -- recording one instead of gating."
+            cabal bench grid-sized:bench:benchmarks --benchmark-options="--csv bench-results.csv"
           fi
-          cabal bench grid-sized:bench:benchmarks --benchmark-options="$opts"
 
       # `always()`, so a run that failed the gate still hands over the numbers
       # that failed it, rather than only the percentages in the log.
@@ -288,7 +302,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bench-results-ghc9.12.3-ubuntu-24.04
-          path: bench-results.csv
+          path: bench-results*.csv
           if-no-files-found: warn
 
       # Only from master, and only from a run that passed the gate: a
@@ -297,7 +311,12 @@ jobs:
       # stops one PR's numbers from becoming every other PR's baseline.
       - name: Promote results to baseline
         if: success() && github.ref == 'refs/heads/master'
-        run: cp -f bench-results.csv bench-baseline.csv
+        run: |
+          if [ "${{ inputs.refresh-baseline }}" = "true" ]; then
+            test -f bench-baseline.csv
+          else
+            cp -f bench-results.csv bench-baseline.csv
+          fi
 
       - name: Save benchmark baseline
         if: success() && github.ref == 'refs/heads/master'

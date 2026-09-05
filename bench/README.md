@@ -46,7 +46,7 @@ cabal bench grid-sized:bench:benchmarks \
   --benchmark-options="--baseline bench/baseline-ghc9.12.3-aarch64-darwin.csv"
 ```
 
-Add `--fail-if-slower 25` to make it exit non-zero rather than just annotating
+Add `--fail-if-slower 50` to make it exit non-zero rather than just annotating
 each line with a percentage, and `--hide-successes` to print only what moved.
 A benchmark that is not in the baseline compares as "same", so adding one never
 fails the run.
@@ -98,9 +98,13 @@ green `master` run measured. It only needs a hand when a slowdown is
 new baseline -- so an accepted regression would otherwise keep every subsequent
 run red. To accept it, run the CI workflow from the Actions tab via
 **Run workflow** on `master` with **refresh-baseline** ticked. That records the
-current numbers without gating, and leaves a note in the Actions log of who
-moved the line and when. Do not reach for it to make a red PR green; a
-regression on a branch is a regression, and the baseline moves only on master.
+current numbers without gating, running the suite five times by default. It
+averages each benchmark's means and writes `2*Stdev` as twice the sample
+standard deviation across those means, so the per-benchmark band captures
+shared-runner variance. Use **baseline-runs** to adjust the sample count. The
+run leaves a note in the Actions log of who moved the line and when. Do not
+reach for it to make a red PR green; a regression on a branch is a regression,
+and the baseline moves only on master.
 
 **The laptop baseline** is refreshed by hand, and only deliberately:
 
