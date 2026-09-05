@@ -20,13 +20,13 @@ module Test.Reflective
 where
 
 import Control.Lens (view)
-import Data.AffineSpace ((.+^))
+import Data.AffineSpace (AffineSpace, Diff, (.+^))
 import Data.Grid.Sized
 import GHC.TypeLits (KnownNat)
 import Test.Arbitrary ()
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck (testProperty, (===))
+import Test.Tasty.QuickCheck (Property, testProperty, (===))
 
 -- | Billiard bounce off two walls @size@ apart, written the obvious recursive way.
 bounceRef :: Int -> Int -> Int
@@ -88,6 +88,17 @@ rf = Reflective . unsafeOrdinal
 r1 :: Int -> Reflect101 5
 r1 = Reflect101 . unsafeOrdinal
 
+plusAgreesWith ::
+  (AffineSpace x, Diff x ~ Int, IsCoordLifted x) =>
+  (Int -> Int) ->
+  x ->
+  Int ->
+  Property
+plusAgreesWith ref c d = toAxisIndex (c .+^ d) === ref (toAxisIndex c + d)
+
+flipAgreesWith :: (IsCoordLifted x) => (Int -> Bool) -> x -> Int -> Property
+flipAgreesWith ref c d = axisFrameFlips c d === ref (toAxisIndex c + d)
+
 -- | The two non-reflecting bounded\/unbounded policies, for the law tests
 -- below: they take the constant-'False' default, and the point of including
 -- them is that the law is 'IsCoord'\'s rather than the mirrors'.
@@ -138,20 +149,15 @@ closedFormAgreesWithReferenceTests =
   testGroup
     "the closed form agrees with the issue's own recursive definition"
     [ testProperty "Reflective, size 5" $ \(c :: Reflective 5) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in ordinalToInt (view asOrdinal (c .+^ d)) === bounceRef 5 (i + d),
+        plusAgreesWith (bounceRef 5) c d,
       testProperty "Reflective, size 1" $ \(c :: Reflective 1) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in ordinalToInt (view asOrdinal (c .+^ d)) === bounceRef 1 (i + d),
+        plusAgreesWith (bounceRef 1) c d,
       testProperty "Reflect101, size 5" $ \(c :: Reflect101 5) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in ordinalToInt (view asOrdinal (c .+^ d)) === reflect101Ref 4 (i + d),
+        plusAgreesWith (reflect101Ref 4) c d,
       testProperty "Reflect101, size 2" $ \(c :: Reflect101 2) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in ordinalToInt (view asOrdinal (c .+^ d)) === reflect101Ref 1 (i + d),
+        plusAgreesWith (reflect101Ref 1) c d,
       testProperty "Reflect101, size 1 (the degenerate axis)" $ \(c :: Reflect101 1) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in ordinalToInt (view asOrdinal (c .+^ d)) === reflect101Ref 0 (i + d)
+        plusAgreesWith (reflect101Ref 0) c d
     ]
 
 -- | The bounce lives in ('.+^') alone; 'offsetIsCoord' still reports 'Nothing'
@@ -237,23 +243,18 @@ frameFlipAgreesWithReferenceTests =
   testGroup
     "axisFrameFlips agrees with the parity of the reference's bounce count"
     [ testProperty "Reflective, size 5" $ \(c :: Reflective 5) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in axisFrameFlips c d === bounceFlipRef 5 (i + d),
+        flipAgreesWith (bounceFlipRef 5) c d,
       testProperty "Reflective, size 1" $ \(c :: Reflective 1) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in axisFrameFlips c d === bounceFlipRef 1 (i + d),
+        flipAgreesWith (bounceFlipRef 1) c d,
       testProperty "Reflect101, size 5" $ \(c :: Reflect101 5) (d :: Int) ->
-        let i = ordinalToInt (view asOrdinal c)
-         in axisFrameFlips c d === reflect101FlipRef 4 (i + d),
+        flipAgreesWith (reflect101FlipRef 4) c d,
       -- Every cell is a mirror when @m == 1@, so nothing ever turns.
       testProperty "Reflect101, size 2 (every cell a mirror)" $
         \(c :: Reflect101 2) (d :: Int) ->
-          let i = ordinalToInt (view asOrdinal c)
-           in axisFrameFlips c d === reflect101FlipRef 1 (i + d),
+          flipAgreesWith (reflect101FlipRef 1) c d,
       testProperty "Reflect101, size 1 (the degenerate axis)" $
         \(c :: Reflect101 1) (d :: Int) ->
-          let i = ordinalToInt (view asOrdinal c)
-           in axisFrameFlips c d === reflect101FlipRef 0 (i + d)
+          flipAgreesWith (reflect101FlipRef 0) c d
     ]
 
 -- | Every (position, displacement) pair on one axis where the bounds check
