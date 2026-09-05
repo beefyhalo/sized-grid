@@ -91,6 +91,7 @@ test-suite tests
     Test.Frames
     Test.Klein
     Test.Mobius
+    Test.Orientability
     Test.Projective
     Test.Tiles
     Test.VertexCycles

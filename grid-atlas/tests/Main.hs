@@ -7,6 +7,7 @@ import Test.CubeMap
 import Test.Frames
 import Test.Klein
 import Test.Mobius
+import Test.Orientability
 import Test.Projective
 import Test.Tasty
 import Test.Tiles
@@ -23,6 +24,7 @@ main =
           kleinTests,
           projectiveTests,
           frameTests,
-          vertexCycleTests
+          vertexCycleTests,
+          orientabilityTests
         ]
     )

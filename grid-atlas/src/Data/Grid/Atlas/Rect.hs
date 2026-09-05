@@ -60,9 +60,13 @@ module Data.Grid.Atlas.Rect
     reversedFrame,
     Landing (..),
     rectStep,
+    mirroringHalfEdges,
+    orientable,
   )
 where
 
+import Data.Atlas.Topology.Seam (HalfEdge, SeamTable (..))
+import Data.Functor.Identity (Identity (..))
 import Data.Grid.Sized (Extremum (..))
 
 -- | Which of a rectangular chart's two axes. Not a type-level axis position
@@ -241,3 +245,90 @@ rectStep sizeOf cross chart (u, v) heading@(Heading axis side) =
             | mirrored = MirroredSeam
             | otherwise = Seam
        in Landing destChart landed heading' crossing
+
+-- | The boundary incidences whose actual walker-frame crossing is mirrored.
+--
+-- The table's orientation bit is not sufficient here: it describes the
+-- along-edge coordinates, while the frame also depends on the source and
+-- destination headings.
+mirroringHalfEdges ::
+  (Axis -> Int) ->
+  SeamTable chart (Axis, Extremum) ->
+  [HalfEdge chart (Axis, Extremum)] ->
+  [HalfEdge chart (Axis, Extremum)]
+mirroringHalfEdges sizeOf table =
+  filter (seamMirrors sizeOf table)
+
+-- | Whether the rectangular charts admit a consistent orientation.
+--
+-- Each seam is an edge constraint on chart orientations: crossing it either
+-- preserves or reverses the chosen orientation. The surface is orientable
+-- exactly when those constraints are 2-colourable.
+orientable ::
+  (Eq chart) =>
+  (Axis -> Int) ->
+  SeamTable chart (Axis, Extremum) ->
+  [HalfEdge chart (Axis, Extremum)] ->
+  Bool
+orientable sizeOf table halfEdges =
+  components charts []
+  where
+    charts = [chart | (chart, _) <- halfEdges]
+    constraints =
+      [ (chart, destination, seamMirrors sizeOf table halfEdge)
+      | halfEdge@(chart, boundary) <- halfEdges,
+        let (destination, _, _) = crossSeam table chart boundary
+      ]
+
+    neighbours chart =
+      [ (destination, mirrored)
+      | (source, destination, mirrored) <- constraints,
+        source == chart
+      ]
+        ++ [ (source, mirrored)
+           | (source, destination, mirrored) <- constraints,
+             destination == chart
+           ]
+
+    components [] _ = True
+    components (chart : rest) assigned =
+      case lookup chart assigned of
+        Just _ -> components rest assigned
+        Nothing ->
+          case colour [(chart, False)] assigned of
+            Nothing -> False
+            Just assigned' -> components rest assigned'
+
+    colour [] assigned = Just assigned
+    colour ((chart, expected) : queue) assigned =
+      case lookup chart assigned of
+        Just actual
+          | actual == expected -> colour queue assigned
+          | otherwise -> Nothing
+        Nothing ->
+          colour
+            ([(neighbour, expected /= mirrored) | (neighbour, mirrored) <- neighbours chart] ++ queue)
+            ((chart, expected) : assigned)
+
+seamMirrors ::
+  (Axis -> Int) ->
+  SeamTable chart (Axis, Extremum) ->
+  HalfEdge chart (Axis, Extremum) ->
+  Bool
+seamMirrors sizeOf (SeamTable cross) (chart, (axis, side)) =
+  let (u, v) =
+        case axis of
+          U -> (boundaryCoordinate side (sizeOf U), 0)
+          V -> (0, boundaryCoordinate side (sizeOf V))
+      Landing _ _ _ crossing =
+        runIdentity $
+          rectStep
+            sizeOf
+            (\source boundary -> Identity (cross source boundary))
+            chart
+            (u, v)
+            (Heading axis side)
+   in reversedFrame crossing
+  where
+    boundaryCoordinate AtMin _ = 0
+    boundaryCoordinate AtMax size = size - 1
