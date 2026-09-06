@@ -12,7 +12,6 @@ import Data.Grid.Sized.Ordinal
 import Data.Hashable (Hashable)
 import Data.Ix (Ix)
 import Data.Primitive.Types (Prim)
-import Data.Universe.Class (universe, universeF)
 import Data.Universe.Class qualified as U
 import GHC.TypeLits
 import System.Random (Random (..))
@@ -48,11 +47,9 @@ instance (KnownNat n, 1 <= n) => Enum (Clamped n) where
 
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Clamped n)
 
-instance (1 <= n, KnownNat n) => U.Universe (Clamped n) where
-  universe = allCoordLike
+deriving newtype instance (1 <= n, KnownNat n) => U.Universe (Clamped n)
 
-instance (1 <= n, KnownNat n) => U.Finite (Clamped n) where
-  universeF = allCoordLike
+deriving newtype instance (1 <= n, KnownNat n) => U.Finite (Clamped n)
 
 instance IsCoord Clamped where
   asOrdinal = iso unClamped Clamped

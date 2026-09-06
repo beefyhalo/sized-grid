@@ -15,7 +15,6 @@ import Data.Grid.Sized.Ordinal
 import Data.Hashable (Hashable)
 import Data.Ix (Ix)
 import Data.Primitive.Types (Prim)
-import Data.Universe.Class (universe, universeF)
 import Data.Universe.Class qualified as U
 import GHC.TypeLits
 import System.Random (Random (..))
@@ -52,11 +51,9 @@ instance (KnownNat n, 1 <= n) => Enum (Reflect101 n) where
 
 deriving newtype instance (KnownNat n, 1 <= n) => Bounded (Reflect101 n)
 
-instance (1 <= n, KnownNat n) => U.Universe (Reflect101 n) where
-  universe = allCoordLike
+deriving newtype instance (1 <= n, KnownNat n) => U.Universe (Reflect101 n)
 
-instance (1 <= n, KnownNat n) => U.Finite (Reflect101 n) where
-  universeF = allCoordLike
+deriving newtype instance (1 <= n, KnownNat n) => U.Finite (Reflect101 n)
 
 instance IsCoord Reflect101 where
   asOrdinal = iso unReflect101 Reflect101

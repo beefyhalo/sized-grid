@@ -14,7 +14,6 @@ import Data.Group (Abelian, Cyclic (..), Group (..))
 import Data.Hashable (Hashable)
 import Data.Ix (Ix)
 import Data.Primitive.Types (Prim)
-import Data.Universe.Class (universe, universeF)
 import Data.Universe.Class qualified as U
 import GHC.TypeLits
 import System.Random
@@ -38,11 +37,9 @@ newtype Periodic (n :: Nat) = Periodic
 
 deriving newtype instance (1 <= n, KnownNat n) => Random (Periodic n)
 
-instance (1 <= n, KnownNat n) => U.Universe (Periodic n) where
-  universe = allCoordLike
+deriving newtype instance (1 <= n, KnownNat n) => U.Universe (Periodic n)
 
-instance (1 <= n, KnownNat n) => U.Finite (Periodic n) where
-  universeF = allCoordLike
+deriving newtype instance (1 <= n, KnownNat n) => U.Finite (Periodic n)
 
 instance (1 <= n, KnownNat n) => Enum (Periodic n) where
   toEnum x = Periodic $ unsafeOrdinal $ x `mod` ordinalSize @n
@@ -61,9 +58,7 @@ instance (1 <= n, KnownNat n) => Enum (Periodic n) where
   enumFromTo a b = map toEnum [fromEnum a .. fromEnum b]
   enumFromThenTo a b c = map toEnum [fromEnum a, fromEnum b .. fromEnum c]
 
-instance (1 <= n, KnownNat n) => Bounded (Periodic n) where
-  minBound = Periodic minBound
-  maxBound = Periodic maxBound
+deriving newtype instance (1 <= n, KnownNat n) => Bounded (Periodic n)
 
 instance IsCoord Periodic where
   asOrdinal = iso unPeriodic Periodic
