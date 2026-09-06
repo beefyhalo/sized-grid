@@ -72,6 +72,7 @@ module Data.Grid.Sized
 
     -- * The rest of the public API
     module X,
+    module Fixture,
     module Optics,
 
     -- * Rexported for generics-sop
@@ -90,6 +91,7 @@ import Data.Grid.Sized.Coord.Periodic as X
 import Data.Grid.Sized.Coord.Reflect101 as X
 import Data.Grid.Sized.Coord.Reflective as X
 import Data.Grid.Sized.Focused as X
+import Data.Grid.Sized.Fixture as Fixture
 -- The `Grid` type is defined in the hidden "Data.Grid.Sized.Internal.Grid", and
 -- this module publishes the safe half of it -- hence the explicit export list
 -- above rather than a `module X` re-export, which would carry the constructor

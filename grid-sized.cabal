@@ -228,6 +228,7 @@ library
     Data.Grid.Sized.Coord.Torus
     Data.Grid.Sized.Coord.Transform
     Data.Grid.Sized.Focused
+    Data.Grid.Sized.Fixture
     Data.Grid.Sized.Optics
     Data.Grid.Sized.Optics.Coordinate
     Data.Grid.Sized.Optics.FocusedGrid
@@ -386,4 +387,3 @@ benchmark benchmarks
     , vector-space
 
   ghc-options:    -with-rtsopts=-T
-

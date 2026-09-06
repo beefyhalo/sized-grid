@@ -157,6 +157,51 @@ semialignZipTests =
     combine (These.That value) = value
     combine (These.These left right) = left + right
 
+fixtureTests :: TestTree
+fixtureTests =
+  testGroup
+    "ASCII fixtures"
+    [ testCase "parses and renders with top row first" $
+        case ( gridFromCharRows
+                 (\ch -> if ch == '#' then Just True else Nothing)
+                 False
+                 "#..\n.##" ::
+                 Maybe (Grid '[Ordinal 3, Ordinal 2] Bool)
+             ) of
+          Nothing -> assertFailure "fixture dimensions should match"
+          Just grid ->
+            assertEqual "#..\n.##" "#..\n.##" (renderCharRows (\live -> if live then '#' else '.') grid),
+      testCase "rejects ragged or incorrectly sized rows" $ do
+        assertEqual
+          "ragged"
+          Nothing
+          (gridFromCharRows Just ' ' "ab\nc" :: Maybe (Grid '[Ordinal 2, Ordinal 2] Char))
+        assertEqual
+          "wrong height"
+          Nothing
+          (gridFromCharRows Just ' ' "ab" :: Maybe (Grid '[Ordinal 2, Ordinal 2] Char)),
+      testCase "blits at the centre and clips at the edge" $
+        case ( gridFromCharRows Just '.' "##\n##" :: Maybe (Grid '[Ordinal 2, Ordinal 2] Char),
+               gridFromCharRows Just '.' ".....\n.....\n.....\n....." :: Maybe (Grid '[Ordinal 5, Ordinal 4] Char)
+             ) of
+          (Just source, Just target) ->
+            assertEqual
+              ".##..\n.##..\n.....\n....."
+              ".....\n.##..\n.##..\n....."
+              (renderCharRows id (blitGrid Centre source target))
+          _ -> assertFailure "fixture dimensions should match",
+      testCase "drops source cells outside the target" $
+        case ( gridFromCharRows Just '.' "abc\ndef\nghi" :: Maybe (Grid '[Ordinal 3, Ordinal 3] Char),
+               gridFromCharRows Just '.' "..\n.." :: Maybe (Grid '[Ordinal 2, Ordinal 2] Char)
+             ) of
+          (Just source, Just target) ->
+            assertEqual
+              "top-left clipping"
+              "ab\nde"
+              (renderCharRows id (blitGrid TopLeft source target))
+          _ -> assertFailure "fixture dimensions should match"
+    ]
+
 testAllCoordOrdered ::
   forall cs proxy.
   (IsCoordList cs) =>
@@ -502,6 +547,7 @@ main =
           [ testGroup "Ordinal 10" ordinal,
             universeTests,
             semialignZipTests,
+            fixtureTests,
             testGroup "Periodic 10" periodic,
             testGroup "Clamped 10" clamped,
             testGroup "Reflective 10" reflective,
