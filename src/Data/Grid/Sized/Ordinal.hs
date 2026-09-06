@@ -25,7 +25,8 @@ where
 import Control.DeepSeq (NFData (..))
 import Control.Monad (unless)
 import Data.Aeson
-import Data.Grid.Sized.Internal.Type (requiring)
+import Data.Constraint (Dict(..))
+import Data.Grid.Sized.Internal.Type (cmpNatLE, requiring)
 import Data.Hashable (Hashable)
 import Data.Ix (Ix)
 import Data.Primitive.Types (Prim)
@@ -179,10 +180,7 @@ reifyOrdinal (UnsafeOrdinal i) func =
   case someNatVal (toInteger i) of
     Nothing -> invariantViolated i (ordinalSize @n)
     Just (SomeNat (_ :: Proxy k)) ->
-      case cmpNat (Proxy @(k + 1)) (Proxy @n) of
-        LTI -> func k
-        EQI -> func k
-        GTI -> invariantViolated i (ordinalSize @n)
+      cmpNatLE @(k + 1) @n (\d -> case d of Dict -> func k) (invariantViolated i (ordinalSize @n))
 
 -- | Turn a size known only at run time -- read from a level file, a header, an
 -- image -- into the @('KnownNat' n, 1 '<=' n)@ that every axis type in this
@@ -208,10 +206,7 @@ reifySize n func =
   case someNatVal (toInteger n) of
     Nothing -> Nothing
     Just (SomeNat (_ :: Proxy k)) ->
-      case cmpNat (Proxy @1) (Proxy @k) of
-        LTI -> Just (func k)
-        EQI -> Just (func k)
-        GTI -> Nothing
+      cmpNatLE @1 @k (\d -> case d of Dict -> Just (func k)) Nothing
 
 -- | The 'unsafeOrdinal' failure branch. Nullary on purpose: see the note
 -- there. It cannot name the index or the size, and that is the price.

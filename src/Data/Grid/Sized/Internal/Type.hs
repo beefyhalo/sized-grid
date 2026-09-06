@@ -9,13 +9,15 @@
 --
 -- Type-level facts the library needs but GHC's Nat solver will not derive.
 module Data.Grid.Sized.Internal.Type
-  ( windowFits,
+  ( cmpNatLE,
+    windowFits,
     requiring,
   )
 where
 
-import Data.Constraint
+import Data.Constraint (Constraint, Dict(..), (:-)(..))
 import Data.Constraint.Nat (leTrans, plusMonotone1)
+import Data.Proxy
 import GHC.TypeLits
 
 -- | The fact @shrinkGrid@ needs in order to call @sliceGrid@: a window of @z@
@@ -34,6 +36,16 @@ windowFits =
     Sub Dict ->
       case leTrans @(n + 1 + z) @(x + z) @(y + 1) of
         Sub Dict -> Dict
+
+-- | 'cmpNat' specialized to a less-than-or-equal check, passing a witness of
+-- @a <= b@ to the success branch.
+cmpNatLE :: forall a b x. (KnownNat a, KnownNat b) => (Dict (a <= b) -> x) -> x -> x
+cmpNatLE yesValue noValue =
+  case cmpNat (Proxy @a) (Proxy @b) of
+    LTI -> yesValue Dict
+    EQI -> yesValue Dict
+    GTI -> noValue
+{-# INLINE cmpNatLE #-}
 
 -- | Consume a constraint the implementation has no other use for, so
 -- @-Wredundant-constraints@ doesn't flag a bound (e.g. @n <= m@) whose only

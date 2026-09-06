@@ -17,9 +17,10 @@ module Data.Grid.Sized.Coord.Centre
   )
 where
 
-import Data.Constraint
+import Data.Constraint (Dict(..))
 import Data.Grid.Sized.Coord.Class
 import Data.Grid.Sized.Coord.Internal
+import Data.Grid.Sized.Internal.Type (cmpNatLE)
 import Data.Grid.Sized.Ordinal
 import GHC.TypeLits
 import Generics.SOP (All, I (..), Proxy (..), hcpure)
@@ -70,14 +71,13 @@ puncturedToCoord (PuncturedCoord o) =
 -- | Every axis contributes at least one value, so the coordinate space is never empty. Not exported: nothing outside this module constructs a 'PuncturedCoord'.
 coordSpaceNonEmpty :: forall cs. (AllSizedKnown cs) => Dict (1 <= MaxCoordSize cs)
 coordSpaceNonEmpty =
-  case cmpNat (Proxy @1) (Proxy @(MaxCoordSize cs)) of
-    LTI -> Dict
-    EQI -> Dict
-    GTI ->
-      error
+  cmpNatLE @1 @(MaxCoordSize cs)
+    (\d -> case d of Dict -> Dict)
+    ( error
         "Data.Grid.Sized.Coord.coordSpaceNonEmpty: impossible: \
         \MaxCoordSize came out below one, though every axis \
         \contributes at least one value"
+    )
 
 -- | Every 'PuncturedCoord', in the same row-major order 'allCoord' visits, with the centre left out.
 allPunctured ::
