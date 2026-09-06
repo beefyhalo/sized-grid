@@ -130,15 +130,9 @@ _CollapsedGrid ::
 _CollapsedGrid = prism' collapseGrid gridFromList
 
 -- | The cell at a coordinate. @'Data.Grid.Sized.Internal.Grid.cellLens'@ under
--- the optics name, which is also what @'ix'@ is; the two used to be the same
--- body written twice.
---
--- The @IsCoordList cs@ is not needed (see @cellLens@) and is kept only because
--- it is the published signature; `requiring` is what stops it reading as a
--- redundant constraint. Both arguments are named rather than left implicit
--- because `requiring` takes a monotype and `Lens'` is not one.
-cell :: forall v cs a. (Vector v a, IsCoordList cs) => Coord cs -> Lens' (GridOf v cs a) a
-cell c f = requiring @(IsCoordList cs) (cellLens c f)
+-- the optics name, which is also what @'ix'@ is.
+cell :: forall v cs a. (Vector v a) => Coord cs -> Lens' (GridOf v cs a) a
+cell = cellLens
 {-# INLINE cell #-}
 
 -- | The window at @off@, read or replaced.
