@@ -273,37 +273,57 @@ instance forall cs. (IsCoordList cs, All Bounded cs) => Bounded (Coord cs) where
   minBound = pointwise0 @Bounded minBound
   maxBound = pointwise0 @Bounded maxBound
 
-class IxCoordList cs where
-  ixRangeNP :: NP I cs -> NP I cs -> [NP I cs]
-  ixIndexNP :: NP I cs -> NP I cs -> NP I cs -> Int
-  ixInRangeNP :: NP I cs -> NP I cs -> NP I cs -> Bool
-  ixRangeSizeNP :: NP I cs -> NP I cs -> Int
+ixRangeNP ::
+  forall cs.
+  (IsCoordList cs, All Ix cs) =>
+  NP I cs ->
+  NP I cs ->
+  [NP I cs]
+ixRangeNP Nil Nil = [Nil]
+ixRangeNP (I lower :* lowers) (I upper :* uppers) =
+  [ I value :* rest
+  | value <- range (lower, upper),
+    rest <- ixRangeNP lowers uppers
+  ]
 
-instance IxCoordList '[] where
-  ixRangeNP Nil Nil = [Nil]
-  ixIndexNP Nil Nil Nil = 0
-  ixInRangeNP Nil Nil Nil = True
-  ixRangeSizeNP Nil Nil = 1
+ixIndexNP ::
+  forall cs.
+  (IsCoordList cs, All Ix cs) =>
+  NP I cs ->
+  NP I cs ->
+  NP I cs ->
+  Int
+ixIndexNP Nil Nil Nil = 0
+ixIndexNP (I lower :* lowers) (I upper :* uppers) (I value :* values) =
+  Ix.index (lower, upper) value * ixRangeSizeNP lowers uppers
+    + ixIndexNP lowers uppers values
 
-instance (Ix c, IxCoordList cs) => IxCoordList (c ': cs) where
-  ixRangeNP (I lower :* lowers) (I upper :* uppers) =
-    [ I value :* rest
-    | value <- range (lower, upper),
-      rest <- ixRangeNP lowers uppers
-    ]
-  ixIndexNP (I lower :* lowers) (I upper :* uppers) (I value :* values) =
-    Ix.index (lower, upper) value * ixRangeSizeNP lowers uppers
-      + ixIndexNP lowers uppers values
-  ixInRangeNP (I lower :* lowers) (I upper :* uppers) (I value :* values) =
-    inRange (lower, upper) value && ixInRangeNP lowers uppers values
-  ixRangeSizeNP (I lower :* lowers) (I upper :* uppers) =
-    rangeSize (lower, upper) * ixRangeSizeNP lowers uppers
+ixInRangeNP ::
+  forall cs.
+  (IsCoordList cs, All Ix cs) =>
+  NP I cs ->
+  NP I cs ->
+  NP I cs ->
+  Bool
+ixInRangeNP Nil Nil Nil = True
+ixInRangeNP (I lower :* lowers) (I upper :* uppers) (I value :* values) =
+  inRange (lower, upper) value && ixInRangeNP lowers uppers values
+
+ixRangeSizeNP ::
+  forall cs.
+  (IsCoordList cs, All Ix cs) =>
+  NP I cs ->
+  NP I cs ->
+  Int
+ixRangeSizeNP Nil Nil = 1
+ixRangeSizeNP (I lower :* lowers) (I upper :* uppers) =
+  rangeSize (lower, upper) * ixRangeSizeNP lowers uppers
 
 -- | 'Ix' treats its pair of bounds as a bounding sub-box. The coordinate
 -- instance therefore uses each axis's contiguous range and combines the
 -- resulting offsets in row-major order. For 'Periodic', this range is
 -- deliberately not cyclic: 'Ix' describes contiguous ordered sub-ranges.
-instance forall cs. (IsCoordList cs, IxCoordList cs) => Ix (Coord cs) where
+instance forall cs. (IsCoordList cs, All Ix cs) => Ix (Coord cs) where
   range (Coord lower, Coord upper) =
     map
       (Coord . npToPosition @cs)
