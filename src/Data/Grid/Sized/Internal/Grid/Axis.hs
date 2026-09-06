@@ -478,24 +478,48 @@ type family DropAxis (n :: Nat) (cs :: [Type]) :: [Type] where
 -- @docs/superpowers/specs/2026-08-29-axis-fold-design.md@: one output
 -- cell at a time, gathering its fibre with a strided inner loop that keeps
 -- the accumulator in an argument, forcing before the write.
+foldAxisResult ::
+ forall v x y.
+ (VG.Vector v x, VG.Vector v y) =>
+ v x ->
+ Int ->
+ Int ->
+ (y -> x -> y) ->
+ (Int -> y) ->
+ Int ->
+ v y
+foldAxisResult v axisSize stride f seedAt startIndex =
+ VG.create $ do
+   out <- VGM.unsafeNew (len `quot` axisSize)
+   let foldFibre base i acc
+         | i >= axisSize = acc
+         | otherwise = foldFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
+       -- Write one output cell: the strict left fold of the fibre based at
+       -- base. The caller specifies the seed value and whether the inner loop
+       -- starts at index 0 or 1.
+       step outIndex base = do
+         let !result = foldFibre base startIndex (seedAt base)
+         VGM.unsafeWrite out outIndex result
+         pure (outIndex + 1)
+   _ <- eachFibreBaseM v axisSize stride step (0 :: Int)
+   pure out
+ where
+   len = VG.length v
+{-# INLINE foldAxisResult #-}
+
 foldAxis' ::
-  forall v cs x y.
-  forall n ->
-  (KnownAxis n cs, IsCoordLifted (AxisAt n cs), VG.Vector v x, VG.Vector v y) =>
-  (y -> x -> y) ->
-  y ->
-  GridOf v cs x ->
-  GridOf v (DropAxis n cs) y
+ forall v cs x y.
+ forall n ->
+ (KnownAxis n cs, IsCoordLifted (AxisAt n cs), VG.Vector v x, VG.Vector v y) =>
+ (y -> x -> y) ->
+ y ->
+ GridOf v cs x ->
+ GridOf v (DropAxis n cs) y
 foldAxis' n f z (Grid v) =
-  requiring @(IsCoordLifted (AxisAt n cs)) $
-    Grid (VG.fromList (eachFibreBase v axisSize stride step []))
-  where
-    (axisSize, stride) = axisSizeAndStride n cs
-    -- One output cell: the strict left fold of the fibre based at base.
-    step base rest = foldFibre base 0 z : rest
-    foldFibre base i acc
-      | i >= axisSize = acc
-      | otherwise = foldFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
+ requiring @(IsCoordLifted (AxisAt n cs)) $
+   Grid (foldAxisResult v axisSize stride f (const z) 0)
+ where
+   (axisSize, stride) = axisSizeAndStride n cs
 {-# INLINE foldAxis' #-}
 
 -- | Seedless strict left fold along one named axis, removing it.
@@ -520,23 +544,7 @@ reduceAxis ::
   GridOf v (DropAxis n cs) a
 reduceAxis n f (Grid v) =
   requiring @(IsCoordLifted (AxisAt n cs)) $
-    Grid $
-      VG.create $ do
-        out <- VGM.unsafeNew (len `quot` axisSize)
-        let reduceFibre base i acc
-              | i >= axisSize = acc
-              | otherwise =
-                  reduceFibre base (i + 1) $! f acc (VG.unsafeIndex v (base + i * stride))
-            -- Write one output cell, seeded by the fibre's first element, and
-            -- carry the running output index forward.
-            step outIndex base = do
-              let !first = VG.unsafeIndex v base
-                  !result = reduceFibre base 1 first
-              VGM.unsafeWrite out outIndex result
-              pure (outIndex + 1)
-        _ <- eachFibreBaseM v axisSize stride step (0 :: Int)
-        pure out
+    Grid (foldAxisResult v axisSize stride f (\base -> VG.unsafeIndex v base) 1)
   where
     (axisSize, stride) = axisSizeAndStride n cs
-    len = VG.length v
 {-# INLINE reduceAxis #-}
