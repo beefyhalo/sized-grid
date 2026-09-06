@@ -1,6 +1,29 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- | A focused view over a grid, with an optional heading and accumulated frame.
+--
+-- The pointing family does not invent a second movement model. It re-exposes the
+-- same 2×2 split already defined at the 'Data.Grid.Sized.Coord' layer: each
+-- axis type decides whether a move is checked or total, and the route/step pair
+-- runs through the same boundary policy in either case.
+--
+-- == Movement model
+--
+-- @'MapStep' cs@ indexes the checked half, and @'MapDiff' cs@ indexes the
+-- total half. The table is the same one stated in "Data.Grid.Sized.Coord":
+--
+-- | | one step | a route |
+-- | --- | --- | --- |
+-- | checked — `Maybe`, needs only `IsCoordList` | 'offsetCoord', 'coordRay', 'offsetCoordUpTo' | 'walkPath' |
+-- | total — licensed by the axis type | '(.+^)', 'transportCoord' | 'walkPathTotal' |
+--
+-- The pointing layer adds no semantics of its own. It only carries the payload
+-- along with the resulting position: 'FocusedGrid' adds a position to a grid,
+-- and 'Walker' adds a heading and accumulated frame to a focused grid. The
+-- checked and total operations therefore pair with the same coordinate-layer
+-- operations as their `Maybe`/affine counterparts, while the caller decides
+-- whether it wants the value, the moved focus, or the step with the heading.
 module Data.Grid.Sized.Focused
   ( FocusedGrid (..),
     focusedAtZero,
