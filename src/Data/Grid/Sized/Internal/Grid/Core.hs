@@ -146,6 +146,44 @@ deriving newtype instance (Foldable v) => Foldable (GridOf v cs)
 instance (Traversable v) => Traversable (GridOf v cs) where
   traverse f (Grid v) = Grid <$> traverse f v
 
+instance (VG.Vector v a, Read (v a), AllSizedKnown cs) => Read (GridOf v cs a) where
+  readsPrec p =
+    readParen (p > 10) $ \r ->
+      [ (g, rest2)
+        | ("Grid", rest1) <- lex r,
+          (v, rest2) <- readsPrec 11 rest1,
+          Just g <- [gridFromVector v]
+      ]
+        ++ [ (g, rest6)
+             | ("Grid", rest1) <- lex r,
+               ("{", rest2) <- lex rest1,
+               ("unGrid", rest3) <- lex rest2,
+               ("=", rest4) <- lex rest3,
+               (v, rest5) <- readsPrec 11 rest4,
+               ("}", rest6) <- lex rest5,
+               Just g <- [gridFromVector v]
+           ]
+
+instance (AllSizedKnown cs) => Read1 (Grid cs) where
+  liftReadsPrec _ rl p =
+    readParen (p > 10) $ \r ->
+      [ (g, rest2)
+        | ("Grid", rest1) <- lex r,
+          (xs, rest2) <- rl rest1,
+          let v = VG.fromList xs,
+          Just g <- [gridFromVector v]
+      ]
+        ++ [ (g, rest6)
+             | ("Grid", rest1) <- lex r,
+               ("{", rest2) <- lex rest1,
+               ("unGrid", rest3) <- lex rest2,
+               ("=", rest4) <- lex rest3,
+               (xs, rest5) <- rl rest4,
+               ("}", rest6) <- lex rest5,
+               let v = VG.fromList xs,
+               Just g <- [gridFromVector v]
+           ]
+
 instance (IsCoordList cs) => Each (Grid cs a) (Grid cs b) a b where
   each = traverse
 

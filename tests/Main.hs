@@ -548,6 +548,9 @@ main =
                   ++ [ aesonLaws @(Grid '[Periodic 10, Periodic 11] Int),
                        lawsToTest $
                          jsonLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int)),
+                       testProperty "Grid reads back from show" $
+                         property $ \(g :: Grid '[Periodic 10, Periodic 11] Int) ->
+                           read (show g) === g,
                        lawsToTest $
                          genericLaws (Proxy @(Grid '[Periodic 10, Periodic 11] Int)),
                        eq1Laws (Proxy @(Grid '[Periodic 10, Periodic 20]))
