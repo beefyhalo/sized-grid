@@ -389,12 +389,13 @@ filterGrid p (Grid v) = VG.filter p v
 {-# INLINE filterGrid #-}
 
 -- | The `Just` cells of a grid of `Maybe`s, in row-major order, as a bare
--- vector. @'mapMaybeGrid' id@.
+-- vector. This is literally @'mapMaybeGrid' id@ so the body and constraints
+-- cannot drift.
 catMaybesGrid ::
   (VG.Vector v (Maybe a), VG.Vector v a) =>
   GridOf v cs (Maybe a) ->
   v a
-catMaybesGrid (Grid v) = VG.mapMaybe id v
+catMaybesGrid = mapMaybeGrid id
 {-# INLINE catMaybesGrid #-}
 
 -- | Effectful `mapMaybeGrid`: run @f@ on every cell in row-major order, then
