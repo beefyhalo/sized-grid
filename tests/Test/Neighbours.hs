@@ -187,6 +187,28 @@ mooreTests =
         all (\c' -> c `elem` neighbours c') (neighbours c)
     ]
 
+deltaSetTests :: TestTree
+deltaSetTests =
+  testGroup
+    "delta neighbourhood primitives"
+    [ testCase "mooreDeltas 1 are the eight king moves" $
+       assertEqual
+         ""
+         8
+         (length (mooreDeltas @'[Clamped 5, Clamped 5] 1)),
+     testCase "vonNeumannDeltas 1 are the four cardinal directions" $
+       assertEqual
+         ""
+         4
+         (length (vonNeumannDeltas @'[Clamped 5, Clamped 5] 1)),
+     testCase "rotateDelta uses quarter-turn conventions" $ do
+       assertEqual "right turn" (d2 0 (-1)) (rotateDelta Rotate90 (d2 1 0))
+       assertEqual "left turn" (d2 0 1) (rotateDelta Rotate270 (d2 1 0)),
+     testCase "turnLeft and turnRight are inverses" $ do
+       assertEqual "right then left" (d2 1 0) (turnLeft (turnRight (d2 1 0)))
+       assertEqual "left then right" (d2 1 0) (turnRight (turnLeft (d2 1 0)))
+    ]
+
 -- | A radius-1 von Neumann neighbourhood has four cells in 2D but six in 3D.
 hwc3 :: Int -> Int -> Int -> Coord '[Clamped 5, Clamped 5, Clamped 5]
 hwc3 x y z = hw x :| hw y :| hw z :| EmptyCoord
@@ -561,6 +583,7 @@ neighbourTests =
       arityTests,
       tupleBridgeTests,
       mooreTests,
+      deltaSetTests,
       vonNeumannTests,
       ordinalTests,
       axisDistanceTests,

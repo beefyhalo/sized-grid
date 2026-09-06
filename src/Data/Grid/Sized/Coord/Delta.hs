@@ -52,11 +52,20 @@
 -- See sized-grid-qfg for the type this deliberately is /not/: on an
 -- all-'Data.Grid.Sized.Coord.Class.Boundaryless' shape the displacements do
 -- form a finite group, and that is a separate, bounded type.
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Data.Grid.Sized.Coord.Delta
   ( Delta (..),
     pattern (:^),
     pattern NoDelta,
     deltaSplit,
+    Rotation (..),
+    rotateDelta,
+    turnLeft,
+    turnRight,
+    mooreDeltas,
+    vonNeumannDeltas,
+    kingDeltas,
 
     -- * Building and taking apart
     singleDelta,
@@ -70,7 +79,9 @@ import Control.Applicative (empty)
 import Control.DeepSeq (NFData (..))
 import Control.Monad.State
 import Data.AdditiveGroup
+import Data.AffineSpace (Diff)
 import Data.Aeson
+import Data.Grid.Sized.Coord.Class (MapDiff)
 import Data.List (intercalate)
 import Data.Vector qualified as V
 import GHC.Generics (Generic)
@@ -194,6 +205,89 @@ singleDelta a = Delta (I a :* Nil)
 
 appendDelta :: a -> Delta as -> Delta (a ': as)
 appendDelta a (Delta as) = Delta (I a :* as)
+
+-- | A quarter-turn in the 2D square-symmetry group, in the same orientation
+-- convention as the hand-written walkers in the example apps: a right turn is
+-- @(x, y) -> (y, -x)@, so the first axis is the horizontal one and the second
+-- axis is drawn downward.
+data Rotation
+  = Rotate0
+  | Rotate90
+  | Rotate180
+  | Rotate270
+  deriving stock (Eq, Ord, Show, Enum, Bounded)
+
+-- | Rotate a 2D displacement by one of the quarter turns of the square.
+rotateDelta :: Num a => Rotation -> Delta '[a, a] -> Delta '[a, a]
+rotateDelta rot (x :^ y :^ NoDelta) =
+  case rot of
+    Rotate0 -> x :^ y :^ NoDelta
+    Rotate90 -> y :^ negate x :^ NoDelta
+    Rotate180 -> negate x :^ negate y :^ NoDelta
+    Rotate270 -> negate y :^ x :^ NoDelta
+{-# INLINE rotateDelta #-}
+
+-- | Turn right by 90 degrees.
+turnRight :: Num a => Delta '[a, a] -> Delta '[a, a]
+turnRight = rotateDelta Rotate90
+{-# INLINE turnRight #-}
+
+-- | Turn left by 90 degrees.
+turnLeft :: Num a => Delta '[a, a] -> Delta '[a, a]
+turnLeft = rotateDelta Rotate270
+{-# INLINE turnLeft #-}
+
+-- | Enumerate every delta with each component in @[-r, r]@, excluding the
+-- zero delta.
+class DeltaList cs where
+  deltaList :: Int -> [Delta (MapDiff cs)]
+
+instance DeltaList '[] where
+  deltaList _ = [NoDelta]
+
+instance (DeltaList xs, Diff x ~ Int) => DeltaList (x ': xs) where
+  deltaList r = [appendDelta d ds | d <- [-r .. r], ds <- deltaList @xs r]
+
+class IsZeroDelta ds where
+  isZeroDelta :: Delta ds -> Bool
+
+instance IsZeroDelta '[] where
+  isZeroDelta NoDelta = True
+
+instance (Eq d, Num d, IsZeroDelta ds) => IsZeroDelta (d ': ds) where
+  isZeroDelta (d :^ ds) = d == 0 && isZeroDelta ds
+
+-- | The L1 distance of a delta: the sum of the magnitudes of each component.
+class DeltaManhattan ds where
+  deltaManhattan :: Delta ds -> Int
+
+instance DeltaManhattan '[] where
+  deltaManhattan _ = 0
+
+instance (d ~ Int, DeltaManhattan ds) => DeltaManhattan (d ': ds) where
+  deltaManhattan (Delta (I x :* xs)) = abs x + deltaManhattan (Delta xs)
+
+-- | The Moore neighbourhood deltas: every component is in @[-r, r]@, and the
+-- zero delta is omitted.
+mooreDeltas :: forall cs. (DeltaList cs, IsZeroDelta (MapDiff cs)) => Int -> [Delta (MapDiff cs)]
+mooreDeltas r = filter (not . isZeroDelta) (deltaList @cs r)
+{-# INLINE mooreDeltas #-}
+
+-- | The von Neumann neighbourhood deltas: every component stays within @r@ in
+-- total absolute distance, excluding the zero delta.
+vonNeumannDeltas ::
+  forall cs.
+  (DeltaList cs, IsZeroDelta (MapDiff cs), DeltaManhattan (MapDiff cs)) =>
+  Int ->
+  [Delta (MapDiff cs)]
+vonNeumannDeltas r =
+  filter ((<= r) . deltaManhattan) (mooreDeltas @cs r)
+{-# INLINE vonNeumannDeltas #-}
+
+-- | The king's step set at unit radius.
+kingDeltas :: forall cs. (DeltaList cs, IsZeroDelta (MapDiff cs)) => [Delta (MapDiff cs)]
+kingDeltas = mooreDeltas @cs 1
+{-# INLINE kingDeltas #-}
 
 -- | Build a displacement from a tuple of the same arity, where that reads
 -- better than a @(':^')@ chain.
