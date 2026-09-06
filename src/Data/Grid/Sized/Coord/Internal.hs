@@ -19,6 +19,8 @@ module Data.Grid.Sized.Coord.Internal
     pattern (:|),
     pattern EmptyCoord,
     coordSplit,
+    splitPosition,
+    joinPosition,
 
     -- * Building and taking apart
     singleCoord,
@@ -112,6 +114,17 @@ unCoord :: forall cs. (IsCoordList cs) => Coord cs -> NP I cs
 unCoord (Coord p) = npFromPosition p
 {-# INLINE unCoord #-}
 
+-- | Split a row-major position at the stride of the axes to its right.
+splitPosition :: forall cs. (IsCoordList cs) => Int -> (Int, Int)
+splitPosition p = p `quotRem` coordListSize @cs
+{-# INLINE splitPosition #-}
+
+-- | Re-combine a row-major split position after the trailing axis list has
+-- already been handled.
+joinPosition :: forall cs. (IsCoordList cs) => Int -> Int -> Int
+joinPosition i r = i * coordListSize @cs + r
+{-# INLINE joinPosition #-}
+
 -- | Peel the first axis off a coordinate: a division by the stride of the
 -- axes to its right.
 coordSplit ::
@@ -120,7 +133,7 @@ coordSplit ::
   Coord (c ': cs) ->
   (c, Coord cs)
 coordSplit (Coord p) =
-  case p `quotRem` coordListSize @cs of
+  case splitPosition @cs p of
     (i, r) -> (unsafeFromAxisIndex i, Coord r)
 {-# INLINE coordSplit #-}
 
@@ -428,7 +441,7 @@ appendCoord ::
   a ->
   Coord as ->
   Coord (a ': as)
-appendCoord a (Coord as) = Coord (toAxisIndex a * coordListSize @as + as)
+appendCoord a (Coord as) = Coord (joinPosition @as (toAxisIndex a) as)
 
 coordFromTuple :: (IsProductType t xs, IsCoordList xs) => t -> Coord xs
 coordFromTuple = Coord . npToPosition . productTypeFrom

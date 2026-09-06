@@ -169,7 +169,7 @@ instance
   FrameAfterStep (x ': xs)
   where
   frameStepMask p (I d :* ds) =
-    case p `quotRem` coordListSize @xs of
+    case splitPosition @xs p of
       (i, r) ->
         let x = unsafeFromAxisIndex @x i
             hd = if axisFrameFlips x d then 1 else 0

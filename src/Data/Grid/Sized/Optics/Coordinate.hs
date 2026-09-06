@@ -65,7 +65,6 @@ import Data.Grid.Sized.Coord.Class
     IsCoord,
     IsCoordLifted,
     IsCoordList (..),
-    coordListSize,
     strengthenIsCoord,
     toAxisIndex,
     unsafeFromAxisIndex,
@@ -77,6 +76,10 @@ import Data.Grid.Sized.Coord.Delta
     deltaFromTuple,
     deltaSplit,
     deltaToTuple,
+  )
+import Data.Grid.Sized.Coord.Internal
+  ( joinPosition,
+    splitPosition,
   )
 import Data.Grid.Sized.Internal.Type (requiring)
 import Data.Grid.Sized.Ordinal
@@ -159,24 +162,19 @@ coordHead ::
   (IsCoordLifted a, IsCoordLifted a', IsCoordList as) =>
   Lens (Coord (a ': as)) (Coord (a' ': as)) a a'
 coordHead f c =
-  case coordPosition c `quotRem` stride of
+  case splitPosition @as (coordPosition c) of
     (i, r) ->
-      (\a' -> unsafeCoordFromPosition (toAxisIndex a' * stride + r))
+      (\a' -> unsafeCoordFromPosition (joinPosition @as (toAxisIndex a') r))
         <$> f (unsafeFromAxisIndex @a i)
-  where
-    stride = coordListSize @as
 
 coordTail ::
   forall a as as'.
   (IsCoordList as, IsCoordList as') =>
   Lens (Coord (a ': as)) (Coord (a ': as')) (Coord as) (Coord as')
 coordTail f c =
-  case coordPosition c `quotRem` coordListSize @as of
+  case splitPosition @as (coordPosition c) of
     (i, r) ->
-      ( \tailCoord ->
-          unsafeCoordFromPosition
-            (i * coordListSize @as' + coordPosition tailCoord)
-      )
+      unsafeCoordFromPosition . joinPosition @as' i . coordPosition
         <$> f (unsafeCoordFromPosition r)
 
 instance
