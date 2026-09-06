@@ -18,7 +18,7 @@ where
 import Control.Concurrent (threadDelay)
 import Control.Exception (bracket_)
 import Control.Monad (when)
-import Data.Grid.Sized (Coord, allCoord, indexGrid)
+import Data.Grid.Sized (Coord, coordFromIndices, indexGrid)
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe, isJust)
 import Sudoku.Board
@@ -145,9 +145,6 @@ render tty givensBoard board focus placed undone =
     status =
       show placed ++ " placed, " ++ show undone ++ " backtracked"
 
--- | The coordinate at a row and column, read out of the grid's own
--- enumeration rather than built here: 'allCoord' is row-major, so cell
--- @(r, c)@ is at @9r + c@ and this module needs no 'Ordinal' arithmetic of
--- its own.
+-- | The coordinate at a row and column.
 coordAt :: Int -> Int -> Coord Cs
-coordAt r c = allCoord !! (9 * r + c)
+coordAt r c = fromMaybe (error "coordAt: out of range") (coordFromIndices @Cs [r, c])

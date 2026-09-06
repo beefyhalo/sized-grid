@@ -26,7 +26,6 @@ module Automata.Wireworld
   )
 where
 
-import Control.Lens (review)
 import Data.Grid.Sized
 import Data.Grid.Sized.Unboxed
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -191,10 +190,7 @@ circuitBoard circuit =
     cellOf _ = Nothing
 
 coordAt :: Int -> Int -> Maybe (Coord Cs)
-coordAt cx cy =
-  (\a b -> review asOrdinal a :| review asOrdinal b :| EmptyCoord)
-    <$> numToOrdinal cx
-    <*> numToOrdinal cy
+coordAt cx cy = coordFromIndices @Cs [cx, cy]
 
 -- * The window
 

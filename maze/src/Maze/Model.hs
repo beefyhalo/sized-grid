@@ -25,7 +25,6 @@ where
 
 import Control.Comonad (extract)
 import Control.Comonad.Store (pos)
-import Control.Lens (review)
 import Data.Grid.Sized
 import Data.Maybe (fromMaybe)
 
@@ -56,10 +55,7 @@ solidGrid :: Grid Cs Tile
 solidGrid = tabulateGrid (const Wall)
 
 coordAt :: Int -> Int -> Maybe (Coord Cs)
-coordAt cx cy =
-  (\a b -> review asOrdinal a :| review asOrdinal b :| EmptyCoord)
-    <$> numToOrdinal cx
-    <*> numToOrdinal cy
+coordAt cx cy = coordFromIndices @Cs [cx, cy]
 
 -- | A coordinate as its two axis indices.
 --

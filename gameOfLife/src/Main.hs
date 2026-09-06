@@ -249,10 +249,7 @@ coordAt ::
   Int ->
   Int ->
   Maybe (Coord '[x, y])
-coordAt cx cy =
-  (\a b -> review asOrdinal a :| review asOrdinal b :| EmptyCoord)
-    <$> numToOrdinal (cx `mod` axisSize @x)
-    <*> numToOrdinal (cy `mod` axisSize @y)
+coordAt cx cy = coordFromIndices @'[x, y] [cx `mod` axisSize @x, cy `mod` axisSize @y]
 
 emptyBoard :: (IsCoordList cs) => UGrid cs TileState
 emptyBoard = tabulateGrid (const Dead)

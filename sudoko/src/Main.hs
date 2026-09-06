@@ -142,6 +142,4 @@ textReport board = do
       putStr (displayBoard solved)
 
 samplePoint :: Coord Cs
-samplePoint =
-  fromJust (numToOrdinal (4 :: Integer))
-    :| singleCoord (fromJust (numToOrdinal (4 :: Integer)))
+samplePoint = fromJust (coordFromIndices @Cs [4, 4])
