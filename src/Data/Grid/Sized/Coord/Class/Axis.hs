@@ -24,6 +24,10 @@ module Data.Grid.Sized.Coord.Class.Axis
     OddC,
     maxCoordSize,
     allCoordLike,
+    maxCoord,
+    reifyCoord,
+    weakenIsCoord,
+    strengthenIsCoord,
     axisSteps,
     axisStepsIx,
     toAxisIndex,
@@ -67,20 +71,6 @@ class IsCoord (c :: Nat -> Type) where
   default zeroPosition :: (Monoid (c n)) => c n
   zeroPosition = mempty
 
-  -- | @1 <= n@ is required because a @c 0@ has no inhabitants.
-  maxCoord :: (KnownNat n, 1 <= n) => c n
-  maxCoord = review asOrdinal maxCoord
-
-  -- | Recover the coord's value as a type-level 'Nat', with the evidence that
-  -- it is in range, and hand it to the continuation as a required type
-  -- argument.
-  reifyCoord ::
-    (KnownNat n) =>
-    c n ->
-    (forall m -> (KnownNat m, m + 1 <= n) => x) ->
-    x
-  reifyCoord c = reifyCoord (view asOrdinal c)
-
   -- | Offset by a signed displacement, or 'Nothing' if that leaves the space.
   -- The checked counterpart of @('Data.AffineSpace..+^')@, which is total and
   -- so must clamp on a bounded coord instead of reporting the overflow.
@@ -98,12 +88,6 @@ class IsCoord (c :: Nat -> Type) where
   -- interior.
   axisBoundaryIsCoord :: (KnownNat n) => c n -> Maybe Extremum
   axisBoundaryIsCoord = axisBoundaryByPosition
-
-  weakenIsCoord :: (KnownNat m) => c n -> Maybe (c m)
-  weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
-
-  strengthenIsCoord :: (KnownNat m, (n <= m)) => c n -> c m
-  strengthenIsCoord = review asOrdinal . strengthenOrdinal . view asOrdinal
 
   -- | Whether the total step @('Data.AffineSpace..+^')@ takes by this
   -- displacement reverses this axis's own sense of direction; used by
@@ -129,6 +113,35 @@ class IsCoord (c :: Nat -> Type) where
   -- the wall and stops, the other turns around a cell early.
   axisFrameFlipsIsCoord :: (KnownNat n, 1 <= n) => c n -> Int -> Bool
   axisFrameFlipsIsCoord _ _ = False
+
+-- | The maximum representable coordinate on this axis; requires a non-empty
+-- axis because an index in @0@ has no inhabitants.
+maxCoord :: forall c n. (IsCoord c, KnownNat n, 1 <= n) => c n
+maxCoord = review asOrdinal (maxBound :: Ordinal n)
+{-# INLINE maxCoord #-}
+
+-- | Recover the coord's value as a type-level 'Nat', with the evidence that
+-- it is in range, and hand it to the continuation as a required type
+-- argument.
+reifyCoord ::
+  forall c n x.
+  (IsCoord c, KnownNat n) =>
+  c n ->
+  (forall m -> (KnownNat m, m + 1 <= n) => x) ->
+  x
+reifyCoord c = reifyOrdinal (view asOrdinal c)
+{-# INLINE reifyCoord #-}
+
+-- | Convert a value on a larger axis into the same value on a smaller axis,
+-- returning 'Nothing' if it is outside the smaller size.
+weakenIsCoord :: forall c n m. (IsCoord c, KnownNat m) => c n -> Maybe (c m)
+weakenIsCoord = fmap (review asOrdinal) . weakenOrdinal . view asOrdinal
+{-# INLINE weakenIsCoord #-}
+
+-- | Convert a value on a smaller axis into the same value on a larger axis.
+strengthenIsCoord :: forall c n m. (IsCoord c, KnownNat m, n <= m) => c n -> c m
+strengthenIsCoord = review asOrdinal . strengthenOrdinal . view asOrdinal
+{-# INLINE strengthenIsCoord #-}
 
 -- | The bounds check that 'offsetIsCoord' takes as its default.
 offsetByPosition ::
@@ -279,8 +292,6 @@ unsafeFromAxisIndex i = review asOrdinal (unsafeOrdinalUnchecked i)
 instance IsCoord Ordinal where
   asOrdinal = id
   zeroPosition = minBound
-  reifyCoord = reifyOrdinal
-  maxCoord = maxBound
 
 -- | Enumerate all possible values of a coord, in order
 allCoordLike :: (1 <= n, IsCoord c, KnownNat n) => [c n]
