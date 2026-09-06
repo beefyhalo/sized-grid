@@ -5,6 +5,7 @@ where
 
 import Control.Lens hiding (index)
 import Control.Monad (replicateM)
+import Data.AffineSpace ((.+^))
 import Data.Align qualified as Align
 import Data.Finitary qualified as F
 import Data.Functor.Rep
@@ -33,6 +34,7 @@ import Test.Periodic
 import Test.QuickCheck
   ( Arbitrary (..),
     Property,
+    counterexample,
     property,
     (.&&.),
     (===),
@@ -380,7 +382,17 @@ coordCreationTests _genC _gen =
 
 main :: IO ()
 main =
-  let ordinal =
+  let inRange ::
+        forall c n.
+        ( IsCoord c,
+          KnownNat n
+        ) =>
+        c n -> Property
+      inRange c =
+        let i = ordinalToInt (view asOrdinal c)
+         in counterexample ("position " ++ show i) $
+              (0 <= i) .&&. (i < ordinalSize @n)
+      ordinal =
         [ isCoordLaws @Ordinal @10,
           lawsToTest $ ixLaws (Proxy @(Ordinal 10)),
           lawsToTest $ showLaws (Proxy @(Ordinal 10)),
@@ -399,7 +411,11 @@ main =
           lawsToTest $ commutativeSemigroupLaws (Proxy @(Periodic 10)),
           pseudoAffineLaws @(Periodic 10),
           interiorActionLaws @Periodic @10,
-          coordRangeLaws @Periodic @10,
+          coordRangeLaws
+            "Coordinate operation range"
+            [ testProperty "Semigroup stays in range" $ \(a :: Periodic 10) (b :: Periodic 10) -> inRange (a <> b),
+              testProperty "Affine displacement stays in range" $ \(c :: Periodic 10) (d :: Int) -> inRange (c .+^ d)
+            ],
           enumRangeLaws @Periodic @10,
           aesonLaws @(Periodic 10),
           lawsToTest $ jsonLaws (Proxy @(Periodic 10)),
@@ -416,7 +432,11 @@ main =
           lawsToTest $ semigroupMonoidLaws (Proxy @(Clamped 10)),
           pseudoAffineLaws @(Clamped 10),
           interiorActionLaws @Clamped @10,
-          coordRangeLaws @Clamped @10,
+          coordRangeLaws
+            "Coordinate operation range"
+            [ testProperty "Semigroup stays in range" $ \(a :: Clamped 10) (b :: Clamped 10) -> inRange (a <> b),
+              testProperty "Affine displacement stays in range" $ \(c :: Clamped 10) (d :: Int) -> inRange (c .+^ d)
+            ],
           enumRangeLaws @Clamped @10,
           aesonLaws @(Clamped 10),
           lawsToTest $ jsonLaws (Proxy @(Clamped 10)),
@@ -424,11 +444,14 @@ main =
           isCoordLaws @Clamped @10,
           zeroPositionMonoidLaws @Clamped @10
         ]
-      -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/'Monoid' instance;
+      -- 'Reflective' and 'Reflect101' have no 'Semigroup'\/ 'Monoid' instance;
       -- 'Test.Reflective' has the bounce-specific properties.
       reflective =
         [ pseudoAffineLaws @(Reflective 10),
           interiorActionLaws @Reflective @10,
+          coordRangeLaws
+            "Affine coordinate range"
+            [testProperty "Affine displacement stays in range" $ \(c :: Reflective 10) (d :: Int) -> inRange (c .+^ d)],
           lawsToTest $ ixLaws (Proxy @(Reflective 10)),
           enumRangeLaws @Reflective @10,
           aesonLaws @(Reflective 10),
@@ -439,6 +462,9 @@ main =
       reflect101 =
         [ pseudoAffineLaws @(Reflect101 10),
           interiorActionLaws @Reflect101 @10,
+          coordRangeLaws
+            "Affine coordinate range"
+            [testProperty "Affine displacement stays in range" $ \(c :: Reflect101 10) (d :: Int) -> inRange (c .+^ d)],
           lawsToTest $ ixLaws (Proxy @(Reflect101 10)),
           enumRangeLaws @Reflect101 @10,
           aesonLaws @(Reflect101 10),

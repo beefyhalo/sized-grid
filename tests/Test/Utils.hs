@@ -173,7 +173,7 @@ interiorActionLaws ::
   forall c n.
   ( IsCoord c,
     KnownNat n,
-    1 <= n,
+   1 <= n,
     Arbitrary (c n),
     Show (c n),
     Eq (c n),
@@ -195,31 +195,10 @@ interiorActionLaws =
         [testProperty "Associative where every leg stays inside" associativity]
 
 coordRangeLaws ::
-  forall c n.
-  ( IsCoord c,
-    KnownNat n,
-    Arbitrary (c n),
-    Show (c n),
-    Semigroup (c n),
-    AffineSpace (c n),
-    Diff (c n) ~ Int
-  ) =>
+  String ->
+  [TestTree] ->
   TestTree
-coordRangeLaws =
-  let inRange :: c n -> Property
-      inRange c =
-        let i = ordinalToInt (view asOrdinal c)
-         in counterexample ("position " ++ show i) $
-              (0 <= i) .&&. (i < ordinalSize @n)
-      combine :: c n -> c n -> Property
-      combine a b = inRange (a <> b)
-      offset :: c n -> Int -> Property
-      offset c d = inRange (c .+^ d)
-   in testGroup
-        "Coordinate operation range"
-        [ testProperty "Semigroup stays in range" combine,
-          testProperty "Affine displacement stays in range" offset
-        ]
+coordRangeLaws groupName tests = testGroup groupName tests
 
 enumRangeLaws ::
   forall c n.
