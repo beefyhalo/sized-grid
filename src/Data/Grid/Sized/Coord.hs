@@ -116,6 +116,11 @@ module Data.Grid.Sized.Coord
     neighbours,
     mooreNeighbours,
     vonNeumannNeighbours,
+    cardinalNeighbours,
+    floodFill,
+    floodFillWith,
+    connectedComponents,
+    connectedComponentsWith,
     axisSteps,
     stepsWithin,
 

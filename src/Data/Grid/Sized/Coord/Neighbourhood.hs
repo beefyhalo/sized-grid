@@ -11,12 +11,20 @@ module Data.Grid.Sized.Coord.Neighbourhood
     neighbours,
     mooreNeighbours,
     vonNeumannNeighbours,
+    cardinalNeighbours,
+    floodFill,
+    floodFillWith,
+    connectedComponents,
+    connectedComponentsWith,
   )
 where
 
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Grid.Sized.Coord.Class
 import Data.Grid.Sized.Coord.Delta
 import Data.Grid.Sized.Coord.Internal
+import Data.Grid.Sized.Coord.Distance
 
 -- | The checked counterpart of 'Data.AffineSpace..+^': succeeds only if every axis's own
 -- boundary policy allows the step, so a torus axis can wrap while a bounded
@@ -78,3 +86,63 @@ vonNeumannNeighbours r (Coord p) =
 neighbours :: (IsCoordList cs) => Coord cs -> [Coord cs]
 neighbours = mooreNeighbours 1
 {-# INLINE neighbours #-}
+
+-- | The four-connected component reachable from @start@ under an @inRegion@
+-- predicate. A coordinate not in the region produces the empty set.
+floodFill :: forall cs. (IsCoordList cs) => (Coord cs -> Bool) -> Coord cs -> Set (Coord cs)
+floodFill = floodFillWith cardinalNeighbours
+
+-- | The connected component reachable from @start@ under a caller-supplied
+-- neighbour generator.
+floodFillWith :: forall cs. (Coord cs -> [Coord cs]) -> (Coord cs -> Bool) -> Coord cs -> Set (Coord cs)
+floodFillWith neighbours' inRegion start
+  | not (inRegion start) = Set.empty
+  | otherwise = go (Set.singleton start) (Set.singleton start)
+  where
+    go seen frontier
+      | Set.null frontier = seen
+      | otherwise =
+          let next =
+                Set.foldl'
+                  ( \acc c ->
+                      foldl'
+                        ( \acc' nextCoord ->
+                            if inRegion nextCoord && not (Set.member nextCoord seen)
+                              then Set.insert nextCoord acc'
+                              else acc'
+                        )
+                        acc
+                        (neighbours' c)
+                  )
+                  Set.empty
+                  frontier
+              new = Set.difference next seen
+           in if Set.null new then seen else go (Set.union seen new) new
+
+-- | The connected components of the region described by @inRegion@.
+-- Four-connectivity is the default: a cell only reaches the directions that
+-- change exactly one axis by one step.
+connectedComponents :: forall cs. (IsCoordList cs) => (Coord cs -> Bool) -> [Set (Coord cs)]
+connectedComponents = connectedComponentsWith cardinalNeighbours
+
+-- | The connected components of the region described by @inRegion@, using a
+-- caller-supplied neighbour generator.
+connectedComponentsWith :: forall cs. (IsCoordList cs) => (Coord cs -> [Coord cs]) -> (Coord cs -> Bool) -> [Set (Coord cs)]
+connectedComponentsWith neighbours' inRegion =
+  go Set.empty (allCoord @cs)
+  where
+    go _ [] = []
+    go seen (c : rest)
+      | inRegion c && not (Set.member c seen) =
+          let component = floodFillWith neighbours' inRegion c
+              seen' = Set.union seen component
+           in component : go seen' rest
+      | otherwise = go seen rest
+
+-- | The axis-aligned neighbours in the four cardinal directions. This keeps
+-- flood fill default connectivity to the same 4-way step as the issue
+-- propositional examples.
+cardinalNeighbours :: forall cs. (IsCoordList cs) => Coord cs -> [Coord cs]
+cardinalNeighbours c =
+  [n | n <- allCoord @cs, n /= c, coordManhattan c n == 1]
+{-# INLINE cardinalNeighbours #-}
