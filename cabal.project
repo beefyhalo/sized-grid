@@ -46,8 +46,15 @@ allow-newer:
   gloss-rendering:containers,
   OpenGL:containers,
   GLUT:containers,
-  OpenGLRaw:containers
+  OpenGLRaw:containers,
+  gloss:GLFW-b
 
+-- sized-grid-x73m. gloss still caps GLFW-b < 2 even though the GLFW backend
+-- itself continues to work against GLFW-b 3.x and the examples only need the
+-- callback surface it exposes in the very small macOS HiDPI fix. Keep this as a
+-- scoped `allow-newer` instead of letting the solver fall back to the stale
+-- 1.4.x line that shipped before the HiDPI fix.
+--
 -- sized-grid-23y3. Which gloss backend the examples get, and why it is not the
 -- default one.
 --
