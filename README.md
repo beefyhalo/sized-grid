@@ -291,3 +291,21 @@ generations = iterate (applyRule gameOfLife)
 main :: IO ()
 main = mapM_ (putStrLn . displayGrid) $ take 4 $ generations start
 ```
+
+Provenance
+==========
+
+`grid-sized` began as a fork of [`sized-grid`][upstream] by Edward Wastell. It
+has diverged past any possible merge back — GHC 9.10 and up,
+`RequiredTypeArguments` throughout, a sealed `Grid` constructor, `Ordinal` as a
+newtype over `Int`, GHC2024 — so it is released under a different name, with the
+version restarted. The upstream name is his, and is still his on Hackage.
+
+The idea this library is built on is his too: that an axis should be indexed by a
+coordinate type which says what happens at its edge, and that `Ordinal` is the
+axis with no way out. Everything above is an argument for taking that further
+than the original did, not for having thought of it.
+
+Copyright is held jointly; see [`LICENSE`](LICENSE).
+
+[upstream]: https://github.com/edwardwas/sized-grid

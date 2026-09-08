@@ -13,7 +13,14 @@ license-file:       LICENSE
 maintainer:         beefyhalo@gmail.com
 bug-reports:        https://github.com/beefyhalo/sized-grid/issues
 synopsis:           Multidimensional grids whose size and boundary policy are types
-author:             Kevin Horlick
+
+-- Both names, in the order they worked on it. The comment at the top of this
+-- file records the fork; that is not enough on its own, because a comment does
+-- not reach Hackage and these two fields are what it displays. `copyright`
+-- mirrors LICENSE exactly, which is the authoritative list of holders and the
+-- reason the per-file Copyright headers could be dropped in sized-grid-itxr.
+author:             Edward Wastell, Kevin Horlick
+copyright:          (c) 2018 Edward Wastell, (c) 2025-2026 Kevin Horlick
 homepage:           https://github.com/beefyhalo/sized-grid
 description:
   `grid-sized` provides finite, multidimensional grids whose size and shape are
