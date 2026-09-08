@@ -47,6 +47,15 @@ benchmark numbers in this repo are only meaningful with the `-O` level of the
 *caller* stated, and there are recorded traps a worker will walk into — see
 `bd memories benchmark`.
 
+## Dispatch with -s
+
+`wt-bead -s <id> -- --model sonnet`. The `-s` is not optional here: CLAUDE.md
+tells any agent in a worktree to `wt merge` its own branch once the gates are
+green, and a worker that does that has skipped the gate and graded its own work.
+`-s` suspends those two rules in the worker's prompt, and CLAUDE.md now carries
+the matching carve-out. Observed once for real: the sized-grid-kqm8 worker
+merged to master as 1f67194 before the supervisor could gate it (sized-grid-3vln).
+
 ## Serialisation
 
 **Never run two benchmark issues at once.** Concurrent `cabal bench` across

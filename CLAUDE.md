@@ -82,6 +82,12 @@ pre-commit hook load on first `cd`.
   master yourself and clean up: `wt merge --no-squash --no-rebase` (keeps the
   individual commits, fast-forwards master, removes the worktree), then push
   master.
+- **Unless a supervisor dispatched you.** If your opening prompt says so (it comes
+  from `wt-bead -s`), the two rules above are suspended: commit on the branch and
+  stop. Do not merge, push, or close the issue — someone else runs the gate on
+  your diff and lands it. Self-merging there skips the review *and* has you
+  grading your own homework, since "the quality gates are green" would be your
+  own assessment of your own work. See `.claude/dispatch.md`.
 - Fast-forward only. Do **not** `git pull --rebase` when master carries merge
   commits — it rewrites history. Never force-push.
 
