@@ -59,13 +59,9 @@ dist-newstyle/
 !.claude/hooks
 .claude/hooks/*
 !.claude/hooks/*.sh
-# Project skills, one directory each. Two levels of the same un-exclude/exclude
-# dance as hooks above, because the skill body sits one directory deeper.
-!.claude/skills
-.claude/skills/*
-!.claude/skills/*/
-.claude/skills/*/*
-!.claude/skills/*/*.md
+# Read by the global /dispatch skill: this repo's gate, routing rule and merge
+# policy. Tracked because it is project convention, not machine state.
+!.claude/dispatch.md
 
 # Symlink into the nix store that git-hooks.nix writes on `nix develop` (see
 # flake.nix's `preCommit`). Generated from flake.nix -- not a source file.

@@ -5,10 +5,14 @@
 # approval on first run (cached in ~/.config/worktrunk/approvals.toml); pass
 # `wt --yes` when driving it non-interactively.
 
-# After a worktree is created: whitelist direnv so `.envrc` (`use flake`, already
-# tracked so it's present in the new tree) loads the dev shell — GHC, cabal, HLS,
-# and the git-hooks.nix pre-commit install — on the first cd into it.
-post-start = "direnv allow {{ worktree_path }}"
+# Before the worktree is handed off: whitelist direnv so `.envrc` (`use flake`,
+# already tracked so it's present in the new tree) loads the dev shell — GHC,
+# cabal, HLS, and the git-hooks.nix pre-commit install — on the first cd into it.
+# pre-start (blocking), not post-start: wt-claude opens the herdr pane and starts
+# the agent as soon as `wt switch` returns, so a backgrounded `direnv allow` races
+# the pane's shell — it sees `.envrc` still blocked and caches that until a manual
+# `direnv allow`. Blocking here lands the allow first.
+pre-start = "direnv allow {{ worktree_path }}"
 
 # Optional: pre-build so an agent landing in the worktree isn't blocked on a cold
 # `cabal build`. Heavy for this many packages — uncomment if you want it.
