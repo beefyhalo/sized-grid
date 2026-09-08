@@ -47,6 +47,25 @@ benchmark numbers in this repo are only meaningful with the `-O` level of the
 *caller* stated, and there are recorded traps a worker will walk into — see
 `bd memories benchmark`.
 
+## Serialisation
+
+**Never run two benchmark issues at once.** Concurrent `cabal bench` across
+worktrees makes every number in both runs worthless — the arms contend for the
+same cores and cache, and the result is churn that reads as a regression. One
+benchmark worker at a time, and let it finish before dispatching the next.
+
+The same applies to the supervisor's own gate: do not run `just bench` while a
+worker is running anything.
+
+Benchmark runs also want the machine **on mains power**. macOS throttles on
+battery, so a run started unplugged is not comparable with the baseline or with
+a run made plugged in. Ask before starting one.
+
+Non-benchmark workers can run in parallel, but check for **file overlap** first.
+Two issues that touch the same file will conflict at merge even when both are
+correct. Encode a known collision as a `blocks` dependency so the ready queue
+stops offering them together — e.g. `bd dep add <later> <earlier> -t blocks`.
+
 ## Frozen
 
 `spike/` is frozen ADR spikes. Excluded from hlint and ormolu; a diff touching it
