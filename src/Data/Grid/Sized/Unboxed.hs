@@ -1,8 +1,4 @@
--- |
--- Module      :  Data.Grid.Sized.Unboxed
--- License     :  MIT -style (see the file LICENSE)
---
--- The unboxed grid: a `Data.Grid.Sized.GridOf` over "Data.Vector.Unboxed",
+-- | The unboxed grid: a `Data.Grid.Sized.GridOf` over "Data.Vector.Unboxed",
 -- machine words instead of heap-allocated boxes.
 --
 -- `Functor`, `Foldable`, `Traversable`, `Applicative`, `Monad` and

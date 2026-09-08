@@ -1,10 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- |
--- Module      :  Data.Grid.Sized.Stencil
--- License     :  MIT -style (see the file LICENSE)
---
--- A neighbourhood, precomputed once for a grid /type/ and then run over as many
+-- | A neighbourhood, precomputed once for a grid /type/ and then run over as many
 -- grids of that type as you like.
 --
 -- The shape of a cellular-automaton step is

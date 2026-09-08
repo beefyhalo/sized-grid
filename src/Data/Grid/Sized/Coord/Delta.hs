@@ -1,8 +1,4 @@
--- |
--- Module      :  Data.Grid.Sized.Coord.Delta
--- License     :  MIT -style (see the file LICENSE)
---
--- A displacement: one 'Data.AffineSpace.Diff' per axis, and the difference
+-- | A displacement: one 'Data.AffineSpace.Diff' per axis, and the difference
 -- space that @'Data.Grid.Sized.Coord.Coord' cs@ is an affine space over.
 --
 -- == Why this is not a @Coord@

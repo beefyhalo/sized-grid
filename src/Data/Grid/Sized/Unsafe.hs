@@ -1,7 +1,4 @@
--- |
--- Module      :  Data.Grid.Sized.Unsafe
--- License     :  MIT -style (see the file LICENSE)
---
+-- | The escape hatch: building a `Data.Grid.Sized.Grid` from a vector without
 -- checking its length. A @Grid cs a@ is supposed to hold exactly
 -- @MaxCoordSize cs@ elements; build one through `unsafeGridFromVector` at
 -- the wrong length and `Data.Functor.Rep.index` can read past the end of

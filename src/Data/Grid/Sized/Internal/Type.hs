@@ -1,13 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- |
--- Module      :  Data.Grid.Sized.Internal.Type
--- Copyright   :  (C) 2018 Edward Wastell, (C) 2025-2026 Kevin Horlick
--- License     :  MIT -style (see the file LICENSE)
--- Maintainer  :  Kevin Horlick <beefyhalo@gmail.com>
--- Stability   :  provisional
---
--- Type-level facts the library needs but GHC's Nat solver will not derive.
+-- | Type-level facts the library needs but GHC's Nat solver will not derive.
 module Data.Grid.Sized.Internal.Type
   ( windowFits,
     requiring,
