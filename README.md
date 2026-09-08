@@ -156,12 +156,13 @@ unless told otherwise.
   (`--ansi`), or not at all (`--text`); the board is read from `FILE`, from
   stdin (`-`), or from a built-in example.
 
-* **`cabal run automata -- [--wireworld|--torus|--walls|--mirror] [--rate N]`** —
+* **`cabal run automata -- [--wireworld|--ant|--torus|--walls|--mirror] [--rate N]`** —
   `Stencil` is an engine, not a Life loop: Wireworld runs four states on
   `Clamped` axes through the same `stencilGrid`, with no new library surface.
   Langton's ant is the other shape — a lone walker carrying a heading, on
-  `Walker`/`stepWalker` — and its topology is the flag: `--torus` wraps
-  (`Periodic`), `--walls` stalls (`Clamped`), `--mirror` bounces (`Reflective`).
+  `Walker`/`stepWalker` — reached by `--ant` or by the topology flag that also
+  picks its board: `--torus` wraps (`Periodic`, and the `--ant` default),
+  `--walls` stalls (`Clamped`), `--mirror` bounces (`Reflective`).
 
 * **`cabal run maze -- [--rate N] [--seed N]`** — `FocusedGrid` carries the
   position so the algorithm need not: the carving head *is* the grid's focus, so
@@ -169,7 +170,7 @@ unless told otherwise.
   off the board is `Nothing` — the only wall test the depth-first carve or the
   breadth-first solve needs. `--seed N` rebuilds the same maze every run.
 
-* **`cabal run sokoban -- [--text] [LEVELS-FILE]`** — the topology is the
+* **`cabal run sokoban -- [--text|--check] [LEVELS-FILE]`** — the topology is the
   puzzle: one `Grid '[Clamped w, Clamped h]` chart glued to itself as a Möbius
   strip, Klein bottle or projective plane through `grid-atlas`, with nothing in
   the rules aware of the twist. `--text` plays in the terminal; `--check` solves
