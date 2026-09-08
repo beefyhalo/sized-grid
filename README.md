@@ -135,6 +135,55 @@ We introduce two new typeclasses: `IsCoord` and `IsGrid`. `IsGrid` has `gridInde
 
 A third, `IsCoordList cs`, is the one you will actually see in signatures — it says that `cs` is a list of axes a `Coord` can be built from. At a concrete list it is discharged by instance resolution, so working at a known grid shape you never write it; it appears only when you are polymorphic in the axes, as `applyRule` below is. It supersedes the `All IsCoordLifted cs` that used to sit in those signatures and implies it, so it is a rename rather than an extra obligation. It also carries the row-major fold behind `coordPosition` as a method, which is what lets that fold unroll to plain arithmetic instead of walking a dictionary per axis at run time.
 
+The example programs
+====================
+
+`cabal.project` bundles the demos so `cabal build all` covers them. Each one
+exists to make a single point from the thesis above; all draw in a gloss window
+unless told otherwise.
+
+* **`cabal run gameOfLife`** — Conway's Life on a `UGrid '[Periodic 60, Periodic
+  60]`. A wrapping neighbourhood needs no bounds check: the wrap lives in the
+  `Periodic` coordinate type, not in the step function. Doubles as the library's
+  example of an unboxed element type other than `Int`. No flags; in-window keys
+  are `t` run/pause, `r` randomise, `c` clear, `p` preset, `n` rule, `v`
+  neighbourhood, `+`/`-` speed, and click to toggle a cell.
+
+* **`cabal run sudoko -- [--gloss|--ansi|--text] [--rate N] [FILE|-]`** —
+  grid-slicing is type-level: `gridWindows`/`mapLowerDim` cut a 9×9 board into
+  its rows, columns and 3×3 squares by shape alone. The backtracking search is
+  replayed step by step in a window (`--gloss`, the default), in the terminal
+  (`--ansi`), or not at all (`--text`); the board is read from `FILE`, from
+  stdin (`-`), or from a built-in example.
+
+* **`cabal run automata -- [--wireworld|--torus|--walls|--mirror] [--rate N]`** —
+  `Stencil` is an engine, not a Life loop: Wireworld runs four states on
+  `Clamped` axes through the same `stencilGrid`, with no new library surface.
+  Langton's ant is the other shape — a lone walker carrying a heading, on
+  `Walker`/`stepWalker` — and its topology is the flag: `--torus` wraps
+  (`Periodic`), `--walls` stalls (`Clamped`), `--mirror` bounces (`Reflective`).
+
+* **`cabal run maze -- [--rate N] [--seed N]`** — `FocusedGrid` carries the
+  position so the algorithm need not: the carving head *is* the grid's focus, so
+  "advance" is `seek` and "where am I" is `pos`. On a `Clamped 61` axis a step
+  off the board is `Nothing` — the only wall test the depth-first carve or the
+  breadth-first solve needs. `--seed N` rebuilds the same maze every run.
+
+* **`cabal run sokoban -- [--text] [LEVELS-FILE]`** — the topology is the
+  puzzle: one `Grid '[Clamped w, Clamped h]` chart glued to itself as a Möbius
+  strip, Klein bottle or projective plane through `grid-atlas`, with nothing in
+  the rules aware of the twist. `--text` plays in the terminal; `--check` solves
+  every level on each surface.
+
+* **`cabal run ising-example`** — a Metropolis-Hastings simulation of the 2D
+  Ising model on a `Grid '[Periodic 60, Periodic 60]` torus, streamed through
+  pipes. Its von Neumann neighbourhood is one table fixed by the lattice type
+  rather than re-enumerated per site per sweep. No flags.
+
+The `grid-atlas` and `atlas-topology` packages in the same project are
+libraries rather than demos: the typed-seam gluing that `sokoban` builds on,
+and the seam-table combinatorics beneath it.
+
 Example - Game of Life
 =====================
 
