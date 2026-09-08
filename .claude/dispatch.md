@@ -18,6 +18,21 @@ and 9.14) is the stronger gate and worth running before landing anything that
 touches the library rather than an example app — it is slow, so it is not the
 default.
 
+**A green `just test` has exactly seven `Test suite …: PASS` lines.** Count them;
+do not `sort -u` them. Four of the seven are distinct (`tests`, `downstream`,
+`sudoko-test`, `readme`) but `sokoban`, `grid-atlas` and `atlas-topology` each
+name theirs `tests`, so deduping reports four and hides three that may not have
+run at all:
+
+```bash
+grep -cE 'Test suite [a-z-]+: PASS' gate.log     # must be 7
+grep -E  'Test suite [a-z-]+: FAIL' gate.log     # must be empty
+```
+
+Do not grep the log for the bare words "fail" or "error": this suite names its
+negative cases things like *"a route a wall interrupts fails even though its
+steps cancel"*, and they are passing tests.
+
 Formatting is ormolu and non-negotiable; the pre-commit hook enforces it. A diff
 that reformats code the issue did not otherwise touch is a rejection.
 
