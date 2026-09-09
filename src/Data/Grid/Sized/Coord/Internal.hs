@@ -34,6 +34,7 @@ module Data.Grid.Sized.Coord.Internal
     coordFromIndices,
     coordFromPosition,
     unsafeCoordFromPosition,
+    axisSize,
     coordSpaceSize,
     axisCount,
 
@@ -57,6 +58,7 @@ import Data.AffineSpace
 import Data.Finitary (Finitary (..))
 import Data.Grid.Sized.Coord.Class
 import Data.Grid.Sized.Coord.Delta
+import Data.Grid.Sized.Ordinal (ordinalSize)
 import Data.Group (Abelian, Group (..))
 import Data.Hashable (Hashable (..))
 import Data.Ix (Ix (..))
@@ -561,6 +563,20 @@ coordFromIndices ::
   Maybe (Coord cs)
 coordFromIndices = fmap Coord . posFromIndices @cs
 {-# INLINE coordFromIndices #-}
+
+-- | The size of one axis, as a plain 'Int'.
+--
+-- Names its axis only under a type family, so every call has to say which axis
+-- it means with a visible type application --- there are no arguments for the
+-- signature to be inferred from:
+--
+-- > baseX = (axisSize \@(Clamped 28) - width) `div` 2
+--
+-- 'coordSpaceSize' is the whole-space counterpart: this over one axis, that the
+-- product over all of them.
+axisSize :: forall x. (IsCoordLifted x) => Int
+axisSize = ordinalSize @(CoordNat x)
+{-# INLINE axisSize #-}
 
 -- | The product of axis sizes: the length of the vector inside a @'Grid' cs@.
 -- Needs only 'IsCoordList', not @KnownNat@, so it works in the indexed

@@ -92,6 +92,7 @@ module Data.Grid.Sized.Coord
     coordFromIndices,
     coordFromPosition,
     unsafeCoordFromPosition,
+    axisSize,
     coordSpaceSize,
     axisCount,
 

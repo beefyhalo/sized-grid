@@ -23,7 +23,12 @@ module Data.Grid.Sized.Internal.Grid.Axis
 where
 
 import Control.Lens hiding (index)
-import Data.Grid.Sized.Coord
+-- `axisSize` here is the runtime Int this module loops over, named that in
+-- every function below and in the header above. The lifted type-level
+-- `Data.Grid.Sized.Coord.axisSize` is the same concept one level up and is
+-- not wanted here, so hide it rather than rename 37 local bindings in the
+-- hot path to make room for a name this module never calls.
+import Data.Grid.Sized.Coord hiding (axisSize)
 import Data.Grid.Sized.Internal.Grid.Core
 import Data.Grid.Sized.Internal.Type (requiring)
 import Data.Kind (Constraint, Type)

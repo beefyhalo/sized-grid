@@ -209,10 +209,6 @@ presets =
           Centred
       ]
 
--- | The size of one axis, as a plain 'Int'.
-axisSize :: forall x. (IsCoordLifted x) => Int
-axisSize = ordinalSize @(CoordNat x)
-
 -- | The live cells of a preset, as coordinates on the board it is laid onto.
 --
 -- The rows are read bottom-up, since 'presetRows' puts row 0 at the top and

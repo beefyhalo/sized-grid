@@ -20,7 +20,9 @@ where
 import Data.Atlas.Topology.Seam (SeamTable (..), crossSeam)
 import Data.Grid.Atlas
 import Data.Grid.Atlas.Rect
-import Data.Grid.Sized
+-- `axisSize` here is the local @Axis -> Int@ dispatch, not the library's
+-- type-level wrapper of the same name; hide the import so it does not shadow.
+import Data.Grid.Sized hiding (axisSize)
 import Data.Maybe (fromMaybe)
 import Data.Vector qualified as V
 import GHC.TypeLits

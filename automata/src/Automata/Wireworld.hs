@@ -164,9 +164,6 @@ clockCircuit =
       "......CCCCCCCC."
     ]
 
-axisSize :: forall x. (IsCoordLifted x) => Int
-axisSize = ordinalSize @(CoordNat x)
-
 -- | Lay a circuit out centred on the board.
 circuitBoard :: Circuit -> UGrid Cs Cell
 circuitBoard circuit =
