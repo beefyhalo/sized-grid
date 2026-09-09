@@ -9,8 +9,13 @@ Run in the worktree, under `direnv exec` — outside the flake devshell `cabal`
 fails on a missing toolchain and it reads as the worker's fault:
 
 ```bash
-direnv exec "$wt" just test     # cabal test all --enable-tests, all seven suites
-direnv exec "$wt" just lint     # hlint, reads .hlint.yaml at the root
+cd "$wt"                        # cd FIRST: `direnv exec DIR CMD` loads DIR's
+                                # environment but runs CMD in the CURRENT dir,
+                                # so `direnv exec "$wt" just test` from master
+                                # tests MASTER with the worktree's toolchain
+log=$(mktemp -t gate.XXXXXX.log)
+direnv exec . just test >"$log" 2>&1   # cabal test all --enable-tests, seven suites
+direnv exec . just lint                # hlint, reads .hlint.yaml at the root
 ```
 
 `just build` alone is not a gate. `just check` (`nix flake check`, both GHC 9.12
@@ -25,9 +30,12 @@ name theirs `tests`, so deduping reports four and hides three that may not have
 run at all:
 
 ```bash
-grep -cE 'Test suite [a-z-]+: PASS' gate.log     # must be 7
-grep -E  'Test suite [a-z-]+: FAIL' gate.log     # must be empty
+grep -cE 'Test suite [a-z-]+: PASS' "$log"     # must be 7
+grep -E  'Test suite [a-z-]+: FAIL' "$log"     # must be empty
 ```
+
+Write that log to `mktemp`, not to `gate.log` inside the worktree: anything left
+in the tree is staged by `wt merge --stage all` and lands on master.
 
 Do not grep the log for the bare words "fail" or "error": this suite names its
 negative cases things like *"a route a wall interrupts fails even though its
@@ -98,8 +106,12 @@ is a rejection.
 ## Landing
 
 ```bash
-cd "$wt" && wt merge --no-squash --no-rebase
+cd /Users/kevin/workspace/sized-grid          # out of "$wt" before it is deleted
+wt -C "$wt" merge --no-squash --no-rebase
 ```
+
+`wt merge` removes the worktree as its last step, so running it from inside `$wt`
+deletes the shell's own cwd.
 
 `--no-rebase` is not optional: master carries merge commits and rebasing rewrites
 history. Never `git pull --rebase` on master, never force-push. Fast-forward
