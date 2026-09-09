@@ -9,6 +9,7 @@ import Data.Align qualified as Align
 import Data.Finitary qualified as F
 import Data.Functor.Rep
 import Data.Grid.Sized
+import Data.Grid.Sized.Fixture
 import Data.Ix qualified as Ix
 import Data.Maybe (isNothing)
 import Data.Monoid (Sum)

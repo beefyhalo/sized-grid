@@ -70,9 +70,15 @@ module Data.Grid.Sized
     -- * Vector helpers
     splitVectorBySize,
 
+    -- * Text-written grids
+
+    --
+    -- $fixtures
+    gridFromCharRows,
+    renderCharRows,
+
     -- * The rest of the public API
     module X,
-    module Fixture,
     module Optics,
 
     -- * Rexported for generics-sop
@@ -90,7 +96,7 @@ import Data.Grid.Sized.Coord.Class as X
 import Data.Grid.Sized.Coord.Periodic as X
 import Data.Grid.Sized.Coord.Reflect101 as X
 import Data.Grid.Sized.Coord.Reflective as X
-import Data.Grid.Sized.Fixture as Fixture
+import Data.Grid.Sized.Fixture (gridFromCharRows, renderCharRows)
 import Data.Grid.Sized.Focused as X
 -- The `Grid` type is defined in the hidden "Data.Grid.Sized.Internal.Grid", and
 -- this module publishes the safe half of it -- hence the explicit export list
@@ -139,3 +145,12 @@ import Generics.SOP
 -- restriction rule governs the narrowing half of the \"Rearranging\" group
 -- above and the 'Data.Grid.Sized.Optics.slice' \/
 -- 'Data.Grid.Sized.Optics.prefix' \/ 'Data.Grid.Sized.Optics.suffix' lenses.
+
+-- $fixtures
+--
+-- The two halves of @Data.Grid.Sized.Fixture@ that carry no vocabulary of
+-- their own. The rest of that module --- 'Data.Grid.Sized.Fixture.blitGrid'
+-- and its 'Data.Grid.Sized.Fixture.Anchor' --- stays behind an explicit
+-- import, because @Anchor@, @Centre@, @TopLeft@ and their siblings are words
+-- an application names its own concepts with, and a grid library has no claim
+-- on them in the namespace a caller gets from one unqualified import.
