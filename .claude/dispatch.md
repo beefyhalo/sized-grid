@@ -79,6 +79,18 @@ green, and a worker that does that has skipped the gate and graded its own work.
 the matching carve-out. Observed once for real: the sized-grid-kqm8 worker
 merged to master as 1f67194 before the supervisor could gate it (sized-grid-3vln).
 
+## Copilot's permissions are already paid for this repo
+
+`WT_CLAUDE_KIND=copilot wt-bead -s <id>` is a live tier here. Its per-command
+approvals (`bd`, `printf`, `cabal check`, `just`, `git add`/`git commit`, and
+file writes) were granted with the "don't ask again … in this repo" option
+during sized-grid-t0a3, and they persist in `~/.copilot/permissions-config.json`
+keyed on `~/workspace/sized-grid` — the main repo path, not the worktree — so
+they apply to every future dispatch here without re-asking.
+
+What still prompts is folder trust, once per new worktree. See "Handing copilot
+its permissions" in the global dispatch skill.
+
 ## Serialisation
 
 **Never run two benchmark issues at once.** Concurrent `cabal bench` across
