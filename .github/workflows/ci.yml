@@ -162,10 +162,12 @@ jobs:
       # supported GHC range, and is the only job that compiles the benchmarks
       # on more than one compiler.
       #
-      # -Werror is baked into every package's ghc-options (not passed here),
-      # so any file this job actually recompiles fails the build on a new
-      # warning -- this doesn't depend on dist-newstyle being cold, since GHC
-      # only needs to be compiling the file to enforce it (sized-grid-ior).
+      # grid-sized enables its development-only -Werror through cabal.project's
+      # package stanza, and the example packages still bake it straight into
+      # their ghc-options, so any file this job actually recompiles fails the
+      # build on a new warning -- this doesn't depend on dist-newstyle being
+      # cold, since GHC only needs to be compiling the file to enforce it
+      # (sized-grid-ior).
       - run: cabal build all --enable-tests --enable-benchmarks
 
       # sized-grid-svil. This step used to be absent, and the comment above

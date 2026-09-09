@@ -59,6 +59,14 @@ source-repository head
   type:     git
   location: https://github.com/beefyhalo/sized-grid
 
+-- Hackage rejects an unconditional -Werror because a new GHC warning can break
+-- the package without any code change. Keep it available for development, but
+-- default it off so the published tarball builds as a consumer would expect.
+flag dev
+  description: Enable development-only warnings as errors
+  manual:      True
+  default:     False
+
 -- Shared language settings. GHC2024 already implies DataKinds, GADTs,
 -- LambdaCase, MonoLocalBinds, DerivingStrategies, RoleAnnotations and
 -- ExplicitNamespaces on top of GHC2021, which is why the per-module LANGUAGE
@@ -94,7 +102,10 @@ common lang-base
   ghc-options:
     -Wall -Wcompat -Widentities -Wincomplete-record-updates
     -Wincomplete-uni-patterns -Wmissing-export-lists -Wpartial-fields
-    -Wredundant-constraints -Werror
+    -Wredundant-constraints
+
+  if flag(dev)
+    ghc-options: -Werror
 
   -- GHC 9.14 deprecates the 'pattern' namespace specifier that
   -- Data.Grid.Sized.Coord's export list uses for (:|) and EmptyCoord, in

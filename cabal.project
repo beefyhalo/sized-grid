@@ -29,6 +29,12 @@ packages:
 -- dropped.
 tests: True
 
+-- Keep the repo build as strict as before: the published package defaults its
+-- development-only -Werror flag off for Hackage, but this checkout and CI want
+-- warnings to stay fatal.
+package grid-sized
+  flags: +dev
+
 -- sized-grid-8hx. GHC 9.14.1 ships containers-0.8, but the gloss stack still
 -- caps containers <0.8 and has no 9.14 release upstream. containers is
 -- non-reinstallable -- the `ghc` package, pulled in by ghc-typelits-natnormalise,

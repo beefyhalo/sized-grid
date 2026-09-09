@@ -18,7 +18,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        inherit (pkgs.haskell.lib) doCheck;
+        inherit (pkgs.haskell.lib) appendConfigureFlags doCheck;
 
         # Keep build inputs minimal so editing build artefacts does not
         # invalidate the derivation.
@@ -38,7 +38,17 @@
         # ghc912 matches what ../aoc builds grid-sized with, so the shared
         # cabal.project between the two repos does not recompile the world.
         # ghc914 is kept building so the move is a one-line change.
-        mkPackage = hsPkgs: doCheck (hsPkgs.callCabal2nix "grid-sized" src { });
+        #
+        # Hackage rejects an unconditional -Werror in the package description, so
+        # grid-sized.cabal gates it behind a manual flag that defaults off.
+        # Nix builds this package directly rather than through cabal.project, so
+        # turn the flag back on here to keep the development checks strict.
+        mkPackage = hsPkgs:
+          doCheck (
+            appendConfigureFlags
+              (hsPkgs.callCabal2nix "grid-sized" src { })
+              [ "-fdev" ]
+          );
 
         mkShell = hsPkgs: hsPkgs.shellFor {
           packages = p: [ (mkPackage hsPkgs) ];
