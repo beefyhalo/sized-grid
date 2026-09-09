@@ -9,7 +9,15 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+```
+
+`bd dolt push` is inert here (no Dolt remote by choice) — it prints
+"No remote is configured — skipping" and exits 0. The session-end commands that
+actually preserve anything are:
+
+```bash
+bd export -o .beads/issues.jsonl && sort -o .beads/issues.jsonl .beads/issues.jsonl
+bd backup sync
 ```
 
 ## Non-Interactive Shell Commands
@@ -82,3 +90,16 @@ bd close <id>         # Complete work
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
+
+## This Repo's Beads Wiring
+
+Read `CLAUDE.md` → "Beads: How This Repo Is Wired" for the full picture. The
+generated block above is bd's boilerplate and is wrong for this repo in two
+places:
+
+- **`git pull --rebase`** rewrites `master`'s merge commits. Never run it here.
+  Fast-forward only, never force-push.
+- **`bd dolt push`** is inert. Use the sorted export and `bd backup sync` above.
+
+Also: the beads engine is embedded and in-process. Do not start a
+`dolt sql-server`, and do not run `bd hooks install` — see CLAUDE.md for why.
